@@ -2,8 +2,8 @@
 
 ## Frontend
 
-- **Framework**: React 18 with TypeScript
-- **Build Tool**: Vite 5.4.2
+- **Framework**: Next.js 14 with React 18 and TypeScript
+- **Rendering**: App Router with Client Components
 - **Styling**: Tailwind CSS 3.4.1 with PostCSS
 - **Icons**: Lucide React
 - **State Management**: React Context API (AuthContext)
@@ -12,15 +12,15 @@
 
 ## Backend
 
-- **Database**: MongoDB Atlas (FREE tier - 512MB)
-- **API Server**: Express.js with REST API
+- **Database**: Supabase (PostgreSQL) - FREE tier
+- **API**: Supabase Auto-generated REST API
+- **Real-time**: Supabase Realtime subscriptions
 - **AI Engine**: Google Gemini API (FREE tier)
 - **Workflow Automation**: n8n integration
-- **Real-time Updates**: Polling-based (can be upgraded to WebSocket)
 
 ## Development Tools
 
-- **Linting**: ESLint 9 with TypeScript ESLint
+- **Linting**: ESLint with Next.js config
 - **Type Checking**: TypeScript 5.5.3
 - **Package Manager**: npm
 
@@ -28,9 +28,9 @@
 
 ```bash
 # Development
-npm run dev              # Start development server
+npm run dev              # Start Next.js development server (port 3000)
 npm run build           # Build for production
-npm run preview         # Preview production build
+npm start               # Start production server
 
 # Code Quality
 npm run lint            # Run ESLint
@@ -44,22 +44,23 @@ supabase functions serve # Serve edge functions locally
 
 ## Environment Variables
 
-Required environment variables in `.env`:
-- `MONGODB_URI`: MongoDB Atlas connection string
-- `MONGODB_DB_NAME`: Database name (e.g., whatsapp_crm)
-- `GEMINI_API_KEY`: Google Gemini API key (FREE)
-- `VITE_API_BASE_URL`: Frontend API base URL (e.g., http://localhost:3000/api)
+Required environment variables in `.env.local`:
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anonymous key
+- `NEXT_PUBLIC_GEMINI_API_KEY`: Google Gemini API key (FREE)
 - `N8N_BASE_URL`: n8n instance URL (optional)
 - `N8N_API_KEY`: n8n API key (optional)
 - `WHATSAPP_VERIFY_TOKEN`: WhatsApp webhook verification token
 - `WHATSAPP_ACCESS_TOKEN`: WhatsApp API access token
 - `WHATSAPP_PHONE_NUMBER_ID`: WhatsApp phone number ID
 
+**Note**: Client-side environment variables must be prefixed with `NEXT_PUBLIC_`
+
 ## Database Schema
 
-- Uses MongoDB with flexible document structure
-- Collections: contacts, conversations, messages, campaigns, triggers, follow_up_rules
-- Embedded documents for flexible metadata storage
+- Uses Supabase (PostgreSQL) with structured tables
+- Tables: contacts, conversations, messages, campaigns, triggers, follow_up_rules, workflow_executions, ai_intents
+- JSONB fields for flexible metadata storage
 - Array fields for tags and targeting
 - Proper indexing for performance optimization
-- No authentication system - direct access to agentic AI features
+- Row Level Security (RLS) disabled for direct access to agentic AI features
