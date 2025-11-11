@@ -1,0 +1,264 @@
+{
+  "name": "Abandoned Cart Recovery",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "abandoned-cart",
+        "responseMode": "onReceived"
+      },
+      "id": "webhook-1",
+      "name": "Product Interest Detected",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "product_interests",
+        "fields": "={\n  \"contact_id\": \"{{ $json.contact_id }}\",\n  \"product_id\": \"{{ $json.product_id }}\",\n  \"product_name\": \"{{ $json.product_name }}\",\n  \"detected_at\": \"{{ $now.toISO() }}\",\n  \"status\": \"interested\"\n}"
+      },
+      "id": "mongodb-1",
+      "name": "Store Interest Event",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "hours"
+      },
+      "id": "wait-1",
+      "name": "Wait 2 Hours",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "operation": "findOne",
+        "collection": "product_interests",
+        "query": "={\n  \"contact_id\": \"{{ $json.contact_id }}\",\n  \"product_id\": \"{{ $json.product_id }}\",\n  \"status\": \"interested\"\n}"
+      },
+      "id": "mongodb-2",
+      "name": "Check Purchase Status",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "interested"
+            }
+          ]
+        }
+      },
+      "id": "if-1",
+      "name": "Still Interested?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "findOne",
+        "collection": "contacts",
+        "query": "={\n  \"_id\": { \"$oid\": \"{{ $json.contact_id }}\" }\n}"
+      },
+      "id": "mongodb-3",
+      "name": "Get Contact",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Generate a friendly reminder message for {{ $json.name }} about {{ $('Product Interest Detected').item.json.product_name }}. Mention a special 5% discount just for them. Keep it under 200 characters and include a sense of value.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.7,\n    \"maxOutputTokens\": 200\n  }\n}",
+        "options": {}
+      },
+      "id": "http-1",
+      "name": "Generate Reminder (5% Off)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.item.json;\nconst contact = $('Get Contact').item.json;\nconst product = $('Product Interest Detected').item.json;\nconst generatedText = response.candidates[0].content.parts[0].text;\n\nreturn {\n  json: {\n    contact_id: contact._id,\n    phone_number: contact.phone_number,\n    message: generatedText,\n    product_id: product.product_id,\n    discount: 5\n  }\n};"
+      },
+      "id": "code-1",
+      "name": "Format Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/messages/send",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"phone_number\": \"{{ $json.phone_number }}\",\n  \"message\": \"{{ $json.message }}\",\n  \"contact_id\": \"{{ $json.contact_id }}\"\n}"
+      },
+      "id": "http-2",
+      "name": "Send Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2000, 200]
+    },
+    {
+      "parameters": {
+        "amount": 24,
+        "unit": "hours"
+      },
+      "id": "wait-2",
+      "name": "Wait 24 Hours",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2220, 200]
+    },
+    {
+      "parameters": {
+        "operation": "findOne",
+        "collection": "product_interests",
+        "query": "={\n  \"contact_id\": \"{{ $('Format Message').item.json.contact_id }}\",\n  \"product_id\": \"{{ $('Format Message').item.json.product_id }}\"\n}"
+      },
+      "id": "mongodb-4",
+      "name": "Check Again",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [2440, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "interested"
+            }
+          ]
+        }
+      },
+      "id": "if-2",
+      "name": "Still No Purchase?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2660, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Generate an urgent but friendly message about {{ $('Product Interest Detected').item.json.product_name }} with a 10% discount. Create FOMO (limited time offer). Keep under 200 characters.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.8,\n    \"maxOutputTokens\": 200\n  }\n}"
+      },
+      "id": "http-3",
+      "name": "Generate Urgency (10% Off)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2880, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/messages/send",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"phone_number\": \"{{ $('Get Contact').item.json.phone_number }}\",\n  \"message\": \"{{ $json.candidates[0].content.parts[0].text }}\",\n  \"contact_id\": \"{{ $('Format Message').item.json.contact_id }}\"\n}"
+      },
+      "id": "http-4",
+      "name": "Send Final Offer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [3100, 100]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "product_interests",
+        "updateKey": "_id",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "=final_offer_sent"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "mongodb-5",
+      "name": "Update Status",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [3320, 100]
+    }
+  ],
+  "connections": {
+    "Product Interest Detected": {
+      "main": [[{"node": "Store Interest Event", "type": "main", "index": 0}]]
+    },
+    "Store Interest Event": {
+      "main": [[{"node": "Wait 2 Hours", "type": "main", "index": 0}]]
+    },
+    "Wait 2 Hours": {
+      "main": [[{"node": "Check Purchase Status", "type": "main", "index": 0}]]
+    },
+    "Check Purchase Status": {
+      "main": [[{"node": "Still Interested?", "type": "main", "index": 0}]]
+    },
+    "Still Interested?": {
+      "main": [[{"node": "Get Contact", "type": "main", "index": 0}]]
+    },
+    "Get Contact": {
+      "main": [[{"node": "Generate Reminder (5% Off)", "type": "main", "index": 0}]]
+    },
+    "Generate Reminder (5% Off)": {
+      "main": [[{"node": "Format Message", "type": "main", "index": 0}]]
+    },
+    "Format Message": {
+      "main": [[{"node": "Send Reminder", "type": "main", "index": 0}]]
+    },
+    "Send Reminder": {
+      "main": [[{"node": "Wait 24 Hours", "type": "main", "index": 0}]]
+    },
+    "Wait 24 Hours": {
+      "main": [[{"node": "Check Again", "type": "main", "index": 0}]]
+    },
+    "Check Again": {
+      "main": [[{"node": "Still No Purchase?", "type": "main", "index": 0}]]
+    },
+    "Still No Purchase?": {
+      "main": [[{"node": "Generate Urgency (10% Off)", "type": "main", "index": 0}]]
+    },
+    "Generate Urgency (10% Off)": {
+      "main": [[{"node": "Send Final Offer", "type": "main", "index": 0}]]
+    },
+    "Send Final Offer": {
+      "main": [[{"node": "Update Status", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["sales", "automation"],
+  "triggerCount": 1
+}

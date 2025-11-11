@@ -1,0 +1,257 @@
+{
+  "name": "AI Lead Scoring",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-scoring",
+        "responseMode": "onReceived"
+      },
+      "id": "webhook-1",
+      "name": "New Message Received",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "lead-scoring"
+    },
+    {
+      "parameters": {
+        "operation": "aggregate",
+        "collection": "messages",
+        "query": "=[\n  {\n    \"$match\": {\n      \"conversation_id\": { \"$oid\": \"{{ $json.conversation_id }}\" }\n    }\n  },\n  { \"$sort\": { \"created_at\": -1 } },\n  { \"$limit\": 20 }\n]"
+      },
+      "id": "mongodb-1",
+      "name": "Get Conversation History",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "credentials": {
+        "mongodb": {
+          "id": "1",
+          "name": "MongoDB WhatsApp CRM"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "New Message Received": {
+      "main": [[{"node": "Get Conversation History", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
+,
+    {
+      "parameters": {
+        "jsCode": "const messages = $input.all().map(m => m.json);\nconst messageHistory = messages.map(m => \n  `${m.sender_type}: ${m.content}`\n).join('\\n');\n\nconst customerMessages = messages.filter(m => m.sender_type === 'customer');\nconst messageCount = customerMessages.length;\n\n// Calculate average response time\nconst responseTimes = [];\nfor (let i = 0; i < messages.length - 1; i++) {\n  if (messages[i].sender_type === 'customer' && messages[i+1].sender_type === 'agent') {\n    const diff = new Date(messages[i+1].created_at) - new Date(messages[i].created_at);\n    responseTimes.push(diff / 1000 / 60); // minutes\n  }\n}\nconst avgResponseTime = responseTimes.length > 0 \n  ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length \n  : 0;\n\nreturn {\n  json: {\n    conversation_id: $('New Message Received').item.json.conversation_id,\n    contact_id: $('New Message Received').item.json.contact_id,\n    message_history: messageHistory,\n    message_count: messageCount,\n    avg_response_time: Math.round(avgResponseTime),\n    latest_message: messages[0].content\n  }\n};"
+      },
+      "id": "code-1",
+      "name": "Prepare Analysis Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Analyze this conversation for buying intent and lead quality. Provide a lead score from 0-100.\\n\\nConversation:\\n{{ $json.message_history }}\\n\\nMetrics:\\n- Message count: {{ $json.message_count }}\\n- Avg response time: {{ $json.avg_response_time }} minutes\\n\\nProvide JSON response:\\n{\\n  \\\"lead_score\\\": 0-100,\\n  \\\"buying_intent\\\": \\\"high/medium/low\\\",\\n  \\\"sentiment\\\": \\\"positive/neutral/negative\\\",\\n  \\\"key_interests\\\": [\\\"interest1\\\", \\\"interest2\\\"],\\n  \\\"urgency_level\\\": \\\"high/medium/low\\\",\\n  \\\"recommended_action\\\": \\\"brief action\\\",\\n  \\\"reasoning\\\": \\\"brief explanation\\\"\\n}\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.3,\n    \"maxOutputTokens\": 500\n  }\n}",
+        "options": {}
+      },
+      "id": "http-1",
+      "name": "Analyze with AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.item.json;\nconst analysisText = response.candidates[0].content.parts[0].text;\n\n// Extract JSON from response\nconst jsonMatch = analysisText.match(/\\{[\\s\\S]*\\}/);\nlet analysis;\ntry {\n  analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : {\n    lead_score: 50,\n    buying_intent: 'medium',\n    sentiment: 'neutral',\n    key_interests: [],\n    urgency_level: 'medium',\n    recommended_action: 'Continue nurturing',\n    reasoning: 'Unable to parse AI response'\n  };\n} catch (e) {\n  analysis = {\n    lead_score: 50,\n    buying_intent: 'medium',\n    sentiment: 'neutral',\n    key_interests: [],\n    urgency_level: 'medium',\n    recommended_action: 'Continue nurturing',\n    reasoning: 'JSON parse error'\n  };\n}\n\nconst context = $('Prepare Analysis Data').item.json;\n\nreturn {\n  json: {\n    contact_id: context.contact_id,\n    conversation_id: context.conversation_id,\n    lead_score: analysis.lead_score,\n    buying_intent: analysis.buying_intent,\n    sentiment: analysis.sentiment,\n    key_interests: analysis.key_interests,\n    urgency_level: analysis.urgency_level,\n    recommended_action: analysis.recommended_action,\n    reasoning: analysis.reasoning,\n    message_count: context.message_count,\n    avg_response_time: context.avg_response_time,\n    scored_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "code-2",
+      "name": "Parse Lead Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "contacts",
+        "updateKey": "_id",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "lead_score",
+              "fieldValue": "={{ $json.lead_score }}"
+            },
+            {
+              "fieldId": "buying_intent",
+              "fieldValue": "={{ $json.buying_intent }}"
+            },
+            {
+              "fieldId": "last_scored_at",
+              "fieldValue": "={{ $json.scored_at }}"
+            }
+          ]
+        }
+      },
+      "id": "mongodb-2",
+      "name": "Update Lead Score",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [1340, 300],
+      "credentials": {
+        "mongodb": {
+          "id": "1",
+          "name": "MongoDB WhatsApp CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.lead_score }}",
+              "operation": "largerEqual",
+              "value2": 80
+            }
+          ]
+        }
+      },
+      "id": "if-1",
+      "name": "High Quality Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "operation": "findOne",
+        "collection": "agents",
+        "query": "={\n  \"role\": \"agent\",\n  \"status\": \"available\"\n}",
+        "options": {\n  "sort": {\n    "active_conversations\": 1\n  }\n}"
+      },
+      "id": "mongodb-3",
+      "name": "Find Available Agent",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [1780, 200],
+      "credentials": {
+        "mongodb": {
+          "id": "1",
+          "name": "MongoDB WhatsApp CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "conversations",
+        "updateKey": "_id",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "assigned_agent_id",
+              "fieldValue": "={{ $json._id }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "assigned"
+            },
+            {
+              "fieldId": "priority",
+              "fieldValue": "high"
+            }
+          ]
+        }
+      },
+      "id": "mongodb-4",
+      "name": "Assign to Agent",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [2000, 200],
+      "credentials": {
+        "mongodb": {
+          "id": "1",
+          "name": "MongoDB WhatsApp CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/notifications/agent-alert",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"agent_id\": \"{{ $('Find Available Agent').item.json._id }}\",\n  \"type\": \"high_quality_lead\",\n  \"conversation_id\": \"{{ $('Parse Lead Score').item.json.conversation_id }}\",\n  \"lead_score\": {{ $('Parse Lead Score').item.json.lead_score }},\n  \"message\": \"High quality lead assigned - Score: {{ $('Parse Lead Score').item.json.lead_score }}\",\n  \"priority\": \"high\",\n  \"metadata\": {\n    \"buying_intent\": \"{{ $('Parse Lead Score').item.json.buying_intent }}\",\n    \"key_interests\": {{ JSON.stringify($('Parse Lead Score').item.json.key_interests) }},\n    \"recommended_action\": \"{{ $('Parse Lead Score').item.json.recommended_action }}\"\n  }\n}"
+      },
+      "id": "http-2",
+      "name": "Notify Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2220, 200]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "lead_scoring_log",
+        "fields": "={{ $('Parse Lead Score').item.json }}"
+      },
+      "id": "mongodb-5",
+      "name": "Log Scoring Event",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [2440, 300],
+      "credentials": {
+        "mongodb": {
+          "id": "1",
+          "name": "MongoDB WhatsApp CRM"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Get Conversation History": {
+      "main": [[{"node": "Prepare Analysis Data", "type": "main", "index": 0}]]
+    },
+    "Prepare Analysis Data": {
+      "main": [[{"node": "Analyze with AI", "type": "main", "index": 0}]]
+    },
+    "Analyze with AI": {
+      "main": [[{"node": "Parse Lead Score", "type": "main", "index": 0}]]
+    },
+    "Parse Lead Score": {
+      "main": [[{"node": "Update Lead Score", "type": "main", "index": 0}]]
+    },
+    "Update Lead Score": {
+      "main": [[{"node": "High Quality Lead?", "type": "main", "index": 0}]]
+    },
+    "High Quality Lead?": {
+      "main": [
+        [{"node": "Find Available Agent", "type": "main", "index": 0}],
+        [{"node": "Log Scoring Event", "type": "main", "index": 0}]
+      ]
+    },
+    "Find Available Agent": {
+      "main": [[{"node": "Assign to Agent", "type": "main", "index": 0}]]
+    },
+    "Assign to Agent": {
+      "main": [[{"node": "Notify Agent", "type": "main", "index": 0}]]
+    },
+    "Notify Agent": {
+      "main": [[{"node": "Log Scoring Event", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["lead-scoring", "ai", "sales"],
+  "triggerCount": 1
+}

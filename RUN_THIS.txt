@@ -1,0 +1,84 @@
+═══════════════════════════════════════════════════════════════
+  QUICK FIX FOR YOUR DOCKER ERROR
+═══════════════════════════════════════════════════════════════
+
+YOUR ERROR:
+  docker: error getting credentials - err: exec: 
+  "docker-credential-desktop": executable file not found
+
+═══════════════════════════════════════════════════════════════
+  SOLUTION: Run These Commands
+═══════════════════════════════════════════════════════════════
+
+Step 1: Fix Docker Config
+──────────────────────────────────────────────────────────────
+echo '{}' > ~/.docker/config.json
+
+
+Step 2: Start n8n with Docker Compose
+──────────────────────────────────────────────────────────────
+docker-compose -f n8n-docker-compose.yml up -d
+
+
+Step 3: Check if Running
+──────────────────────────────────────────────────────────────
+docker ps | grep n8n
+
+
+Step 4: Access n8n
+──────────────────────────────────────────────────────────────
+Open browser: http://localhost:5678
+Username: admin
+Password: change_this_password
+
+
+═══════════════════════════════════════════════════════════════
+  ALTERNATIVE: Use npm (No Docker)
+═══════════════════════════════════════════════════════════════
+
+If Docker still doesn't work:
+
+npm install n8n -g
+n8n start
+
+Then access: http://localhost:5678
+
+
+═══════════════════════════════════════════════════════════════
+  AUTOMATED FIX
+═══════════════════════════════════════════════════════════════
+
+Run the automated fix script:
+
+chmod +x fix-n8n-install.sh
+./fix-n8n-install.sh
+
+
+═══════════════════════════════════════════════════════════════
+  HELPFUL COMMANDS
+═══════════════════════════════════════════════════════════════
+
+View n8n logs:
+  docker-compose -f n8n-docker-compose.yml logs -f
+
+Stop n8n:
+  docker-compose -f n8n-docker-compose.yml down
+
+Restart n8n:
+  docker-compose -f n8n-docker-compose.yml restart
+
+Check Docker status:
+  docker ps
+
+
+═══════════════════════════════════════════════════════════════
+  NEED MORE HELP?
+═══════════════════════════════════════════════════════════════
+
+Read detailed guides:
+  - QUICK_FIX.md (Simple solutions)
+  - FIX_DOCKER_N8N.md (Detailed troubleshooting)
+  - N8N_SETUP_GUIDE.md (Complete setup guide)
+
+
+═══════════════════════════════════════════════════════════════
