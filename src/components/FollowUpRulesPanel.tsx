@@ -13,12 +13,7 @@ export function FollowUpRulesPanel() {
 
   const loadRules = async () => {
     try {
-      const { data, error } = await supabase
-        .from('follow_up_rules')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const data = await api.get('/follow-up-rules');
       setRules(data || []);
     } catch (error) {
       console.error('Error loading rules:', error);
@@ -29,12 +24,7 @@ export function FollowUpRulesPanel() {
 
   const toggleRule = async (ruleId: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
-        .from('follow_up_rules')
-        .update({ is_active: !currentStatus })
-        .eq('id', ruleId);
-
-      if (error) throw error;
+      await api.put(`/follow-up-rules/${ruleId}`, { is_active: !currentStatus });
       loadRules();
     } catch (error) {
       console.error('Error toggling rule:', error);

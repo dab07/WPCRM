@@ -13,12 +13,7 @@ export function CampaignsPanel() {
 
   const loadCampaigns = async () => {
     try {
-      const { data, error } = await supabase
-        .from('campaigns')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const data = await api.get('/campaigns');
       setCampaigns(data || []);
     } catch (error) {
       console.error('Error loading campaigns:', error);

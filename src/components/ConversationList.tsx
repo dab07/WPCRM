@@ -30,16 +30,8 @@ export function ConversationList({ selectedId, onSelect }: ConversationListProps
 
   const loadConversations = async () => {
     try {
-      const { data, error } = await supabase
-        .from('conversations')
-        .select(`
-          *,
-          contact:contacts(*)
-        `)
-        .order('last_message_at', { ascending: false });
-
-      if (error) throw error;
-      setConversations(data as unknown as ConversationWithContact[]);
+      const data = await api.get('/conversations');
+      setConversations(data || []);
     } catch (error) {
       console.error('Error loading conversations:', error);
     } finally {

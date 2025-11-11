@@ -55,22 +55,11 @@ export function AgenticDashboard() {
       setMetrics(metricsData);
 
       // Load trigger executions
-      const { data: triggerData } = await supabase
-        .from('triggers')
-        .select('*')
-        .eq('is_active', true)
-        .order('execution_count', { ascending: false })
-        .limit(10);
-      
+      const triggerData = await api.get('/triggers?is_active=true&limit=10');
       setTriggers(triggerData || []);
 
       // Load recent workflow executions
-      const { data: workflowData } = await supabase
-        .from('workflow_executions')
-        .select('*')
-        .order('started_at', { ascending: false })
-        .limit(10);
-      
+      const workflowData = await api.get('/workflow-executions?limit=10');
       setWorkflows(workflowData || []);
 
     } catch (error) {
@@ -84,27 +73,19 @@ export function AgenticDashboard() {
     const today = new Date().toISOString().split('T')[0];
 
     // Get conversation metrics
-    const { data: conversations } = await supabase
-      .from('conversations')
-      .select('status, ai_confidence_score, created_at');
+    const conversations = await api.get('/conversations');
 
     const totalConversations = conversations?.length || 0;
-    const aiHandled = conversations?.filter(c => c.status === 'ai_handled').length || 0;
+    const aiHandled = conversations?.filter((c: any) => c.status === 'ai_handled').length || 0;
     const aiHandledPercentage = totalConversations > 0 ? (aiHandled / totalConversations) * 100 : 0;
 
     // Get workflow metrics
-    const { data: activeWorkflows } = await supabase
-      .from('workflow_executions')
-      .select('id')
-      .eq('status', 'running');
+    const activeWorkflows = await api.get('/workflow-executions?status=running');
 
     // Get trigger metrics for today
-    const { data: triggerExecutions } = await supabase
-      .from('triggers')
-      .select('execution_count')
-      .gte('updated_at', today);
+    const triggerExecutions = await api.get(`/triggers?updated_at_gte=${today}`);
 
-    const triggersActivatedToday = triggerExecutions?.reduce((sum, t) => sum + t.execution_count, 0) || 0;
+    const triggersActivatedToday = triggerExecutions?.reduce((sum: number, t: any) => sum + (t.execution_count || 0), 0) || 0;
 
     return {
       total_conversations: totalConversations,

@@ -32,12 +32,7 @@ export function ContactsPanel() {
 
   const loadContacts = async () => {
     try {
-      const { data, error } = await supabase
-        .from('contacts')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const data = await api.get('/contacts');
       setContacts(data || []);
       setFilteredContacts(data || []);
     } catch (error) {
@@ -164,18 +159,13 @@ function ContactDetails({
 
   const handleSave = async () => {
     try {
-      const { error } = await supabase
-        .from('contacts')
-        .update({
-          name: formData.name,
-          email: formData.email || null,
-          company: formData.company || null,
-          tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', contact.id);
-
-      if (error) throw error;
+      await api.put(`/contacts/${contact.id}`, {
+        name: formData.name,
+        email: formData.email || null,
+        company: formData.company || null,
+        tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
+        updated_at: new Date().toISOString(),
+      });
       setEditing(false);
       onUpdate();
     } catch (error) {

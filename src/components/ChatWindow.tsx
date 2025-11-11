@@ -39,13 +39,7 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
 
   const loadMessages = async () => {
     try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversation.id)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
+      const data = await api.get(`/messages?conversation_id=${conversation.id}`);
       setMessages(data || []);
     } catch (error) {
       console.error('Error loading messages:', error);
@@ -56,13 +50,7 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
 
   const loadAgents = async () => {
     try {
-      const { data, error } = await supabase
-        .from('agents')
-        .select('*')
-        .eq('is_active', true)
-        .order('full_name');
-
-      if (error) throw error;
+      const data = await api.get('/agents?is_active=true');
       setAgents(data || []);
     } catch (error) {
       console.error('Error loading agents:', error);
@@ -71,16 +59,11 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
 
   const assignAgent = async (agentId: string) => {
     try {
-      const { error } = await supabase
-        .from('conversations')
-        .update({
-          assigned_agent_id: agentId,
-          status: 'agent_assigned',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', conversation.id);
-
-      if (error) throw error;
+      await api.put(`/conversations/${conversation.id}`, {
+        assigned_agent_id: agentId,
+        status: 'agent_assigned',
+        updated_at: new Date().toISOString(),
+      });
       setShowAssignMenu(false);
     } catch (error) {
       console.error('Error assigning agent:', error);

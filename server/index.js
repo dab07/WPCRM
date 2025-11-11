@@ -64,10 +64,10 @@ async function startServer() {
 
     // Start Express server
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔗 API: http://localhost:${PORT}/api`);
-      console.log(`🪝 Webhook: http://localhost:${PORT}/webhook`);
+      console.log(`Server running on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`API: http://localhost:${PORT}/api`);
+      console.log(`Webhook: http://localhost:${PORT}/webhook`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
