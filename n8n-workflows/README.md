@@ -1,380 +1,351 @@
-# n8n Workflows for Agentic AI WhatsApp CRM
+# n8n Workflows for WhatsApp CRM (Supabase)
 
-This directory contains pre-built n8n workflows for your WhatsApp CRM system.
+This directory contains pre-built n8n workflows for your WhatsApp CRM system, configured for **Supabase PostgreSQL**.
 
-## Available Workflows
+## 📋 Quick Start
 
-### 1. Lead Nurturing Sequence (`1-lead-nurturing.json`)
-**Purpose**: Automatically nurture new leads with personalized messages
+1. **Start n8n**: `npx n8n`
+2. **Import workflows**: Use the `-supabase.json` files
+3. **Configure credentials**: Add Supabase API credentials
+4. **Set environment variables**: `SUPABASE_URL`, `GEMINI_API_KEY`
+5. **Activate workflows**: Toggle the switch in n8n
 
-**Trigger**: Webhook when new contact is created
-**Steps**:
-1. Wait 1 hour (let them settle in)
-2. Get contact details from MongoDB
-3. Generate personalized welcome message with Gemini AI
-4. Send WhatsApp message
-5. Wait 24 hours
-6. Check if customer engaged
-7. If engaged → Send product information
-8. If not engaged → Send re-engagement message
-9. Update customer journey stage
+## 📦 Available Workflows
 
-**Webhook URL**: `http://localhost:5678/webhook/lead-nurturing`
+### ✅ Supabase Versions (Use These!)
+
+1. **Lead Nurturing Sequence** (`1-lead-nurturing-supabase.json`)
+2. **Abandoned Cart Recovery** (`2-abandoned-cart-supabase.json`)
+3. **Customer Feedback Collection** (`3-feedback-collection-supabase.json`)
+4. **Smart Re-engagement** (`4-smart-reengagement-supabase.json`)
+5. **AI Lead Scoring** (`5-ai-lead-scoring-supabase.json`)
+
+### ⚠️ Legacy MongoDB Versions (Deprecated)
+
+Original MongoDB workflows kept for reference only - do not use.
+
+## 📚 Documentation
+
+- **[N8N_SELF_HOSTING_GUIDE.md](./N8N_SELF_HOSTING_GUIDE.md)** - Complete setup guide for self-hosting n8n
+- **[SUPABASE_CONVERSION.md](./SUPABASE_CONVERSION.md)** - MongoDB to Supabase conversion details
+- **[NPM_SETUP.md](./NPM_SETUP.md)** - npm package installation guide
+
+## 🚀 Workflow Details
+
+### 1. Lead Nurturing Sequence
+
+**Purpose**: Automatically nurture new leads with personalized AI messages
+
+**Flow**:
+1. Webhook receives new lead
+2. Wait 1 hour
+3. Get contact from Supabase
+4. Generate welcome message with Gemini AI
+5. Send WhatsApp message
+6. Wait 24 hours
+7. Check engagement
+8. Send follow-up based on engagement
+
+**Webhook**: `http://localhost:5678/webhook/lead-nurturing`
 
 **Test**:
 ```bash
 curl -X POST http://localhost:5678/webhook/lead-nurturing \
   -H "Content-Type: application/json" \
   -d '{
-    "contact_id": "your_mongodb_contact_id",
-    "name": "John Doe",
-    "phone_number": "+1234567890"
+    "contact_id": "uuid-here",
+    "conversation_id": "uuid-here"
   }'
 ```
 
 ---
 
-### 2. Abandoned Cart Recovery (`2-abandoned-cart.json`)
-**Purpose**: Re-engage customers who showed product interest but didn't purchase
+### 2. Abandoned Cart Recovery
 
-**Trigger**: Webhook when product interest is detected
-**Steps**:
-1. Store interest event in MongoDB
-2. Wait 2 hours
-3. Check if purchase was made
-4. If no purchase → Generate reminder with 5% discount
-5. Send WhatsApp message
+**Purpose**: Re-engage customers who showed product interest
+
+**Flow**:
+1. Webhook receives product interest event
+2. Store in contact metadata
+3. Wait 2 hours
+4. Check if still interested
+5. Send 5% discount reminder
 6. Wait 24 hours
 7. Check again
-8. If still no purchase → Generate urgency message with 10% discount
-9. Send final offer
-10. Update status
+8. Send 10% discount final offer
 
-**Webhook URL**: `http://localhost:5678/webhook/abandoned-cart`
+**Webhook**: `http://localhost:5678/webhook/abandoned-cart`
 
 **Test**:
 ```bash
 curl -X POST http://localhost:5678/webhook/abandoned-cart \
   -H "Content-Type: application/json" \
   -d '{
-    "contact_id": "your_mongodb_contact_id",
-    "product_id": "prod_123",
+    "contact_id": "uuid-here",
+    "product_id": "123",
     "product_name": "Premium Package"
   }'
 ```
 
 ---
 
-### 3. Customer Feedback Collection (`3-feedback-collection.json`)
-**Purpose**: Automatically collect feedback after purchase
+### 3. Customer Feedback Collection
 
-**Trigger**: Webhook when purchase is completed
-**Steps**:
-1. Update customer journey to "purchase" stage
-2. Wait 7 days
-3. Generate personalized feedback request
-4. Send WhatsApp message
-5. Wait for response (3 days)
-6. If response received → Analyze sentiment with Gemini
-7. Store feedback in MongoDB
-8. If negative → Alert agent
-9. If positive → Send thank you message
+**Purpose**: Collect and analyze feedback after purchase
 
-**Webhook URL**: `http://localhost:5678/webhook/feedback-collection`
+**Flow**:
+1. Webhook receives purchase event
+2. Update journey stage
+3. Wait 7 days
+4. Send feedback request
+5. Wait 3 days for response
+6. Analyze sentiment with AI
+7. Store in contact metadata
+8. Alert agent if negative
 
----
+**Webhook**: `http://localhost:5678/webhook/feedback-collection`
 
-### 4. Smart Re-engagement (`4-smart-reengagement.json`)
-**Purpose**: Re-engage inactive customers automatically
-
-**Trigger**: Cron (Daily at 10 AM)
-**Steps**:
-1. Find customers inactive for >7 days
-2. For each customer:
-   - Get conversation history
-   - Get customer preferences
-   - Generate personalized re-engagement message with Gemini
-   - Send WhatsApp message
-   - Update last contact date
-   - Log re-engagement attempt
-
-**Schedule**: Daily at 10:00 AM
-
----
-
-### 5. AI Lead Scoring (`5-ai-lead-scoring.json`)
-**Purpose**: Automatically score and qualify leads
-
-**Trigger**: Webhook on new message
-**Steps**:
-1. Get conversation history
-2. Analyze message with Gemini AI for buying intent
-3. Calculate lead score based on:
-   - Message frequency
-   - Sentiment analysis
-   - Keywords detected
-   - Engagement level
-   - Response time
-4. Update lead score in MongoDB
-5. If score > 80 → Assign to sales agent
-6. Send notification to agent
-
-**Webhook URL**: `http://localhost:5678/webhook/lead-scoring`
-
----
-
-## How to Import Workflows
-
-### Method 1: Via n8n UI (Recommended)
-
-1. Open n8n: `http://localhost:5678`
-2. Click **Workflows** in the left sidebar
-3. Click **Import from File**
-4. Select a workflow JSON file from this directory
-5. Click **Import**
-6. The workflow will open in the editor
-7. Click **Save**
-
-### Method 2: Via API
-
+**Test**:
 ```bash
-# Import workflow via n8n API
-curl -X POST http://localhost:5678/api/v1/workflows \
-  -H "X-N8N-API-KEY: your_api_key" \
-  -H "Content-Type: application/json" \
-  -d @1-lead-nurturing.json
-```
-
-### Method 3: Copy-Paste
-
-1. Open the JSON file in a text editor
-2. Copy the entire content
-3. In n8n, click **Workflows** → **Add Workflow**
-4. Click the **⋮** menu → **Import from URL or File**
-5. Paste the JSON content
-6. Click **Import**
-
----
-
-## Configuration Required
-
-After importing workflows, you need to configure:
-
-### 1. MongoDB Credentials
-
-1. Go to **Credentials** in n8n
-2. Click **Add Credential**
-3. Search for "MongoDB"
-4. Fill in:
-   - **Connection String**: Your MongoDB URI from `.env`
-   - **Database**: `whatsapp-crm`
-5. Click **Save**
-6. Name it: "MongoDB WhatsApp CRM"
-
-### 2. Environment Variables
-
-Make sure these are set in your `n8n-docker-compose.yml`:
-```yaml
-environment:
-  - GEMINI_API_KEY=your_gemini_api_key
-  - MONGODB_URI=your_mongodb_uri
-  - WHATSAPP_API_TOKEN=your_whatsapp_token
-```
-
-### 3. Update Webhook URLs
-
-In each workflow, update the HTTP Request nodes with your actual server URL:
-- Development: `http://localhost:3000`
-- Production: `https://your-domain.com`
-
----
-
-## Testing Workflows
-
-### Test Individual Nodes
-
-1. Open a workflow
-2. Click on any node
-3. Click **Execute Node** button
-4. Check the output in the right panel
-
-### Test Entire Workflow
-
-1. Click **Execute Workflow** button (top right)
-2. Provide test data if needed
-3. Watch the execution flow
-4. Check results in each node
-
-### Test Webhooks
-
-Use curl or Postman:
-```bash
-# Test lead nurturing
-curl -X POST http://localhost:5678/webhook/lead-nurturing \
+curl -X POST http://localhost:5678/webhook/feedback-collection \
   -H "Content-Type: application/json" \
   -d '{
-    "contact_id": "673e5f8a9b1c2d3e4f5a6b7c",
-    "name": "Test User",
-    "phone_number": "+1234567890"
+    "contact_id": "uuid-here",
+    "product_name": "Test Product"
   }'
 ```
 
 ---
 
-## Customizing Workflows
+### 4. Smart Re-engagement
 
-### Modify AI Prompts
+**Purpose**: Re-engage inactive customers with personalized messages
 
-In "Generate Message" nodes, update the Gemini AI prompt:
+**Flow**:
+1. Cron triggers daily at 10 AM
+2. Find conversations inactive >7 days
+3. For each customer:
+   - Get conversation history
+   - Generate personalized message with AI
+   - Send WhatsApp message
+   - Log re-engagement
+
+**Schedule**: Daily at 10:00 AM (automatic)
+
+**Manual Test**: Click "Execute Workflow" in n8n
+
+---
+
+### 5. AI Lead Scoring
+
+**Purpose**: Automatically score and qualify leads
+
+**Flow**:
+1. Webhook receives new message
+2. Get conversation history
+3. Analyze with Gemini AI
+4. Calculate lead score (0-100)
+5. Update contact metadata
+6. If score ≥80 → Assign to agent
+7. Log scoring event
+
+**Webhook**: `http://localhost:5678/webhook/lead-scoring`
+
+**Test**:
+```bash
+curl -X POST http://localhost:5678/webhook/lead-scoring \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contact_id": "uuid-here",
+    "conversation_id": "uuid-here"
+  }'
+```
+
+---
+
+## 🔧 Setup Instructions
+
+### 1. Import Workflows
+
+**Via UI (Recommended)**:
+1. Open n8n at `http://localhost:5678`
+2. Click **Workflows** → **Import from File**
+3. Select a `-supabase.json` file
+4. Click **Import**
+5. Activate the workflow
+
+**Via API**:
+```bash
+curl -X POST http://localhost:5678/api/v1/workflows \
+  -H "X-N8N-API-KEY: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d @1-lead-nurturing-supabase.json
+```
+
+### 2. Configure Credentials
+
+**Supabase API**:
+1. Go to **Credentials** → **New**
+2. Search for "Supabase API"
+3. Add:
+   - **Name**: `Supabase CRM`
+   - **Host**: `https://xxxxx.supabase.co`
+   - **Service Role Key**: From Supabase dashboard
+
+### 3. Set Environment Variables
+
+```bash
+# In your shell or n8n config
+export SUPABASE_URL=https://xxxxx.supabase.co
+export GEMINI_API_KEY=your-gemini-api-key
+```
+
+Or add to n8n Docker/config:
+```yaml
+environment:
+  - SUPABASE_URL=https://xxxxx.supabase.co
+  - GEMINI_API_KEY=your-gemini-api-key
+```
+
+---
+
+## 🎯 Key Features
+
+### Supabase Integration
+- REST API-based (no database drivers needed)
+- UUID-based IDs
+- JSONB metadata for flexible data
+- PostgREST filtering
+
+### AI-Powered
+- Gemini AI for message generation
+- Sentiment analysis
+- Lead scoring
+- Intent detection
+
+### Automation
+- Webhook triggers
+- Scheduled tasks (cron)
+- Conditional logic
+- Rate limiting
+
+---
+
+## 📊 Data Storage
+
+### Contact Metadata (JSONB)
 ```json
 {
-  "contents": [{
-    "parts": [{
-      "text": "Your custom prompt here..."
-    }]
-  }]
+  "lead_score": 85,
+  "buying_intent": "high",
+  "journey_stage": "interest",
+  "product_interests": [...],
+  "feedback": {...}
+}
+```
+
+### Conversation Metadata (JSONB)
+```json
+{
+  "priority": "high",
+  "last_reengagement_at": "2024-11-12T10:00:00Z",
+  "reengagement_count": 3
+}
+```
+
+### Workflow Executions Table
+All workflow runs are logged to `workflow_executions` table with input/output data.
+
+---
+
+## 🔍 Monitoring
+
+### View Executions
+1. Click **Executions** in n8n
+2. See all workflow runs
+3. Debug errors
+4. Check data flow
+
+### Check Logs
+```bash
+# n8n logs
+docker logs n8n-container
+
+# Or if running with npx
+# Check terminal output
+```
+
+---
+
+## 🛠️ Customization
+
+### Modify AI Prompts
+Edit the "Generate Message" nodes:
+```json
+{
+  "text": "Your custom prompt here..."
 }
 ```
 
 ### Change Timing
-
-In "Wait" nodes, adjust the duration:
-- Hours: `{ "amount": 2, "unit": "hours" }`
-- Days: `{ "amount": 3, "unit": "days" }`
-- Minutes: `{ "amount": 30, "unit": "minutes" }`
+Edit "Wait" nodes:
+```json
+{
+  "amount": 2,
+  "unit": "hours"
+}
+```
 
 ### Add Conditions
-
-Use "IF" nodes to add conditional logic:
+Use "IF" nodes:
 ```javascript
-// Check if customer is VIP
+{{ $json.lead_score > 80 }}
 {{ $json.tags.includes('vip') }}
-
-// Check message count
-{{ $json.message_count > 5 }}
-
-// Check last interaction
-{{ $now.diff($json.last_interaction, 'days') > 7 }}
 ```
 
 ---
 
-## Monitoring Workflows
-
-### View Executions
-
-1. Click **Executions** in n8n
-2. See all workflow runs
-3. Click on any execution to see details
-4. Debug errors and check data flow
-
-### Enable Logging
-
-Add "Set" nodes to log data:
-```javascript
-// Log to console
-console.log('Customer:', $json.name);
-console.log('Stage:', $json.stage);
-```
-
-### Error Handling
-
-Add "Error Trigger" node:
-1. Catches workflow errors
-2. Sends alert to admin
-3. Logs error to MongoDB
-
----
-
-## Best Practices
-
-### 1. Use Descriptive Names
-- Workflow: "Lead Nurturing - Welcome Sequence"
-- Nodes: "Get Contact from MongoDB", "Generate AI Message"
-
-### 2. Add Notes
-- Right-click node → Add Note
-- Document complex logic
-- Explain business rules
-
-### 3. Test Before Activating
-- Test with sample data
-- Verify all nodes work
-- Check MongoDB updates
-
-### 4. Monitor Performance
-- Check execution times
-- Optimize slow queries
-- Add indexes if needed
-
-### 5. Version Control
-- Export workflows regularly
-- Store in Git
-- Track changes
-
----
-
-## Troubleshooting
+## 🐛 Troubleshooting
 
 ### Workflow Not Triggering
-- Check webhook URL is correct
-- Verify workflow is activated (toggle switch)
-- Check n8n logs: `docker logs n8n-whatsapp-crm`
+- Check workflow is activated
+- Verify webhook URL
+- Check n8n logs
 
-### MongoDB Connection Failed
-- Verify connection string in credentials
-- Check IP whitelist in MongoDB Atlas
-- Test connection outside n8n
+### Supabase Connection Failed
+- Verify credentials
+- Check service role key
+- Test API manually
 
 ### Gemini API Errors
-- Check API key is set in environment
-- Verify rate limits not exceeded
+- Check API key
+- Verify rate limits
 - Check request format
 
-### Messages Not Sending
-- Verify WhatsApp API credentials
-- Check phone number format
-- Test API endpoint separately
+### Environment Variables Not Found
+- Restart n8n after setting
+- Check with `echo $SUPABASE_URL`
+- Verify in n8n settings
 
 ---
 
-## Creating New Workflows
-
-### Template Structure
-
-```
-Trigger (Webhook/Cron)
-    ↓
-Get Data (MongoDB)
-    ↓
-Process with AI (Gemini)
-    ↓
-Take Action (Send Message)
-    ↓
-Update Database (MongoDB)
-    ↓
-Log Result
-```
-
-### Common Nodes
-
-- **Webhook**: Receive external triggers
-- **Cron**: Schedule recurring tasks
-- **MongoDB**: Database operations
-- **HTTP Request**: API calls (Gemini, WhatsApp)
-- **Code**: Custom JavaScript logic
-- **IF**: Conditional branching
-- **Wait**: Delay execution
-- **Set**: Transform data
-
----
-
-## Support
+## 📖 Additional Resources
 
 - **n8n Documentation**: https://docs.n8n.io
-- **Community Forum**: https://community.n8n.io
-- **GitHub Issues**: https://github.com/n8n-io/n8n/issues
+- **Supabase Docs**: https://supabase.com/docs
+- **PostgREST API**: https://postgrest.org
+- **Gemini AI**: https://ai.google.dev
 
 ---
+
+## 🎉 Next Steps
+
+1. ✅ Import all 5 workflows
+2. ✅ Configure Supabase credentials
+3. ✅ Set environment variables
+4. ✅ Test each workflow
+5. ✅ Integrate with your CRM
+6. ✅ Monitor executions
+7. ✅ Customize as needed
 
 **Happy Automating! 🚀**

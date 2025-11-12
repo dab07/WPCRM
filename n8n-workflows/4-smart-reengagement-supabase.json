@@ -1,5 +1,5 @@
 {
-  "name": "Smart Re-engagement",
+  "name": "Smart Re-engagement (Supabase)",
   "nodes": [
     {
       "parameters": {
@@ -20,19 +20,42 @@
     },
     {
       "parameters": {
-        "operation": "aggregate",
-        "collection": "conversations",
-        "query": "=[\n  {\n    \"$match\": {\n      \"status\": \"active\",\n      \"last_message_at\": {\n        \"$lte\": { \"$date\": \"{{ $now.minus({days: 7}).toISO() }}\" }\n      }\n    }\n  },\n  {\n    \"$lookup\": {\n      \"from\": \"contacts\",\n      \"localField\": \"contact_id\",\n      \"foreignField\": \"_id\",\n      \"as\": \"contact\"\n    }\n  },\n  { \"$unwind\": \"$contact\" },\n  { \"$limit\": 50 }\n]"
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/conversations",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "=eq.active"
+            },
+            {
+              "name": "last_message_at",
+              "value": "=lte.{{ $now.minus({days: 7}).toISO() }}"
+            },
+            {
+              "name": "select",
+              "value": "*,contacts(*)"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {}
       },
-      "id": "mongodb-1",
+      "id": "http-1",
       "name": "Find Inactive Customers",
-      "type": "n8n-nodes-base.mongodb",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [460, 300],
       "credentials": {
-        "mongodb": {
+        "supabaseApi": {
           "id": "1",
-          "name": "MongoDB WhatsApp CRM"
+          "name": "Supabase CRM"
         }
       }
     },
@@ -49,25 +72,44 @@
     },
     {
       "parameters": {
-        "operation": "aggregate",
-        "collection": "messages",
-        "query": "=[\n  {\n    \"$match\": {\n      \"conversation_id\": { \"$oid\": \"{{ $json._id }}\" }\n    }\n  },\n  { \"$sort\": { \"created_at\": -1 } },\n  { \"$limit\": 10 }\n]"
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "conversation_id",
+              "value": "=eq.{{ $json.id }}"
+            },
+            {
+              "name": "order",
+              "value": "created_at.desc"
+            },
+            {
+              "name": "limit",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {}
       },
-      "id": "mongodb-2",
+      "id": "http-2",
       "name": "Get Conversation History",
-      "type": "n8n-nodes-base.mongodb",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [900, 300],
       "credentials": {
-        "mongodb": {
+        "supabaseApi": {
           "id": "1",
-          "name": "MongoDB WhatsApp CRM"
+          "name": "Supabase CRM"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "const conversation = $('Process Each Customer').item.json;\nconst messages = $input.all().map(m => m.json);\n\nconst messageHistory = messages.map(m => \n  `${m.sender_type}: ${m.content}`\n).join('\\n');\n\nconst daysSinceLastMessage = Math.floor(\n  (new Date() - new Date(conversation.last_message_at)) / (1000 * 60 * 60 * 24)\n);\n\nreturn {\n  json: {\n    contact_id: conversation.contact._id,\n    contact_name: conversation.contact.name,\n    phone_number: conversation.contact.phone_number,\n    conversation_id: conversation._id,\n    tags: conversation.contact.tags || [],\n    message_history: messageHistory,\n    days_inactive: daysSinceLastMessage,\n    last_topic: messages[0]?.content || 'general inquiry'\n  }\n};"
+        "jsCode": "const conversation = $('Process Each Customer').item.json;\nconst messages = $input.item.json;\n\nconst messageHistory = messages.map(m => \n  `${m.sender_type}: ${m.content}`\n).join('\\n');\n\nconst daysSinceLastMessage = Math.floor(\n  (new Date() - new Date(conversation.last_message_at)) / (1000 * 60 * 60 * 24)\n);\n\nconst contact = conversation.contacts;\n\nreturn {\n  json: {\n    contact_id: contact.id,\n    contact_name: contact.name,\n    phone_number: contact.phone_number,\n    conversation_id: conversation.id,\n    tags: contact.tags || [],\n    message_history: messageHistory,\n    days_inactive: daysSinceLastMessage,\n    last_topic: messages[0]?.content || 'general inquiry'\n  }\n};"
       },
       "id": "code-1",
       "name": "Prepare Context",
@@ -84,7 +126,7 @@
         "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Generate a personalized re-engagement message for {{ $json.contact_name }} who hasn't messaged in {{ $json.days_inactive }} days.\\n\\nContext:\\n- Last topic: {{ $json.last_topic }}\\n- Customer tags: {{ $json.tags.join(', ') }}\\n- Recent conversation:\\n{{ $json.message_history }}\\n\\nCreate a friendly, relevant message that:\\n1. References their previous interaction naturally\\n2. Provides value or helpful information\\n3. Asks an open-ended question\\n4. Feels personal, not automated\\n5. Is under 200 characters\\n\\nDo not be pushy or salesy.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.8,\n    \"maxOutputTokens\": 250\n  }\n}",
         "options": {}
       },
-      "id": "http-1",
+      "id": "http-3",
       "name": "Generate Personalized Message",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -108,7 +150,7 @@
         "specifyBody": "json",
         "jsonBody": "={\n  \"phone_number\": \"{{ $json.phone_number }}\",\n  \"message\": \"{{ $json.message }}\",\n  \"contact_id\": \"{{ $json.contact_id }}\"\n}"
       },
-      "id": "http-2",
+      "id": "http-4",
       "name": "Send Re-engagement Message",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -116,49 +158,56 @@
     },
     {
       "parameters": {
-        "operation": "update",
-        "collection": "conversations",
-        "updateKey": "_id",
-        "fieldsUi": {
-          "fieldValues": [
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/conversations",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
             {
-              "fieldId": "last_reengagement_at",
-              "fieldValue": "={{ $now.toISO() }}"
-            },
-            {
-              "fieldId": "reengagement_count",
-              "fieldValue": "={{ $json.reengagement_count + 1 }}"
+              "name": "id",
+              "value": "=eq.{{ $('Format Message').item.json.conversation_id }}"
             }
           ]
-        }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"metadata\": {\n    \"last_reengagement_at\": \"{{ $now.toISO() }}\",\n    \"reengagement_count\": {{ ($json.metadata?.reengagement_count || 0) + 1 }}\n  }\n}",
+        "options": {}
       },
-      "id": "mongodb-3",
+      "id": "http-5",
       "name": "Update Last Contact",
-      "type": "n8n-nodes-base.mongodb",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [2000, 300],
       "credentials": {
-        "mongodb": {
+        "supabaseApi": {
           "id": "1",
-          "name": "MongoDB WhatsApp CRM"
+          "name": "Supabase CRM"
         }
       }
     },
     {
       "parameters": {
-        "operation": "insert",
-        "collection": "reengagement_log",
-        "fields": "={\n  \"contact_id\": \"{{ $('Format Message').item.json.contact_id }}\",\n  \"conversation_id\": \"{{ $('Format Message').item.json.conversation_id }}\",\n  \"message_sent\": \"{{ $('Format Message').item.json.message }}\",\n  \"type\": \"smart_ai\",\n  \"sent_at\": \"{{ $now.toISO() }}\",\n  \"status\": \"sent\"\n}"
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/workflow_executions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contact_id\": \"{{ $('Format Message').item.json.contact_id }}\",\n  \"workflow_name\": \"smart_reengagement\",\n  \"trigger_type\": \"scheduled\",\n  \"status\": \"completed\",\n  \"input_data\": {\n    \"conversation_id\": \"{{ $('Format Message').item.json.conversation_id }}\",\n    \"message_sent\": \"{{ $('Format Message').item.json.message }}\",\n    \"type\": \"smart_ai\"\n  },\n  \"completed_at\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
       },
-      "id": "mongodb-4",
+      "id": "http-6",
       "name": "Log Re-engagement",
-      "type": "n8n-nodes-base.mongodb",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [2220, 300],
       "credentials": {
-        "mongodb": {
+        "supabaseApi": {
           "id": "1",
-          "name": "MongoDB WhatsApp CRM"
+          "name": "Supabase CRM"
         }
       }
     },
@@ -213,6 +262,6 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": ["automation", "retention"],
+  "tags": ["supabase", "automation", "retention"],
   "triggerCount": 1
 }

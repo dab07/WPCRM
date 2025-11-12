@@ -1,5 +1,5 @@
 {
-  "name": "Lead Nurturing Sequence",
+  "name": "Lead Nurturing Sequence (Supabase)",
   "nodes": [
     {
       "parameters": {
@@ -28,19 +28,34 @@
     },
     {
       "parameters": {
-        "operation": "aggregate",
-        "collection": "contacts",
-        "query": "=[\n  { \"$match\": { \"_id\": { \"$oid\": \"{{ $json.contact_id }}\" } } },\n  {\n    \"$lookup\": {\n      \"from\": \"customer_journey\",\n      \"localField\": \"_id\",\n      \"foreignField\": \"contact_id\",\n      \"as\": \"journey\"\n    }\n  }\n]"
+        "method": "GET",
+        "url": "={{ $env.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/contacts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "=eq.{{ $json.contact_id }}"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            }
+          ]
+        },
+        "options": {}
       },
-      "id": "mongodb-1",
+      "id": "http-1",
       "name": "Get Contact Details",
-      "type": "n8n-nodes-base.mongodb",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [680, 300],
       "credentials": {
-        "mongodb": {
+        "supabaseApi": {
           "id": "1",
-          "name": "MongoDB WhatsApp CRM"
+          "name": "Supabase CRM"
         }
       }
     },
@@ -50,10 +65,10 @@
         "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={{ $env.GEMINI_API_KEY }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"You are a friendly customer service agent. Generate a warm welcome message for a new lead named {{ $json.name }}. Mention that you're here to help them and ask what brought them to us today. Keep it under 160 characters and friendly.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.7,\n    \"maxOutputTokens\": 150\n  }\n}",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"You are a friendly customer service agent. Generate a warm welcome message for a new lead named {{ $json[0].name }}. Mention that you're here to help them and ask what brought them to us today. Keep it under 160 characters and friendly.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.7,\n    \"maxOutputTokens\": 150\n  }\n}",
         "options": {}
       },
-      "id": "http-1",
+      "id": "http-2",
       "name": "Generate Welcome Message",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -61,7 +76,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const response = $input.item.json;\nconst contact = $('Get Contact Details').item.json;\nconst generatedText = response.candidates[0].content.parts[0].text;\n\nreturn {\n  json: {\n    contact_id: contact._id,\n    name: contact.name,\n    phone_number: contact.phone_number,\n    message: generatedText,\n    stage: 'welcome_sent'\n  }\n};"
+        "jsCode": "const response = $input.item.json;\nconst contact = $('Get Contact Details').item.json[0];\nconst generatedText = response.candidates[0].content.parts[0].text;\n\nreturn {\n  json: {\n    contact_id: contact.id,\n    name: contact.name,\n    phone_number: contact.phone_number,\n    message: generatedText,\n    stage: 'welcome_sent'\n  }\n};"
       },
       "id": "code-1",
       "name": "Format Message",
@@ -78,7 +93,7 @@
         "jsonBody": "={\n  \"phone_number\": \"{{ $json.phone_number }}\",\n  \"message\": \"{{ $json.message }}\",\n  \"contact_id\": \"{{ $json.contact_id }}\"\n}",
         "options": {}
       },
-      "id": "http-2",
+      "id": "http-3",
       "name": "Send WhatsApp Message",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -97,19 +112,48 @@
     },
     {
       "parameters": {
-        "operation": "aggregate",
-        "collection": "messages",
-        "query": "=[\n  {\n    \"$match\": {\n      \"conversation_id\": { \"$oid\": \"{{ $json.conversation_id }}\" },\n      \"sender_type\": \"customer\",\n      \"created_at\": { \"$gte\": { \"$date\": \"{{ $now.minus({hours: 24}).toISO() }}\" } }\n    }\n  },\n  { \"$count\": \"message_count\" }\n]"
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "conversation_id",
+              "value": "=eq.{{ $json.conversation_id }}"
+            },
+            {
+              "name": "sender_type",
+              "value": "=eq.customer"
+            },
+            {
+              "name": "created_at",
+              "value": "=gte.{{ $now.minus({hours: 24}).toISO() }}"
+            },
+            {
+              "name": "select",
+              "value": "count"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
       },
-      "id": "mongodb-2",
+      "id": "http-4",
       "name": "Check Engagement",
-      "type": "n8n-nodes-base.mongodb",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [1780, 300],
       "credentials": {
-        "mongodb": {
+        "supabaseApi": {
           "id": "1",
-          "name": "MongoDB WhatsApp CRM"
+          "name": "Supabase CRM"
         }
       }
     },
@@ -118,7 +162,7 @@
         "conditions": {
           "number": [
             {
-              "value1": "={{ $json.message_count }}",
+              "value1": "={{ $json.count }}",
               "operation": "larger",
               "value2": 0
             }
@@ -140,7 +184,7 @@
         "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Generate a message sharing key product benefits for an engaged customer named {{ $('Format Message').item.json.name }}. Keep it conversational and under 200 characters.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.7,\n    \"maxOutputTokens\": 200\n  }\n}",
         "options": {}
       },
-      "id": "http-3",
+      "id": "http-5",
       "name": "Generate Product Info",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -155,7 +199,7 @@
         "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Generate a gentle re-engagement message for {{ $('Format Message').item.json.name }} who hasn't responded. Ask if they have any questions. Keep it friendly and under 160 characters.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.8,\n    \"maxOutputTokens\": 150\n  }\n}",
         "options": {}
       },
-      "id": "http-4",
+      "id": "http-6",
       "name": "Generate Re-engagement",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -163,31 +207,33 @@
     },
     {
       "parameters": {
-        "operation": "update",
-        "collection": "customer_journey",
-        "updateKey": "contact_id",
-        "fieldsUi": {
-          "fieldValues": [
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/contacts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
             {
-              "fieldId": "stage",
-              "fieldValue": "=interest"
-            },
-            {
-              "fieldId": "updated_at",
-              "fieldValue": "={{ $now.toISO() }}"
+              "name": "id",
+              "value": "=eq.{{ $('Format Message').item.json.contact_id }}"
             }
           ]
-        }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"metadata\": {\n    \"journey_stage\": \"interest\",\n    \"updated_at\": \"{{ $now.toISO() }}\"\n  }\n}",
+        "options": {}
       },
-      "id": "mongodb-3",
+      "id": "http-7",
       "name": "Update Journey Stage",
-      "type": "n8n-nodes-base.mongodb",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [2440, 200],
       "credentials": {
-        "mongodb": {
+        "supabaseApi": {
           "id": "1",
-          "name": "MongoDB WhatsApp CRM"
+          "name": "Supabase CRM"
         }
       }
     }
@@ -231,8 +277,8 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": [],
+  "tags": ["supabase", "lead-nurturing"],
   "triggerCount": 1,
-  "updatedAt": "2024-11-08T00:00:00.000Z",
-  "versionId": "1"
+  "updatedAt": "2024-11-12T00:00:00.000Z",
+  "versionId": "2"
 }

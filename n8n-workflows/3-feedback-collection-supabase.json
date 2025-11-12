@@ -1,5 +1,5 @@
 {
-  "name": "Customer Feedback Collection",
+  "name": "Customer Feedback Collection (Supabase)",
   "nodes": [
     {
       "parameters": {
@@ -16,35 +16,33 @@
     },
     {
       "parameters": {
-        "operation": "update",
-        "collection": "customer_journey",
-        "updateKey": "contact_id",
-        "fieldsUi": {
-          "fieldValues": [
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/contacts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
             {
-              "fieldId": "stage",
-              "fieldValue": "purchase"
-            },
-            {
-              "fieldId": "purchase_date",
-              "fieldValue": "={{ $now.toISO() }}"
-            },
-            {
-              "fieldId": "updated_at",
-              "fieldValue": "={{ $now.toISO() }}"
+              "name": "id",
+              "value": "=eq.{{ $json.contact_id }}"
             }
           ]
-        }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"metadata\": {\n    \"journey_stage\": \"purchase\",\n    \"purchase_date\": \"{{ $now.toISO() }}\"\n  }\n}",
+        "options": {}
       },
-      "id": "mongodb-1",
+      "id": "http-1",
       "name": "Update Journey Stage",
-      "type": "n8n-nodes-base.mongodb",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [460, 300],
       "credentials": {
-        "mongodb": {
+        "supabaseApi": {
           "id": "1",
-          "name": "MongoDB WhatsApp CRM"
+          "name": "Supabase CRM"
         }
       }
     },
@@ -61,19 +59,34 @@
     },
     {
       "parameters": {
-        "operation": "findOne",
-        "collection": "contacts",
-        "query": "={\n  \"_id\": { \"$oid\": \"{{ $json.contact_id }}\" }\n}"
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/contacts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "=eq.{{ $json.contact_id }}"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            }
+          ]
+        },
+        "options": {}
       },
-      "id": "mongodb-2",
+      "id": "http-2",
       "name": "Get Contact",
-      "type": "n8n-nodes-base.mongodb",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [900, 300],
       "credentials": {
-        "mongodb": {
+        "supabaseApi": {
           "id": "1",
-          "name": "MongoDB WhatsApp CRM"
+          "name": "Supabase CRM"
         }
       }
     },
@@ -83,10 +96,10 @@
         "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={{ $env.GEMINI_API_KEY }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Generate a friendly feedback request message for {{ $json.name }} who purchased {{ $('Purchase Completed').item.json.product_name }} 7 days ago. Ask about their experience and if they have any suggestions. Keep it conversational and under 200 characters.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.7,\n    \"maxOutputTokens\": 200\n  }\n}",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Generate a friendly feedback request message for {{ $json[0].name }} who purchased {{ $('Purchase Completed').item.json.product_name }} 7 days ago. Ask about their experience and if they have any suggestions. Keep it conversational and under 200 characters.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.7,\n    \"maxOutputTokens\": 200\n  }\n}",
         "options": {}
       },
-      "id": "http-1",
+      "id": "http-3",
       "name": "Generate Feedback Request",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -94,7 +107,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const response = $input.item.json;\nconst contact = $('Get Contact').item.json;\nconst generatedText = response.candidates[0].content.parts[0].text;\n\nreturn {\n  json: {\n    contact_id: contact._id,\n    phone_number: contact.phone_number,\n    message: generatedText,\n    feedback_requested_at: new Date().toISOString()\n  }\n};"
+        "jsCode": "const response = $input.item.json;\nconst contact = $('Get Contact').item.json[0];\nconst generatedText = response.candidates[0].content.parts[0].text;\n\nreturn {\n  json: {\n    contact_id: contact.id,\n    phone_number: contact.phone_number,\n    message: generatedText,\n    feedback_requested_at: new Date().toISOString()\n  }\n};"
       },
       "id": "code-1",
       "name": "Format Message",
@@ -110,7 +123,7 @@
         "specifyBody": "json",
         "jsonBody": "={\n  \"phone_number\": \"{{ $json.phone_number }}\",\n  \"message\": \"{{ $json.message }}\",\n  \"contact_id\": \"{{ $json.contact_id }}\"\n}"
       },
-      "id": "http-2",
+      "id": "http-4",
       "name": "Send Feedback Request",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -129,19 +142,46 @@
     },
     {
       "parameters": {
-        "operation": "aggregate",
-        "collection": "messages",
-        "query": "=[\n  {\n    \"$match\": {\n      \"contact_id\": { \"$oid\": \"{{ $('Format Message').item.json.contact_id }}\" },\n      \"sender_type\": \"customer\",\n      \"created_at\": { \"$gte\": { \"$date\": \"{{ $('Format Message').item.json.feedback_requested_at }}\" } }\n    }\n  },\n  { \"$sort\": { \"created_at\": -1 } },\n  { \"$limit\": 5 }\n]"
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "contact_id",
+              "value": "=eq.{{ $('Format Message').item.json.contact_id }}"
+            },
+            {
+              "name": "sender_type",
+              "value": "=eq.customer"
+            },
+            {
+              "name": "created_at",
+              "value": "=gte.{{ $('Format Message').item.json.feedback_requested_at }}"
+            },
+            {
+              "name": "order",
+              "value": "created_at.desc"
+            },
+            {
+              "name": "limit",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {}
       },
-      "id": "mongodb-3",
+      "id": "http-5",
       "name": "Get Feedback Response",
-      "type": "n8n-nodes-base.mongodb",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [2000, 300],
       "credentials": {
-        "mongodb": {
+        "supabaseApi": {
           "id": "1",
-          "name": "MongoDB WhatsApp CRM"
+          "name": "Supabase CRM"
         }
       }
     },
@@ -165,7 +205,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const messages = $input.all();\nconst feedbackText = messages.map(m => m.json.content).join(' ');\n\nreturn {\n  json: {\n    contact_id: $('Format Message').item.json.contact_id,\n    feedback_text: feedbackText\n  }\n};"
+        "jsCode": "const messages = $input.item.json;\nconst feedbackText = messages.map(m => m.content).join(' ');\n\nreturn {\n  json: {\n    contact_id: $('Format Message').item.json.contact_id,\n    feedback_text: feedbackText\n  }\n};"
       },
       "id": "code-2",
       "name": "Combine Feedback",
@@ -182,7 +222,7 @@
         "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Analyze this customer feedback and classify the sentiment as 'positive', 'neutral', or 'negative'. Also extract key themes. Feedback: {{ $json.feedback_text }}\\n\\nRespond in JSON format: {\\\"sentiment\\\": \\\"positive/neutral/negative\\\", \\\"themes\\\": [\\\"theme1\\\", \\\"theme2\\\"], \\\"summary\\\": \\\"brief summary\\\"}\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.3,\n    \"maxOutputTokens\": 300\n  }\n}",
         "options": {}
       },
-      "id": "http-3",
+      "id": "http-6",
       "name": "Analyze Sentiment",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -200,19 +240,33 @@
     },
     {
       "parameters": {
-        "operation": "insert",
-        "collection": "feedback",
-        "fields": "={{ $json }}"
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/contacts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "=eq.{{ $json.contact_id }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"metadata\": {\n    \"feedback\": {\n      \"text\": \"{{ $json.feedback_text }}\",\n      \"sentiment\": \"{{ $json.sentiment }}\",\n      \"themes\": {{ JSON.stringify($json.themes) }},\n      \"summary\": \"{{ $json.summary }}\",\n      \"analyzed_at\": \"{{ $json.analyzed_at }}\"\n    }\n  }\n}",
+        "options": {}
       },
-      "id": "mongodb-4",
+      "id": "http-7",
       "name": "Store Feedback",
-      "type": "n8n-nodes-base.mongodb",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [3100, 200],
       "credentials": {
-        "mongodb": {
+        "supabaseApi": {
           "id": "1",
-          "name": "MongoDB WhatsApp CRM"
+          "name": "Supabase CRM"
         }
       }
     },
@@ -242,7 +296,7 @@
         "specifyBody": "json",
         "jsonBody": "={\n  \"type\": \"negative_feedback\",\n  \"contact_id\": \"{{ $json.contact_id }}\",\n  \"message\": \"Negative feedback received: {{ $json.summary }}\",\n  \"priority\": \"high\"\n}"
       },
-      "id": "http-4",
+      "id": "http-8",
       "name": "Alert Agent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -256,7 +310,7 @@
         "specifyBody": "json",
         "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Generate a warm thank you message for positive feedback. Keep it genuine and under 160 characters.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.7,\n    \"maxOutputTokens\": 150\n  }\n}"
       },
-      "id": "http-5",
+      "id": "http-9",
       "name": "Generate Thank You",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -268,9 +322,9 @@
         "url": "http://localhost:3000/api/messages/send",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"phone_number\": \"{{ $('Get Contact').item.json.phone_number }}\",\n  \"message\": \"{{ $json.candidates[0].content.parts[0].text }}\",\n  \"contact_id\": \"{{ $('Parse Analysis').item.json.contact_id }}\"\n}"
+        "jsonBody": "={\n  \"phone_number\": \"{{ $('Get Contact').item.json[0].phone_number }}\",\n  \"message\": \"{{ $json.candidates[0].content.parts[0].text }}\",\n  \"contact_id\": \"{{ $('Parse Analysis').item.json.contact_id }}\"\n}"
       },
-      "id": "http-6",
+      "id": "http-10",
       "name": "Send Thank You",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -334,6 +388,6 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": ["feedback", "customer-success"],
+  "tags": ["supabase", "feedback", "customer-success"],
   "triggerCount": 1
 }
