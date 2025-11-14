@@ -10,6 +10,7 @@ node_modules
 dist
 dist-ssr
 *.local
+guides
 
 # Next.js
 /.next/
@@ -30,4 +31,3 @@ next-env.d.ts
 .env.local
 .env.production.local
 
-guide

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createWhatsAppService } from '@/lib/whatsapp';
+import { createWhatsAppService } from '../../../../lib/whatsapp';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
