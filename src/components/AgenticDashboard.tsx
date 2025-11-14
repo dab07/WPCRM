@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from '../lib/api';
+import { api } from '@/lib/api';
 import { 
   Bot, 
   Zap, 
@@ -9,7 +9,6 @@ import {
   Target,
   Brain,
   Workflow,
-  BarChart3,
   Settings
 } from 'lucide-react';
 
