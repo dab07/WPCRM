@@ -325,7 +325,7 @@ function AddContactModal({
     setSaving(true);
 
     try {
-      await api.post('/contacts', {
+      const newContact = await api.post('/contacts', {
         name: formData.name,
         phone_number: formData.phone_number,
         email: formData.email || null,
@@ -333,6 +333,17 @@ function AddContactModal({
         tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
         source: 'manual',
       });
+
+      // Trigger n8n lead nurturing workflow
+      try {
+        const { n8n } = await import('../lib/api');
+        await n8n.triggerLeadNurturing(newContact);
+        console.log('Lead nurturing workflow triggered for:', newContact.name);
+      } catch (n8nError) {
+        console.error('Failed to trigger n8n workflow:', n8nError);
+        // Don't fail the contact creation if n8n fails
+      }
+
       onSuccess();
       onClose();
     } catch (error) {

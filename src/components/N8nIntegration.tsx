@@ -101,14 +101,20 @@ export function N8nIntegration() {
   }, []);
 
   const loadConfiguration = async () => {
-    // In a real app, this would load from your backend/environment
+    // Load from environment variables first, then localStorage
+    const envConfig = {
+      base_url: process.env.NEXT_PUBLIC_N8N_BASE_URL || '',
+      api_key: process.env.NEXT_PUBLIC_N8N_API_KEY || '',
+      webhook_url: '',
+      is_connected: false
+    };
+
     const savedConfig = localStorage.getItem('n8n_config');
-    if (savedConfig) {
-      const parsed = JSON.parse(savedConfig);
-      setConfig(parsed);
-      if (parsed.base_url && parsed.api_key) {
-        checkConnection(parsed);
-      }
+    const finalConfig = savedConfig ? { ...envConfig, ...JSON.parse(savedConfig) } : envConfig;
+    
+    setConfig(finalConfig);
+    if (finalConfig.base_url && finalConfig.api_key) {
+      checkConnection(finalConfig);
     }
   };
 
@@ -116,13 +122,8 @@ export function N8nIntegration() {
     setConnectionStatus('checking');
     
     try {
-      // Test connection to n8n instance
-      const response = await fetch(`${configToTest.base_url}/rest/workflows`, {
-        headers: {
-          'Authorization': `Bearer ${configToTest.api_key}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // Use Next.js API proxy to avoid CORS issues
+      const response = await fetch('/api/n8n?endpoint=/api/v1/workflows');
 
       if (response.ok) {
         const workflowData = await response.json();
@@ -130,6 +131,7 @@ export function N8nIntegration() {
         setConnectionStatus('connected');
         setConfig(prev => ({ ...prev, is_connected: true }));
       } else {
+        console.error('n8n connection failed:', response.status, await response.text());
         setConnectionStatus('disconnected');
         setConfig(prev => ({ ...prev, is_connected: false }));
       }

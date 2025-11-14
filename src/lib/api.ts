@@ -217,3 +217,55 @@ class API {
 }
 
 export const api = new API();
+
+// n8n Workflow Triggers
+export const n8n = {
+  async triggerLeadNurturing(contact: Partial<Contact>) {
+    try {
+      const response = await fetch('/api/n8n?endpoint=/webhook/lead-nurturing', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contact_id: contact.id,
+          phone_number: contact.phone_number,
+          name: contact.name,
+          email: contact.email,
+          source: contact.source,
+          tags: contact.tags,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`n8n trigger failed: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to trigger lead nurturing workflow:', error);
+      throw error;
+    }
+  },
+
+  async triggerWorkflow(workflowPath: string, data: any) {
+    try {
+      const response = await fetch(`/api/n8n?endpoint=/webhook/${workflowPath}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error(`n8n trigger failed: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`Failed to trigger workflow ${workflowPath}:`, error);
+      throw error;
+    }
+  },
+};
