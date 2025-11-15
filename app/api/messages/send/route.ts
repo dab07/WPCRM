@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createWhatsAppService } from '../../../../lib/whatsapp';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
-
-const whatsappService = createWhatsAppService();
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,7 +20,7 @@ export async function POST(request: NextRequest) {
     // Get conversation and contact
     const { data: conversation } = await supabase
       .from('conversations')
-      .select('*, contacts(*)')
+      .select('*, contact:contacts(*)')
       .eq('id', conversationId)
       .single();
 
@@ -31,21 +28,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Conversation not found' },
         { status: 404 }
-      );
-    }
-
-    const contact = conversation.contacts;
-
-    // Send via WhatsApp
-    const result = await whatsappService.sendMessage({
-      to: contact.phone_number,
-      message: message,
-    });
-
-    if (!result.success) {
-      return NextResponse.json(
-        { error: result.error || 'Failed to send message' },
-        { status: 500 }
       );
     }
 
@@ -58,7 +40,6 @@ export async function POST(request: NextRequest) {
         content: message,
         message_type: 'text',
         delivery_status: 'sent',
-        whatsapp_message_id: result.messageId,
       })
       .select()
       .single();
@@ -77,7 +58,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: savedMessage,
-      whatsappMessageId: result.messageId,
     });
 
   } catch (error) {

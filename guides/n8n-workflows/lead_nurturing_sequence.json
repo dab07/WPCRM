@@ -57,28 +57,17 @@
     },
     {
       "parameters": {
-        "url": "http://localhost:3000/api/messages/send",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "url": "http://localhost:3000/api/messages/send-direct",
+        "method": "POST",
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "phone_number",
-              "value": "={{ $json.phone_number }}"
-            },
-            {
-              "name": "message",
-              "value": "Hi {{ $json.name }}! Thanks for your interest. How can we help you today?"
-            }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"phone_number\": $json.phone_number, \"message\": \"Hi \" + $json.name + \"! 👋 Thanks for your interest. How can we help you today?\", \"contact_id\": $json.contact_id } }}",
         "options": {}
       },
       "id": "send-message-1",
       "name": "Send Welcome Message",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
+      "typeVersion": 4.2,
       "position": [850, 200]
     }
   ],
