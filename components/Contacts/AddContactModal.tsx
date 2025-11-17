@@ -39,10 +39,12 @@ export function AddContactModal({ isOpen, onClose, onSuccess }: AddContactModalP
     try {
       const tags = formData.tags.split(',').map((t) => t.trim()).filter(Boolean);
 
-      console.log('[ContactModel] Sending request to /api/contacts/create');
+      console.log('[ContactModal] Creating contact via API');
       const response = await fetch('/api/contacts/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           name: formData.name,
           phone_number: formattedPhone,
@@ -53,25 +55,15 @@ export function AddContactModal({ isOpen, onClose, onSuccess }: AddContactModalP
         }),
       });
 
-      console.log('[ContactModel] Response status:', response.status);
       const result = await response.json();
-      console.log('[ContactModel] Response data:', result);
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to create contact');
       }
 
-      // Show success message
-      if (result.warning) {
-        setError(`⚠️ ${result.warning}: ${result.error}`);
-        setTimeout(() => {
-          onSuccess();
-          onClose();
-        }, 3000);
-      } else {
-        onSuccess();
-        onClose();
-      }
+      console.log('[ContactModal] Contact created successfully');
+      onSuccess();
+      onClose();
 
       setFormData({
         name: '',

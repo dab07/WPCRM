@@ -16,10 +16,6 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
         <StatusBadge status={campaign.status} variant="campaign" />
       </div>
 
-      {campaign.description && (
-        <p className="text-sm text-slate-600 mb-4 line-clamp-2">{campaign.description}</p>
-      )}
-
       <div className="space-y-2 text-sm">
         <div className="flex items-center justify-between">
           <span className="text-slate-500 flex items-center gap-2">

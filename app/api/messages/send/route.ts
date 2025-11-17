@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendWhatsAppMessage } from '../../../../lib/whatsapp-cloud';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 export async function POST(request: NextRequest) {
@@ -31,11 +32,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Send via WhatsApp
+    const result = await sendWhatsAppMessage({
+      to: conversation.contact.phone_number,
+      message
+    });
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error || 'Failed to send message' },
+        { status: 500 }
+      );
+    }
+
     // Save message to database
     const { data: savedMessage } = await supabase
       .from('messages')
       .insert({
         conversation_id: conversationId,
+        whatsapp_message_id: result.messageId,
         sender_type: 'agent',
         content: message,
         message_type: 'text',
