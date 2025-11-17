@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Brain, Bot, Workflow, Zap, MessageSquare, Target, Users, Settings } from 'lucide-react';
 import { useAgenticMetrics } from '../../lib/hooks/useAgenticMetrics';
 import { useWorkflowExecutions } from '../../lib/hooks/useWorkflowExecutions';
@@ -9,8 +10,10 @@ import { MetricCard } from './MetricCard';
 import { TriggersList } from './TriggersList';
 import { WorkflowsList } from './WorkflowsList';
 import { AIAgentsStatus } from './AIAgentsStatus';
+import { ConfigureAIModal } from './ConfigureAIModal';
 
 export function AgenticDashboard() {
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const { metrics, loading: metricsLoading } = useAgenticMetrics();
   const { workflows } = useWorkflowExecutions(10);
   const { triggers } = useTriggerExecutions(10);
@@ -21,18 +24,19 @@ export function AgenticDashboard() {
 
   return (
     <div className="p-6 space-y-6 w-full">
-      <DashboardHeader />
+      <DashboardHeader onConfigureClick={() => setIsConfigModalOpen(true)} />
       <MetricsGrid metrics={metrics} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TriggersList triggers={triggers} />
         <WorkflowsList workflows={workflows} />
       </div>
       <AIAgentsStatus />
+      <ConfigureAIModal isOpen={isConfigModalOpen} onClose={() => setIsConfigModalOpen(false)} />
     </div>
   );
 }
 
-function DashboardHeader() {
+function DashboardHeader({ onConfigureClick }: { onConfigureClick: () => void }) {
   return (
     <div className="flex items-center justify-between">
       <div>
@@ -42,7 +46,9 @@ function DashboardHeader() {
         </h1>
         <p className="text-slate-600 mt-1">Monitor autonomous AI agents and workflow automation</p>
       </div>
-      <Button icon={Settings}>Configure AI</Button>
+      <Button icon={Settings} onClick={onConfigureClick}>
+        Configure AI
+      </Button>
     </div>
   );
 }

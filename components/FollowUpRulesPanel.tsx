@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, FollowUpRule } from '../lib/api';
+import { api, FollowUpRule } from '../lib/api-client';
 import { Clock, Plus, X, ToggleLeft, ToggleRight } from 'lucide-react';
 
 export function FollowUpRulesPanel() {
@@ -13,7 +13,7 @@ export function FollowUpRulesPanel() {
 
   const loadRules = async () => {
     try {
-      const data = await api.get('/follow-up-rules');
+      const data = await api.followUpRules.list();
       setRules(data || []);
     } catch (error) {
       console.error('Error loading rules:', error);
@@ -24,7 +24,7 @@ export function FollowUpRulesPanel() {
 
   const toggleRule = async (ruleId: string, currentStatus: boolean) => {
     try {
-      await api.put(`/follow-up-rules/${ruleId}`, { is_active: !currentStatus });
+      await api.followUpRules.update(ruleId, { is_active: !currentStatus });
       loadRules();
     } catch (error) {
       console.error('Error toggling rule:', error);
@@ -73,7 +73,7 @@ export function FollowUpRulesPanel() {
                   <h3 className="font-semibold text-slate-900 text-lg mb-1">{rule.name}</h3>
                   <p className="text-sm text-slate-600">
                     Trigger: {rule.trigger_condition.replace('_', ' ')} after{' '}
-                    <span className="font-medium">{rule.days_threshold} days</span>
+                    <span className="font-medium">{rule.inactivity_hours ? Math.round(rule.inactivity_hours / 24) : 0} days</span>
                   </p>
                 </div>
                 <button

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from '../api';
+import { api } from '../api-client';
 
 export interface TriggerExecution {
   id: string;
@@ -17,8 +17,18 @@ export function useTriggerExecutions(limit: number = 10) {
   const loadTriggers = async () => {
     try {
       setError(null);
-      const data = await api.get(`/triggers?is_active=true&limit=${limit}`);
-      setTriggers(data || []);
+      const data = await api.triggers.list();
+      const activeTriggers = (data || [])
+        .filter((t: any) => t.is_active)
+        .slice(0, limit)
+        .map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          execution_count: 0, // Would need separate execution tracking
+          success_rate: 100,
+          last_executed: t.created_at,
+        }));
+      setTriggers(activeTriggers);
     } catch (err) {
       console.log('Triggers table not available:', err);
       setTriggers([]);

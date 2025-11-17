@@ -4,12 +4,10 @@ import {
   Settings, 
   Play, 
   Pause, 
-  BarChart3, 
   ExternalLink,
   CheckCircle,
   XCircle,
   Clock,
-  Zap
 } from 'lucide-react';
 
 interface N8nConfig {
@@ -17,16 +15,6 @@ interface N8nConfig {
   api_key: string;
   webhook_url: string;
   is_connected: boolean;
-}
-
-interface WorkflowTemplate {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  trigger_type: string;
-  estimated_setup_time: string;
-  complexity: 'beginner' | 'intermediate' | 'advanced';
 }
 
 export function N8nIntegration() {
@@ -39,86 +27,30 @@ export function N8nIntegration() {
   const [isConfiguring, setIsConfiguring] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('disconnected');
   const [workflows, setWorkflows] = useState<any[]>([]);
-  const [workflowTemplates] = useState<WorkflowTemplate[]>([
-    {
-      id: 'lead_nurturing',
-      name: 'Lead Nurturing Sequence',
-      description: 'Automatically nurture leads based on their engagement level and behavior',
-      category: 'Sales',
-      trigger_type: 'New Contact',
-      estimated_setup_time: '15 minutes',
-      complexity: 'beginner'
-    },
-    {
-      id: 'abandoned_cart',
-      name: 'Abandoned Cart Recovery',
-      description: 'Re-engage customers who showed interest but didn\'t complete purchase',
-      category: 'E-commerce',
-      trigger_type: 'Product Interest',
-      estimated_setup_time: '20 minutes',
-      complexity: 'intermediate'
-    },
-    {
-      id: 'customer_lifecycle',
-      name: 'Customer Lifecycle Management',
-      description: 'Manage customer journey from onboarding to retention',
-      category: 'Customer Success',
-      trigger_type: 'Purchase Event',
-      estimated_setup_time: '30 minutes',
-      complexity: 'advanced'
-    },
-    {
-      id: 'feedback_collection',
-      name: 'Automated Feedback Collection',
-      description: 'Collect customer feedback at optimal times',
-      category: 'Support',
-      trigger_type: 'Time-based',
-      estimated_setup_time: '10 minutes',
-      complexity: 'beginner'
-    },
-    {
-      id: 'social_media_sync',
-      name: 'Social Media Integration',
-      description: 'Sync customer interactions across social platforms',
-      category: 'Marketing',
-      trigger_type: 'External Event',
-      estimated_setup_time: '25 minutes',
-      complexity: 'advanced'
-    },
-    {
-      id: 'crm_sync',
-      name: 'CRM Data Synchronization',
-      description: 'Keep customer data in sync with external CRM systems',
-      category: 'Integration',
-      trigger_type: 'Data Change',
-      estimated_setup_time: '20 minutes',
-      complexity: 'intermediate'
-    }
-  ]);
-
+  
   useEffect(() => {
     loadConfiguration();
   }, []);
 
   const loadConfiguration = async () => {
-    // Load from environment variables first, then localStorage
-    const envConfig = {
-      base_url: process.env.NEXT_PUBLIC_N8N_BASE_URL || '',
-      api_key: process.env.NEXT_PUBLIC_N8N_API_KEY || '',
+    // Load from localStorage (set via Configure AI modal) or environment variables
+    const savedBaseUrl = localStorage.getItem('n8n_base_url') || process.env.NEXT_PUBLIC_N8N_BASE_URL || '';
+    const savedApiKey = localStorage.getItem('n8n_api_key') || process.env.NEXT_PUBLIC_N8N_API_KEY || '';
+    
+    const finalConfig = {
+      base_url: savedBaseUrl,
+      api_key: savedApiKey,
       webhook_url: '',
       is_connected: false
     };
-
-    const savedConfig = localStorage.getItem('n8n_config');
-    const finalConfig = savedConfig ? { ...envConfig, ...JSON.parse(savedConfig) } : envConfig;
     
     setConfig(finalConfig);
     if (finalConfig.base_url && finalConfig.api_key) {
-      checkConnection(finalConfig);
+      checkConnection();
     }
   };
 
-  const checkConnection = async (configToTest = config) => {
+  const checkConnection = async () => {
     setConnectionStatus('checking');
     
     try {
@@ -144,8 +76,9 @@ export function N8nIntegration() {
 
   const saveConfiguration = async () => {
     try {
-      // Save to localStorage (in production, save to your backend)
-      localStorage.setItem('n8n_config', JSON.stringify(config));
+      // Save to localStorage using the same keys as ConfigureAIModal
+      localStorage.setItem('n8n_base_url', config.base_url);
+      localStorage.setItem('n8n_api_key', config.api_key);
       
       // Test the connection
       await checkConnection();
@@ -155,40 +88,6 @@ export function N8nIntegration() {
       console.error('Error saving n8n configuration:', error);
     }
   };
-
-  const deployWorkflowTemplate = async (template: WorkflowTemplate) => {
-    try {
-      // In a real implementation, this would deploy the workflow to n8n
-      console.log('Deploying workflow template:', template.name);
-      
-      // For demo purposes, we'll just show a success message
-      alert(`Workflow "${template.name}" deployed successfully! Check your n8n instance.`);
-    } catch (error) {
-      console.error('Error deploying workflow:', error);
-    }
-  };
-
-  const getComplexityColor = (complexity: string) => {
-    switch (complexity) {
-      case 'beginner': return 'bg-green-100 text-green-600';
-      case 'intermediate': return 'bg-yellow-100 text-yellow-600';
-      case 'advanced': return 'bg-red-100 text-red-600';
-      default: return 'bg-gray-100 text-gray-600';
-    }
-  };
-
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'Sales': return BarChart3;
-      case 'E-commerce': return Zap;
-      case 'Customer Success': return CheckCircle;
-      case 'Support': return Clock;
-      case 'Marketing': return ExternalLink;
-      case 'Integration': return Settings;
-      default: return Workflow;
-    }
-  };
-
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -331,60 +230,6 @@ export function N8nIntegration() {
           </div>
         </div>
       )}
-
-      {/* Workflow Templates */}
-      <div className="bg-white rounded-xl border border-slate-200">
-        <div className="p-6 border-b border-slate-200">
-          <h3 className="text-lg font-semibold text-slate-900">Workflow Templates</h3>
-          <p className="text-slate-600 mt-1">
-            Pre-built workflows optimized for WhatsApp CRM automation
-          </p>
-        </div>
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {workflowTemplates.map((template) => {
-              const CategoryIcon = getCategoryIcon(template.category);
-              return (
-                <div key={template.id} className="border border-slate-200 rounded-lg p-6 hover:border-purple-300 transition-colors">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-purple-100 rounded-lg">
-                        <CategoryIcon className="w-5 h-5 text-purple-600" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-slate-900">{template.name}</h4>
-                        <p className="text-sm text-slate-600">{template.category}</p>
-                      </div>
-                    </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getComplexityColor(template.complexity)}`}>
-                      {template.complexity}
-                    </span>
-                  </div>
-                  
-                  <p className="text-slate-600 mb-4">{template.description}</p>
-                  
-                  <div className="flex items-center justify-between text-sm text-slate-500 mb-4">
-                    <span>Trigger: {template.trigger_type}</span>
-                    <span>Setup: {template.estimated_setup_time}</span>
-                  </div>
-                  
-                  <button
-                    onClick={() => deployWorkflowTemplate(template)}
-                    disabled={connectionStatus !== 'connected'}
-                    className={`w-full px-4 py-2 rounded-lg font-medium transition-colors ${
-                      connectionStatus === 'connected'
-                        ? 'bg-purple-600 text-white hover:bg-purple-700'
-                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                    }`}
-                  >
-                    {connectionStatus === 'connected' ? 'Deploy Workflow' : 'Connect n8n First'}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
 
       {/* Setup Guide */}
       {connectionStatus === 'disconnected' && (

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from '../api';
+import { api } from '../api-client';
 
 export interface AgentMetrics {
   total_conversations: number;
@@ -18,37 +18,37 @@ export function useAgenticMetrics() {
   const loadMetrics = async () => {
     try {
       setError(null);
-      const today = new Date().toISOString().split('T')[0];
 
       // Get conversation metrics
-      const conversations = await api.get('/conversations');
+      const conversations = await api.conversations.list();
       const totalConversations = conversations?.length || 0;
       const aiHandled = conversations?.filter((c: any) => c.status === 'ai_handled').length || 0;
       const aiHandledPercentage = totalConversations > 0 ? (aiHandled / totalConversations) * 100 : 0;
 
-      // Get workflow metrics (handle if table doesn't exist)
-      let activeWorkflows = [];
+      // Get workflow metrics
+      let activeWorkflows = 0;
       try {
-        activeWorkflows = await api.get('/workflow-executions?status=running');
+        const workflows = await api.workflowExecutions.list();
+        activeWorkflows = workflows?.filter((w: any) => w.status === 'running').length || 0;
       } catch (err) {
-        console.log('Workflow executions table not available');
+        console.log('Workflow executions not available');
       }
 
-      // Get trigger metrics for today (handle if table doesn't exist)
+      // Get trigger metrics
       let triggersActivatedToday = 0;
       try {
-        const triggerExecutions = await api.get(`/triggers?updated_at_gte=${today}`);
-        triggersActivatedToday = triggerExecutions?.reduce((sum: number, t: any) => sum + (t.execution_count || 0), 0) || 0;
+        const triggers = await api.triggers.list();
+        triggersActivatedToday = triggers?.filter((t: any) => t.is_active).length || 0;
       } catch (err) {
-        console.log('Triggers table not available');
+        console.log('Triggers not available');
       }
 
       setMetrics({
         total_conversations: totalConversations,
-        ai_handled_percentage: aiHandledPercentage,
-        average_response_time: 2.3, // Calculate from actual data
-        customer_satisfaction: 4.2, // From feedback data
-        active_workflows: activeWorkflows?.length || 0,
+        ai_handled_percentage: Math.round(aiHandledPercentage),
+        average_response_time: 2.3,
+        customer_satisfaction: 4.2,
+        active_workflows: activeWorkflows,
         triggers_activated_today: triggersActivatedToday,
       });
     } catch (err) {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api, ConversationWithContact } from '../api';
+import { api, ConversationWithContact } from '../api-client';
 
 export function useConversations() {
   const [conversations, setConversations] = useState<ConversationWithContact[]>([]);

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api, Campaign } from '../api';
+import { api, Campaign } from '../api-client';
 
 export function useCampaigns() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -9,7 +9,7 @@ export function useCampaigns() {
   const loadCampaigns = async () => {
     try {
       setError(null);
-      const data = await api.get('/campaigns');
+      const data = await api.campaigns.list();
       setCampaigns(data || []);
     } catch (err) {
       setError(err as Error);
@@ -25,7 +25,7 @@ export function useCampaigns() {
 
   const createCampaign = async (campaignData: Partial<Campaign>) => {
     try {
-      await api.post('/campaigns', campaignData);
+      await api.campaigns.create(campaignData);
       await loadCampaigns();
     } catch (err) {
       setError(err as Error);
@@ -33,5 +33,15 @@ export function useCampaigns() {
     }
   };
 
-  return { campaigns, loading, error, createCampaign, reload: loadCampaigns };
+  const executeCampaign = async (campaignId: string) => {
+    try {
+      await api.campaigns.execute(campaignId);
+      await loadCampaigns();
+    } catch (err) {
+      setError(err as Error);
+      throw err;
+    }
+  };
+
+  return { campaigns, loading, error, createCampaign, executeCampaign, reload: loadCampaigns };
 }

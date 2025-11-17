@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from '../api';
+import { api } from '../api-client';
 
 export interface WorkflowExecution {
   id: string;
@@ -17,8 +17,8 @@ export function useWorkflowExecutions(limit: number = 10) {
   const loadWorkflows = async () => {
     try {
       setError(null);
-      const data = await api.get(`/workflow-executions?limit=${limit}`);
-      setWorkflows(data || []);
+      const data = await api.workflowExecutions.list();
+      setWorkflows((data || []).slice(0, limit) as WorkflowExecution[]);
     } catch (err) {
       console.log('Workflow executions table not available:', err);
       setWorkflows([]);

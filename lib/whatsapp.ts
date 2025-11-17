@@ -1,6 +1,3 @@
-// WhatsApp Business API Client
-// Supports Meta Cloud API, Twilio, 360Dialog, Wati, Vonage, MessageBird
-
 interface WhatsAppConfig {
   provider: 'meta' | 'twilio' | '360dialog' | 'wati' | 'vonage' | 'messagebird';
   // Meta Cloud API

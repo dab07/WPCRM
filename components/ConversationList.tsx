@@ -1,6 +1,6 @@
 'use client';
 
-import { ConversationWithContact } from '../lib/api';
+import { ConversationWithContact } from '../lib/api-client';
 import { MessageSquare, Clock, User } from 'lucide-react';
 import { useConversations } from '../lib/hooks';
 import { LoadingSpinner, EmptyState, StatusBadge } from './ui';
@@ -67,7 +67,7 @@ function ConversationItem({
         <div className="flex flex-col items-end gap-1">
           <span className="text-xs text-slate-500 flex items-center gap-1">
             <Clock className="w-3 h-3" />
-            {formatRelativeTime(conversation.last_message_at)}
+            {conversation.last_message_at ? formatRelativeTime(conversation.last_message_at) : 'No messages'}
           </span>
           <StatusBadge status={conversation.status} variant="conversation" />
         </div>

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendWhatsAppMessage } from '../../../../lib/whatsapp-cloud';
 
@@ -11,7 +11,7 @@ const supabase = createClient(
  * Cron job to send follow-up messages for inactive conversations
  * Run this every hour via cron or n8n scheduler
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     console.log('[Follow-ups] 🔄 Starting follow-up check...');
 

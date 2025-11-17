@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { api, Message, Conversation, Contact, Agent } from '../lib/api';
+import { Message, Conversation, Contact } from '../lib/api-client';
 import { Send, Bot, User as UserIcon, Clock, UserPlus } from 'lucide-react';
 
 interface ChatWindowProps {

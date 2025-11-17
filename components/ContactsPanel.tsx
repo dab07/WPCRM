@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, Contact } from '../lib/api';
+import { api, Contact } from '../lib/api-client';
 import { Search, User, Mail, Building2, Tag, Plus } from 'lucide-react';
 import { AddContactModal } from './Contacts/AddContactModal';
 
@@ -33,7 +33,7 @@ export function ContactsPanel() {
 
   const loadContacts = async () => {
     try {
-      const data = await api.get('/contacts');
+      const data = await api.contacts.list();
       setContacts(data || []);
       setFilteredContacts(data || []);
     } catch (error) {
@@ -162,12 +162,11 @@ function ContactDetails({
 
   const handleSave = async () => {
     try {
-      await api.put(`/contacts/${contact.id}`, {
+      await api.contacts.update(contact.id, {
         name: formData.name,
-        email: formData.email || null,
-        company: formData.company || null,
+        email: formData.email || undefined,
+        company: formData.company || undefined,
         tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
-        updated_at: new Date().toISOString(),
       });
       setEditing(false);
       onUpdate();

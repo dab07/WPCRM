@@ -2,7 +2,7 @@
 
 import { useState, FormEvent } from 'react';
 import { Modal, Button } from '../ui';
-import { api } from '../../lib/api';
+import { api } from '../../lib/api-client';
 
 interface CreateCampaignModalProps {
   isOpen: boolean;
@@ -25,17 +25,17 @@ export function CreateCampaignModal({ isOpen, onClose, onSuccess }: CreateCampai
 
     try {
       const tags = formData.target_tags.split(',').map((t) => t.trim()).filter(Boolean);
-      const contacts = await api.get(`/contacts?tags=${tags.join(',')}`);
 
-      await api.post('/campaigns', {
+      await api.campaigns.create({
         name: formData.name,
         message_template: formData.message_template,
         target_tags: tags,
-        scheduled_at: formData.scheduled_at,
+        scheduled_at: formData.scheduled_at || undefined,
         status: 'scheduled',
         sent_count: 0,
         delivered_count: 0,
-        read_count: 0,
+        failed_count: 0,
+        total_recipients: 0,
       });
 
       onSuccess();

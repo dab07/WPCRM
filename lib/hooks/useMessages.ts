@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api, Message } from '../api';
+import { api, Message } from '../api-client';
 
 export function useMessages(conversationId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -9,7 +9,7 @@ export function useMessages(conversationId: string) {
   const loadMessages = async () => {
     try {
       setError(null);
-      const data = await api.get(`/messages?conversation_id=${conversationId}`);
+      const data = await api.messages.list(conversationId);
       setMessages(data || []);
     } catch (err) {
       setError(err as Error);
@@ -20,6 +20,7 @@ export function useMessages(conversationId: string) {
   };
 
   useEffect(() => {
+    if (!conversationId) return;
     loadMessages();
     const interval = setInterval(loadMessages, 3000);
     return () => clearInterval(interval);
@@ -27,20 +28,7 @@ export function useMessages(conversationId: string) {
 
   const sendMessage = async (content: string) => {
     try {
-      await api.post('/messages', {
-        conversation_id: conversationId,
-        sender_type: 'agent',
-        content: content.trim(),
-        message_type: 'text',
-        delivery_status: 'sent',
-      });
-
-      await api.put(`/conversations/${conversationId}`, {
-        last_message_at: new Date().toISOString(),
-        last_message_from: 'agent',
-        status: 'agent_assigned',
-      });
-
+      await api.messages.send(conversationId, content.trim());
       await loadMessages();
     } catch (err) {
       setError(err as Error);

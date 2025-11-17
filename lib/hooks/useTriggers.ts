@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api, Trigger } from '../api';
+import { api, Trigger } from '../api-client';
 
 export function useTriggers() {
   const [triggers, setTriggers] = useState<Trigger[]>([]);
@@ -9,7 +9,7 @@ export function useTriggers() {
   const loadTriggers = async () => {
     try {
       setError(null);
-      const data = await api.get('/triggers');
+      const data = await api.triggers.list();
       setTriggers(data || []);
     } catch (err) {
       setError(err as Error);
@@ -25,7 +25,7 @@ export function useTriggers() {
 
   const createTrigger = async (triggerData: Partial<Trigger>) => {
     try {
-      await api.post('/triggers', triggerData);
+      await api.triggers.create(triggerData);
       await loadTriggers();
     } catch (err) {
       setError(err as Error);
@@ -35,7 +35,7 @@ export function useTriggers() {
 
   const updateTrigger = async (id: string, updates: Partial<Trigger>) => {
     try {
-      await api.put(`/triggers/${id}`, updates);
+      await api.triggers.update(id, updates);
       await loadTriggers();
     } catch (err) {
       setError(err as Error);
@@ -45,7 +45,7 @@ export function useTriggers() {
 
   const deleteTrigger = async (id: string) => {
     try {
-      await api.delete(`/triggers/${id}`);
+      await api.triggers.delete(id);
       await loadTriggers();
     } catch (err) {
       setError(err as Error);

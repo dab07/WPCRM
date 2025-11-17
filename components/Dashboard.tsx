@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { ConversationList } from './ConversationList';
 import { ChatWindow } from './ChatWindow';
 import { ContactsPanel } from './ContactsPanel';
-import { CampaignsPanel } from './CampaignsPanel';
+import { CampaignsPanel } from './Campaigns';
 import { FollowUpRulesPanel } from './FollowUpRulesPanel';
-import { AgenticDashboard } from './AgenticDashboard/index';
+import { AgenticDashboard } from './AgenticDashboard';
 import { TriggerManagement } from './TriggerManagement';
 import { N8nIntegration } from './N8nIntegration';
 import { MessageSquare, Users, Send, Clock, Bot, Brain, Zap, Workflow } from 'lucide-react';
-import { ConversationWithContact } from '../lib/api';
+import { ConversationWithContact } from '../lib/api-client';
 import { EmptyState } from './ui';
 
 type Tab = 'agentic' | 'conversations' | 'contacts' | 'campaigns' | 'follow-ups' | 'triggers' | 'workflows';
@@ -21,7 +21,7 @@ const TABS = [
   { id: 'contacts' as Tab, label: 'Contacts', icon: Users },
   { id: 'campaigns' as Tab, label: 'Campaigns', icon: Send },
   { id: 'triggers' as Tab, label: 'Triggers', icon: Zap },
-  { id: 'workflows' as Tab, label: 'Workflows', icon: Workflow },
+  { id: 'workflows' as Tab, label: 'N8N', icon: Workflow },
   { id: 'follow-ups' as Tab, label: 'Follow-ups', icon: Clock },
 ];
 
