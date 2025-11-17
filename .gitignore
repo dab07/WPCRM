@@ -28,6 +28,4 @@ next-env.d.ts
 *.sln
 *.sw?
 .env
-.env.local
-.env.production.local
 

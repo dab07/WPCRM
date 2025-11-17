@@ -1,6 +1,13 @@
 import { useEffect, useState, useRef } from 'react';
-import { Message, Conversation, Contact } from '../lib/api-client';
+import { Message, Conversation, Contact, api } from '../lib/api-client';
 import { Send, Bot, User as UserIcon, Clock, UserPlus } from 'lucide-react';
+
+interface Agent {
+  id: string;
+  full_name: string;
+  email: string;
+  is_active: boolean;
+}
 
 interface ChatWindowProps {
   conversation: Conversation & { contact: Contact };
@@ -39,7 +46,7 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
 
   const loadMessages = async () => {
     try {
-      const data = await api.get(`/messages?conversation_id=${conversation.id}`);
+      const data = await api.messages.list(conversation.id);
       setMessages(data || []);
     } catch (error) {
       console.error('Error loading messages:', error);
@@ -50,20 +57,17 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
 
   const loadAgents = async () => {
     try {
-      const data = await api.get('/agents?is_active=true');
-      setAgents(data || []);
+      // TODO: Implement agents API endpoint
+      // For now, use empty array
+      setAgents([]);
     } catch (error) {
       console.error('Error loading agents:', error);
     }
   };
 
-  const assignAgent = async (agentId: string) => {
+  const assignAgent = async (_agentId: string) => {
     try {
-      await api.put(`/conversations/${conversation.id}`, {
-        assigned_agent_id: agentId,
-        status: 'agent_assigned',
-        updated_at: new Date().toISOString(),
-      });
+      await api.conversations.updateStatus(conversation.id, 'agent_assigned');
       setShowAssignMenu(false);
     } catch (error) {
       console.error('Error assigning agent:', error);
@@ -80,21 +84,9 @@ export function ChatWindow({ conversation }: ChatWindowProps) {
 
     setSending(true);
     try {
-      await api.post('/messages', {
-        conversation_id: conversation.id,
-        sender_type: 'agent',
-        content: newMessage.trim(),
-        message_type: 'text',
-        delivery_status: 'sent',
-      });
-
-      await api.put(`/conversations/${conversation.id}`, {
-        last_message_at: new Date().toISOString(),
-        last_message_from: 'agent',
-        status: 'agent_assigned',
-      });
-
+      await api.messages.send(conversation.id, newMessage.trim());
       setNewMessage('');
+      await loadMessages();
     } catch (error) {
       console.error('Error sending message:', error);
     } finally {

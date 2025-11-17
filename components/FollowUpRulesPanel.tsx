@@ -128,9 +128,14 @@ function CreateRuleModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    trigger_condition: 'inactivity' | 'tag_added' | 'keyword_match';
+    days_threshold: number;
+    message_template: string;
+  }>({
     name: '',
-    trigger_condition: 'no_reply',
+    trigger_condition: 'inactivity',
     days_threshold: 3,
     message_template: '',
   });
@@ -141,15 +146,14 @@ function CreateRuleModal({
 
     setSaving(true);
     try {
-      await api.post('/follow-up-rules', {
+      await api.followUpRules.create({
         name: formData.name,
         trigger_condition: formData.trigger_condition,
-        days_threshold: formData.days_threshold,
+        inactivity_hours: formData.days_threshold * 24,
         message_template: formData.message_template,
         is_active: true,
       });
 
-      if (error) throw error;
       onSuccess();
       onClose();
     } catch (error) {
@@ -191,11 +195,12 @@ function CreateRuleModal({
             </label>
             <select
               value={formData.trigger_condition}
-              onChange={(e) => setFormData({ ...formData, trigger_condition: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, trigger_condition: e.target.value as 'inactivity' | 'tag_added' | 'keyword_match' })}
               className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="no_reply">No reply from customer</option>
-              <option value="time_gap">Time gap in conversation</option>
+              <option value="inactivity">Inactivity (no messages)</option>
+              <option value="tag_added">Tag added to contact</option>
+              <option value="keyword_match">Keyword detected</option>
             </select>
           </div>
 

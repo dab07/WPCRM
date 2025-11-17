@@ -150,7 +150,7 @@ async function handleTextMessage(
   const { intent, confidence } = await detectIntent(text);
 
   // Save message to database
-  const { data: savedMessage } = await supabase
+  await supabase
     .from('messages')
     .insert({
       conversation_id: conversation.id,

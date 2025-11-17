@@ -41,8 +41,8 @@ export function TriggerManagement() {
 
   const loadTriggers = async () => {
     try {
-      const data = await api.get('/triggers');
-      setTriggers(data || []);
+      const data = await api.triggers.list();
+      setTriggers(data as any || []);
     } catch (error) {
       console.error('Error loading triggers:', error);
     } finally {
@@ -55,12 +55,21 @@ export function TriggerManagement() {
     
     try {
       if (editingTrigger) {
-        await api.put(`/triggers/${editingTrigger.id}`, {
-          ...formData,
-          updated_at: new Date().toISOString(),
+        await api.triggers.update(editingTrigger.id, {
+          name: formData.name,
+          event_type: formData.type as any,
+          conditions: { condition: formData.condition },
+          action_config: { action: formData.action },
         });
       } else {
-        await api.post('/triggers', formData);
+        await api.triggers.create({
+          name: formData.name,
+          event_type: formData.type as any,
+          conditions: { condition: formData.condition },
+          action_type: 'trigger_workflow',
+          action_config: { action: formData.action },
+          is_active: true,
+        });
       }
 
       await loadTriggers();
@@ -74,7 +83,7 @@ export function TriggerManagement() {
     if (!confirm('Are you sure you want to delete this trigger?')) return;
 
     try {
-      await api.delete(`/triggers/${triggerId}`);
+      await api.triggers.delete(triggerId);
       await loadTriggers();
     } catch (error) {
       console.error('Error deleting trigger:', error);
@@ -83,9 +92,8 @@ export function TriggerManagement() {
 
   const toggleTrigger = async (triggerId: string, isActive: boolean) => {
     try {
-      await api.put(`/triggers/${triggerId}`, { 
+      await api.triggers.update(triggerId, { 
         is_active: !isActive,
-        updated_at: new Date().toISOString(),
       });
       await loadTriggers();
     } catch (error) {

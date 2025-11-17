@@ -32,7 +32,18 @@ A fully functional WhatsApp CRM system with AI-powered responses, business card 
 - Gemini API key
 - n8n (optional, for automation)
 
-## 🔧 Quick Start
+## 🚀 Deploy to Vercel
+
+**Ready to deploy?** See [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md) for step-by-step instructions.
+
+Quick steps:
+1. Push to GitHub
+2. Import to Vercel (https://vercel.com/new)
+3. Add environment variables
+4. Update WhatsApp webhook URL
+5. Done! 🎉
+
+## 🔧 Quick Start (Local Development)
 
 ### 1. Clone and Install
 

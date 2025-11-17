@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { Conversation, Contact } from '../../lib/api';
 import { useMessages } from '../../lib/hooks';
 import { LoadingSpinner } from '../ui';
-import ChatHeader from './ChatHeader.tsx';
-import MessageList from './MessageList.tsx';
-import MessageInput from './MessageInput.tsx';
+import ChatHeader from './ChatHeader';
+import MessageList from './MessageList';
+import MessageInput from './MessageInput';
 
 interface ChatWindowProps {
   conversation: Conversation & { contact: Contact };

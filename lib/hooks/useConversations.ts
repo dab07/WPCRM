@@ -9,8 +9,8 @@ export function useConversations() {
   const loadConversations = async () => {
     try {
       setError(null);
-      const data = await api.get('/conversations');
-      setConversations(data || []);
+      const data = await api.conversations.list();
+      setConversations(data as ConversationWithContact[] || []);
     } catch (err) {
       setError(err as Error);
       console.error('Error loading conversations:', err);
