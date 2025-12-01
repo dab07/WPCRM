@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const N8N_BASE_URL = process.env.NEXT_PUBLIC_N8N_BASE_URL || 'http://localhost:5678';
-const N8N_API_KEY = process.env.NEXT_PUBLIC_N8N_API_KEY || '';
+const N8N_BASE_URL = process.env.N8N_BASE_URL || process.env.NEXT_PUBLIC_N8N_BASE_URL || 'http://localhost:5678';
+const N8N_API_KEY = process.env.N8N_API_KEY || process.env.NEXT_PUBLIC_N8N_API_KEY || '';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
