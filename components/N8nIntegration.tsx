@@ -260,7 +260,7 @@ export function N8nIntegration() {
           </div>
           <div className="mt-4 flex gap-3">
             <a
-              href="https://docs.n8n.io/getting-started/"
+              href="https://docs.n8n.io"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
