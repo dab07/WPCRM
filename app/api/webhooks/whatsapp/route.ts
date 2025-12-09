@@ -183,38 +183,41 @@ async function handleTextMessage(
   // Generate AI response
   const aiResponse = await generateAIResponse(text);
   
-  if (aiResponse.success && aiResponse.response) {
-    // Send AI response
-    const result = await sendWhatsAppMessage({
-      to: contact.phone_number,
-      message: aiResponse.response
-    });
+  // Fallback response if AI fails
+  const responseMessage = aiResponse.success && aiResponse.response 
+    ? aiResponse.response 
+    : "Thank you for your message! We've received it and will get back to you shortly.";
+  
+  // Send response
+  const result = await sendWhatsAppMessage({
+    to: contact.phone_number,
+    message: responseMessage
+  });
 
-    if (result.success) {
-      // Save AI response to database
-      await supabase
-        .from('messages')
-        .insert({
-          conversation_id: conversation.id,
-          whatsapp_message_id: result.messageId,
-          sender_type: 'ai',
-          content: aiResponse.response,
-          message_type: 'text',
-          delivery_status: 'sent',
-          ai_confidence: aiResponse.confidence
-        });
+  if (result.success) {
+    // Save response to database
+    await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversation.id,
+        whatsapp_message_id: result.messageId,
+        sender_type: 'ai',
+        content: responseMessage,
+        message_type: 'text',
+        delivery_status: 'sent',
+        ai_confidence: aiResponse.confidence || 0.5
+      });
 
-      // Update conversation
-      await supabase
-        .from('conversations')
-        .update({
-          status: 'ai_handled',
-          ai_confidence_score: aiResponse.confidence,
-          last_message_at: new Date().toISOString(),
-          last_message_from: 'ai'
-        })
-        .eq('id', conversation.id);
-    }
+    // Update conversation
+    await supabase
+      .from('conversations')
+      .update({
+        status: 'ai_handled',
+        ai_confidence_score: aiResponse.confidence || 0.5,
+        last_message_at: new Date().toISOString(),
+        last_message_from: 'ai'
+      })
+      .eq('id', conversation.id);
   }
 }
 

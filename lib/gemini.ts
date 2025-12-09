@@ -179,9 +179,16 @@ You are a helpful customer service AI. Generate a professional, friendly respons
     );
 
     const result = await response.json();
+    
+    if (!response.ok) {
+      console.error('[Gemini] API Error:', result);
+      throw new Error(result.error?.message || 'Gemini API request failed');
+    }
+
     const generatedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!generatedText) {
+      console.error('[Gemini] No text in response:', result);
       throw new Error('No response from Gemini');
     }
 
