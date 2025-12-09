@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { extractBusinessCardFromText, extractBusinessCardFromImage, generateAIResponse, detectIntent } from '../../../../lib/gemini';
+import { extractBusinessCardFromText, generateAIResponse, detectIntent } from '../../../../lib/gemini';
 import { sendWhatsAppMessage } from '../../../../lib/whatsapp-cloud';
 
 const supabase = createClient(
@@ -187,13 +187,13 @@ async function handleTextMessage(
 }
 
 async function handleImageMessage(
-  imageData: any,
-  contact: any,
-  conversation: any,
-  messageId: string
+  _imageData: any,
+  _contact: any,
+  _conversation: any,
+  _messageId: string
 ) {
   console.log('[N8N Webhook] 🖼️ Image message received');
-  // Implement image handling similar to the WhatsApp webhook
+  // TODO: Implement image handling similar to the WhatsApp webhook
 }
 
 async function handleBusinessCardExtraction(
