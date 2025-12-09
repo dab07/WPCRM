@@ -28,7 +28,7 @@ export async function extractBusinessCardFromText(text: string): Promise<{
 Text: ${text}`;
 
     const response = await fetch(
-      `${GEMINI_API_URL}/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+      `${GEMINI_API_URL}/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -86,7 +86,7 @@ export async function extractBusinessCardFromImage(imageBase64: string): Promise
     const prompt = `Extract all business card information from this image. Return ONLY a valid JSON object with these fields: name, company, phone, email, address, website, designation. If a field is not found, omit it. Do not include any markdown formatting or explanation.`;
 
     const response = await fetch(
-      `${GEMINI_API_URL}/gemini-pro-vision:generateContent?key=${GEMINI_API_KEY}`,
+      `${GEMINI_API_URL}/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -162,7 +162,7 @@ export async function generateAIResponse(
 You are a helpful customer service AI. Generate a professional, friendly response to the customer's message. Keep it concise and helpful.`;
 
     const response = await fetch(
-      `${GEMINI_API_URL}/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+      `${GEMINI_API_URL}/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
