@@ -35,7 +35,7 @@ export function N8nIntegration() {
   const loadConfiguration = async () => {
     // Load from localStorage (set via Configure AI modal) or environment variables
     const savedBaseUrl = localStorage.getItem('n8n_base_url') || process.env.NEXT_PUBLIC_N8N_BASE_URL || '';
-    const savedApiKey = localStorage.getItem('n8n_api_key') || process.env.NEXT_PUBLIC_N8N_API_KEY || '';
+    const savedApiKey = localStorage.getItem('n8n_api_key') || ''; // API key stored server-side only
     
     const finalConfig = {
       base_url: savedBaseUrl,
