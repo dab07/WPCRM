@@ -1,7 +1,12 @@
-// Gemini AI Service for business card extraction and AI responses
+import { GoogleGenAI } from "@google/genai";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+if (!GEMINI_API_KEY) {
+  throw new Error('GEMINI_API_KEY is required');
+}
+
+const ai = new GoogleGenAI({});
 
 export interface BusinessCardData {
   name?: string;
@@ -23,29 +28,21 @@ export async function extractBusinessCardFromText(text: string): Promise<{
   error?: string;
 }> {
   try {
-    const prompt = `Extract business card information from the following text. Return ONLY a valid JSON object with these fields: name, company, phone, email, address, website, designation. If a field is not found, omit it. Do not include any markdown formatting or explanation.
-
-Text: ${text}`;
-
-    const response = await fetch(
-      `${GEMINI_API_URL}/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }]
-          }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 500,
-          }
-        })
-      }
-    );
-
-    const result = await response.json();
-    const generatedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: `Extract business card information from the following text. Return ONLY a valid JSON object with these fields: name, company, phone, email, address, website, designation. If a field is not found, omit it. Do not include any markdown formatting or explanation.\n\nText: ${text}`
+            }
+          ]
+        }
+      ]
+    });
+  
+    const generatedText = response.text;
 
     if (!generatedText) {
       throw new Error('No response from Gemini');
@@ -83,35 +80,27 @@ export async function extractBusinessCardFromImage(imageBase64: string): Promise
   error?: string;
 }> {
   try {
-    const prompt = `Extract all business card information from this image. Return ONLY a valid JSON object with these fields: name, company, phone, email, address, website, designation. If a field is not found, omit it. Do not include any markdown formatting or explanation.`;
-
-    const response = await fetch(
-      `${GEMINI_API_URL}/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: 'image/jpeg',
-                  data: imageBase64
-                }
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: `Extract all business card information from this image. Return ONLY a valid JSON object with these fields: name, company, phone, email, address, website, designation. If a field is not found, omit it. Do not include any markdown formatting or explanation.`
+            },
+            {
+              inlineData: {
+                data: imageBase64,
+                mimeType: 'image/jpeg'
               }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 500,
-          }
-        })
-      }
-    );
+            }
+          ]
+        }
+      ]
+    });
 
-    const result = await response.json();
-    const generatedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+    const generatedText = response.text;
 
     if (!generatedText) {
       throw new Error('No response from Gemini');
@@ -161,34 +150,23 @@ export async function generateAIResponse(
 
 You are a helpful customer service AI. Generate a professional, friendly response to the customer's message. Keep it concise and helpful.`;
 
-    const response = await fetch(
-      `${GEMINI_API_URL}/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }]
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 200,
-          }
-        })
-      }
-    );
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: prompt
+            }
+          ]
+        }
+      ]
+    });
 
-    const result = await response.json();
-    
-    if (!response.ok) {
-      console.error('[Gemini] API Error:', result);
-      throw new Error(result.error?.message || 'Gemini API request failed');
-    }
-
-    const generatedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+    const generatedText = response.text;
 
     if (!generatedText) {
-      console.error('[Gemini] No text in response:', result);
       throw new Error('No response from Gemini');
     }
 

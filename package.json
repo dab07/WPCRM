@@ -12,6 +12,7 @@
     "db:reset": "supabase db reset"
   },
   "dependencies": {
+    "@google/genai": "^1.33.0",
     "@supabase/supabase-js": "^2.57.4",
     "date-fns": "^2.30.0",
     "lucide-react": "^0.344.0",
