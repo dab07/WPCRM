@@ -1,12 +1,27 @@
 import { GoogleGenAI } from "@google/genai";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+let ai: GoogleGenAI | null = null;
 
-if (!GEMINI_API_KEY) {
-  throw new Error('GEMINI_API_KEY is required');
+function getGeminiClient(): GoogleGenAI {
+  // Only initialize on server-side
+  if (typeof window !== 'undefined') {
+    throw new Error('Gemini client can only be used on server-side');
+  }
+
+  if (!ai) {
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    
+    if (!GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY is required');
+    }
+    
+    ai = new GoogleGenAI({
+      apiKey: GEMINI_API_KEY
+    });
+  }
+  
+  return ai;
 }
-
-const ai = new GoogleGenAI({});
 
 export interface BusinessCardData {
   name?: string;
@@ -28,7 +43,8 @@ export async function extractBusinessCardFromText(text: string): Promise<{
   error?: string;
 }> {
   try {
-    const response = await ai.models.generateContent({
+    const client = getGeminiClient();
+    const response = await client.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [
         {
@@ -80,7 +96,8 @@ export async function extractBusinessCardFromImage(imageBase64: string): Promise
   error?: string;
 }> {
   try {
-    const response = await ai.models.generateContent({
+    const client = getGeminiClient();
+    const response = await client.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [
         {
@@ -150,7 +167,8 @@ export async function generateAIResponse(
 
 You are a helpful customer service AI. Generate a professional, friendly response to the customer's message. Keep it concise and helpful.`;
 
-    const response = await ai.models.generateContent({
+    const client = getGeminiClient();
+    const response = await client.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [
         {
