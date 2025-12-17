@@ -39,7 +39,7 @@ export function useTriggerExecutions(limit: number = 10) {
 
   useEffect(() => {
     loadTriggers();
-  }, [limit]);
+  }, [limit, loadTriggers]);
 
   return { triggers, loading, error, reload: loadTriggers };
 }

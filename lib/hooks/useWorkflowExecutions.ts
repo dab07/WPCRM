@@ -29,7 +29,7 @@ export function useWorkflowExecutions(limit: number = 10) {
 
   useEffect(() => {
     loadWorkflows();
-  }, [limit]);
+  }, [limit, loadWorkflows]);
 
   return { workflows, loading, error, reload: loadWorkflows };
 }

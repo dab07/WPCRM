@@ -24,7 +24,7 @@ export function useMessages(conversationId: string) {
     loadMessages();
     const interval = setInterval(loadMessages, 3000);
     return () => clearInterval(interval);
-  }, [conversationId]);
+  }, [conversationId, loadMessages]);
 
   const sendMessage = async (content: string) => {
     try {

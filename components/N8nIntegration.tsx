@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   Workflow, 
   Settings, 
@@ -28,11 +28,7 @@ export function N8nIntegration() {
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('disconnected');
   const [workflows, setWorkflows] = useState<any[]>([]);
   
-  useEffect(() => {
-    loadConfiguration();
-  }, []);
-
-  const loadConfiguration = async () => {
+  const loadConfiguration = useCallback(async () => {
     // Load from localStorage (set via Configure AI modal) or environment variables
     const savedBaseUrl = localStorage.getItem('n8n_base_url') || process.env.NEXT_PUBLIC_N8N_BASE_URL || '';
     const savedApiKey = localStorage.getItem('n8n_api_key') || ''; // API key stored server-side only
@@ -48,7 +44,11 @@ export function N8nIntegration() {
     if (finalConfig.base_url && finalConfig.api_key) {
       checkConnection();
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadConfiguration();
+  }, [loadConfiguration]);
 
   const checkConnection = async () => {
     setConnectionStatus('checking');
