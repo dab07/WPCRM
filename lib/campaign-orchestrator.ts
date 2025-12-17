@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { format, isToday, parseISO } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { generateAIResponse } from './gemini';
 
 interface Campaign {
