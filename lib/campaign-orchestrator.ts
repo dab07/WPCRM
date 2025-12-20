@@ -31,7 +31,7 @@ export class CampaignOrchestrator {
   constructor() {
     this.supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
   }
 
@@ -147,6 +147,9 @@ export class CampaignOrchestrator {
           
           sentCount++;
           
+          // Rate limiting: Wait 1 second between messages to avoid WhatsApp limits
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
         } catch (error) {
           console.error(`Failed to send message to ${contact.phone_number}:`, error);
           failedCount++;
@@ -248,27 +251,28 @@ Include appropriate emojis and maintain a warm, friendly tone.
    * Send WhatsApp message (integrate with your WhatsApp API)
    */
   private async sendWhatsAppMessage(phoneNumber: string, message: string) {
-    // TODO: Integrate with your WhatsApp Business API
-    // This is a placeholder - replace with actual WhatsApp API call
-    
-    console.log(`Sending to ${phoneNumber}: ${message}`);
-    
-    // Example implementation:
-    // const response = await fetch('/api/whatsapp/send', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({
-    //     to: phoneNumber,
-    //     message: message
-    //   })
-    // });
-    
-    // if (!response.ok) {
-    //   throw new Error(`WhatsApp API error: ${response.status}`);
-    // }
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 100));
+    try {
+      // Use the existing WhatsApp Cloud API function
+      const { sendWhatsAppMessage } = await import('./whatsapp-cloud');
+      
+      console.log(`[Campaign] Sending to ${phoneNumber}: ${message.substring(0, 50)}...`);
+      
+      const result = await sendWhatsAppMessage({
+        to: phoneNumber,
+        message
+      });
+      
+      if (!result.success) {
+        throw new Error(`WhatsApp send failed: ${result.error}`);
+      }
+      
+      console.log(`[Campaign] ✅ Message sent to ${phoneNumber}`);
+      return result;
+      
+    } catch (error) {
+      console.error(`[Campaign] ❌ Failed to send to ${phoneNumber}:`, error);
+      throw error;
+    }
   }
 
   /**

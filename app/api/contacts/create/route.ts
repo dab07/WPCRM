@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
         phone_number,
         email: email || null,
         company: company || null,
-        tags: tags || [],
+        tags: tags ? [...tags, 'broadcast'] : ['broadcast'],
         source: source || 'manual',
       })
       .select()
