@@ -5,10 +5,6 @@ import {
   Instagram, 
   Settings, 
   Plus, 
-  Trash2, 
-  Edit3,
-  CheckCircle,
-  XCircle,
   Play,
   Pause
 } from 'lucide-react';
@@ -45,7 +41,6 @@ export function InstagramIntegration() {
   const [broadcastRules, setBroadcastRules] = useState<BroadcastRule[]>([]);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [isAddingRule, setIsAddingRule] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState<string>('');
 
   const [newAccount, setNewAccount] = useState({
     account_username: '',
@@ -220,10 +215,10 @@ export function InstagramIntegration() {
                   </p>
                   <div className="flex items-center gap-2">
                     <button 
-                      onClick={() => setSelectedAccount(account.id)}
+                      onClick={() => setIsAddingRule(true)}
                       className="flex-1 px-3 py-1 text-sm bg-pink-100 text-pink-600 rounded hover:bg-pink-200 transition-colors"
                     >
-                      Manage Rules
+                      Add Rule
                     </button>
                   </div>
                 </div>
