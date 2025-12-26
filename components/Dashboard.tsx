@@ -9,11 +9,12 @@ import { FollowUpRulesPanel } from './FollowUpRulesPanel';
 import { AgenticDashboard } from './AgenticDashboard';
 import { TriggerManagement } from './TriggerManagement';
 import { N8nIntegration } from './N8nIntegration';
-import { MessageSquare, Users, Send, Clock, Bot, Brain, Zap, Workflow } from 'lucide-react';
+import { InstagramIntegration } from './InstagramIntegration';
+import { MessageSquare, Users, Send, Clock, Bot, Brain, Zap, Workflow, Instagram } from 'lucide-react';
 import { ConversationWithContact } from '../lib/api-client';
 import { EmptyState } from './ui';
 
-type Tab = 'agentic' | 'conversations' | 'contacts' | 'campaigns' | 'follow-ups' | 'triggers' | 'workflows';
+type Tab = 'agentic' | 'conversations' | 'contacts' | 'campaigns' | 'follow-ups' | 'triggers' | 'workflows' | 'instagram';
 
 const TABS = [
   { id: 'agentic' as Tab, label: 'Agentic AI', icon: Brain },
@@ -22,6 +23,7 @@ const TABS = [
   { id: 'campaigns' as Tab, label: 'Campaigns', icon: Send },
   { id: 'triggers' as Tab, label: 'Triggers', icon: Zap },
   { id: 'workflows' as Tab, label: 'N8N', icon: Workflow },
+  { id: 'instagram' as Tab, label: 'Instagram', icon: Instagram },
   { id: 'follow-ups' as Tab, label: 'Follow-ups', icon: Clock },
 ];
 
@@ -117,6 +119,7 @@ function MainContent({
       {activeTab === 'campaigns' && <CampaignsPanel />}
       {activeTab === 'triggers' && <TriggerManagement />}
       {activeTab === 'workflows' && <N8nIntegration />}
+      {activeTab === 'instagram' && <InstagramIntegration />}
       {activeTab === 'follow-ups' && <FollowUpRulesPanel />}
     </main>
   );

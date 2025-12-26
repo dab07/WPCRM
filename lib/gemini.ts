@@ -204,6 +204,129 @@ You are a helpful customer service AI. Generate a professional, friendly respons
 }
 
 /**
+ * Generate contextual message for Instagram reel/post
+ */
+export async function generateInstagramMessage(
+  reelUrl: string,
+  caption: string,
+  hashtags: string[] = [],
+  customPrompt?: string
+): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+}> {
+  try {
+    const defaultPrompt = 'Generate a brief, engaging 20-30 word message about this Instagram reel to share with customers via WhatsApp. Include the reel link and make it sound natural and exciting.';
+    
+    const prompt = customPrompt || defaultPrompt;
+    
+    const contextInfo = `
+Instagram Reel URL: ${reelUrl}
+Caption: ${caption}
+Hashtags: ${hashtags.join(', ')}
+
+${prompt}`;
+
+    const client = getGeminiClient();
+    const response = await client.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: contextInfo
+            }
+          ]
+        }
+      ]
+    });
+
+    const generatedText = response.text;
+
+    if (!generatedText) {
+      throw new Error('No response from Gemini');
+    }
+
+    return {
+      success: true,
+      message: generatedText.trim()
+    };
+  } catch (error: any) {
+    console.error('[Gemini] Error generating Instagram message:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Analyze Instagram content for targeting
+ */
+export async function analyzeInstagramContent(
+  caption: string,
+  hashtags: string[] = []
+): Promise<{
+  success: boolean;
+  categories?: string[];
+  sentiment?: 'positive' | 'neutral' | 'negative';
+  targetAudience?: string[];
+  error?: string;
+}> {
+  try {
+    const prompt = `Analyze this Instagram content and return ONLY a JSON object with these fields:
+- categories: array of content categories (e.g., ["lifestyle", "business", "entertainment"])
+- sentiment: "positive", "neutral", or "negative"
+- targetAudience: array of audience types (e.g., ["young_adults", "professionals", "entrepreneurs"])
+
+Caption: ${caption}
+Hashtags: ${hashtags.join(', ')}`;
+
+    const client = getGeminiClient();
+    const response = await client.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: prompt
+            }
+          ]
+        }
+      ]
+    });
+
+    const generatedText = response.text;
+
+    if (!generatedText) {
+      throw new Error('No response from Gemini');
+    }
+
+    // Clean and parse JSON
+    const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No JSON found in response');
+    }
+
+    const analysis = JSON.parse(jsonMatch[0]);
+    
+    return {
+      success: true,
+      ...analysis
+    };
+  } catch (error: any) {
+    console.error('[Gemini] Error analyzing Instagram content:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
  * Detect intent from customer message
  */
 export async function detectIntent(message: string): Promise<{
