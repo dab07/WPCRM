@@ -1,9 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabaseAdmin } from '../supabase/supabase';
 
 export interface InstagramPost {
   id: string;
@@ -72,7 +67,7 @@ export async function storeInstagramPost(post: InstagramPost, accountId: string)
   try {
     const postType = post.media_type === 'VIDEO' ? 'reel' : 'post';
     
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('instagram_posts')
       .insert({
         instagram_post_id: post.id,
@@ -99,7 +94,7 @@ export async function storeInstagramPost(post: InstagramPost, accountId: string)
  */
 export async function getBroadcastRules(accountId: string, postType: 'reel' | 'post'): Promise<InstagramBroadcastRule[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('instagram_broadcast_rules')
       .select('*')
       .eq('account_id', accountId)
@@ -121,7 +116,7 @@ export async function getTargetContacts(tags: string[]): Promise<any[]> {
   try {
     if (tags.length === 0) {
       // If no tags specified, return all contacts
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('contacts')
         .select('*');
       
@@ -129,7 +124,7 @@ export async function getTargetContacts(tags: string[]): Promise<any[]> {
       return data || [];
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('contacts')
       .select('*')
       .overlaps('tags', tags);
@@ -168,7 +163,7 @@ export async function logBroadcast(
   errorMessage?: string
 ) {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('instagram_broadcast_logs')
       .insert({
         post_id: postId,

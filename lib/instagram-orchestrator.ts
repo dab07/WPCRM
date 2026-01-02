@@ -7,6 +7,7 @@ import {
   InstagramPost 
 } from './instagram';
 import { generateInstagramMessage } from './gemini';
+import { supabaseAdmin } from '../supabase/supabase';
 
 export interface InstagramBroadcastResult {
   success: boolean;
@@ -23,7 +24,7 @@ export interface InstagramBroadcastResult {
  */
 export async function processInstagramPost(
   post: InstagramPost,
-  accountId: string
+  instagramAccountId: string
 ): Promise<InstagramBroadcastResult> {
   const result: InstagramBroadcastResult = {
     success: false,
@@ -34,13 +35,26 @@ export async function processInstagramPost(
   };
 
   try {
-    // 1. Store the Instagram post in database
-    const storedPost = await storeInstagramPost(post, accountId);
+    // 1. Find the social media account by Instagram account ID
+    const { data: socialAccount, error: accountError } = await supabaseAdmin
+      .from('social_media_accounts')
+      .select('*')
+      .eq('platform', 'instagram')
+      .eq('account_id', instagramAccountId)
+      .single();
+
+    if (accountError || !socialAccount) {
+      result.errors.push(`Instagram account not found in database: ${instagramAccountId}`);
+      return result;
+    }
+
+    // 2. Store the Instagram post in database using the UUID
+    const storedPost = await storeInstagramPost(post, socialAccount.id);
     result.postId = storedPost.id;
 
-    // 2. Get broadcast rules for this post type
+    // 3. Get broadcast rules for this account
     const postType = post.media_type === 'VIDEO' ? 'reel' : 'post';
-    const broadcastRules = await getBroadcastRules(accountId, postType);
+    const broadcastRules = await getBroadcastRules(socialAccount.id, postType);
 
     if (broadcastRules.length === 0) {
       result.errors.push('No active broadcast rules found for this post type');
@@ -141,12 +155,7 @@ async function sendWhatsAppMessage(
   error?: string;
 }> {
   try {
-    // This is where you'd integrate with your WhatsApp Business API
-    // For now, this is a placeholder that simulates the API call
-    
-    // Example integration with WhatsApp Business API:
-    
-    /*
+    // Real WhatsApp Business API integration
     const response = await fetch(`https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
       method: 'POST',
       headers: {
@@ -162,7 +171,8 @@ async function sendWhatsAppMessage(
     });
 
     if (!response.ok) {
-      throw new Error(`WhatsApp API error: ${response.status}`);
+      const errorData = await response.json();
+      throw new Error(`WhatsApp API error: ${response.status} - ${JSON.stringify(errorData)}`);
     }
 
     const data = await response.json();
@@ -170,24 +180,6 @@ async function sendWhatsAppMessage(
       success: true,
       messageId: data.messages[0].id
     };
-    */
-    // Placeholder simulation
-    console.log(`[WhatsApp] Sending to ${phoneNumber}: ${message}`);
-    
-    // Simulate success/failure (90% success rate)
-    const success = Math.random() > 0.1;
-    
-    if (success) {
-      return {
-        success: true,
-        messageId: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      };
-    } else {
-      return {
-        success: false,
-        error: 'Simulated delivery failure'
-      };
-    }
 
   } catch (error: any) {
     return {

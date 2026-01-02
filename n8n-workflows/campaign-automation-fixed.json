@@ -1,0 +1,138 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 0],
+      "id": "af30abbc-4dcd-4f9e-9fd4-ce886dbd5f18",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://wpcrm.vercel.app/api/campaigns/orchestrator",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"action\": \"process_scheduled\",\n  \"source\": \"n8n_schedule_trigger\",\n  \"timestamp\": \"{{ $now }}\",\n  \"timezone\": \"{{ $now.format('z') }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [208, 0],
+      "id": "de00e935-c445-4532-b0af-6a4aa301f6b7",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "2y2kpXsXTGEnT0Hv",
+          "name": "Bearer Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "success_check",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [416, 0],
+      "id": "success_checker",
+      "name": "Check Success"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Success path - log the results\nconst data = $input.first().json;\n\nconsole.log('✅ Campaign automation completed successfully:', {\n  processed: data.processed || 0,\n  sent: data.sent || 0,\n  failed: data.failed || 0,\n  timestamp: data.timestamp\n});\n\nreturn [{\n  json: {\n    status: 'success',\n    campaigns_processed: data.processed || 0,\n    messages_sent: data.sent || 0,\n    messages_failed: data.failed || 0,\n    timestamp: new Date().toISOString(),\n    message: 'Campaign automation completed successfully'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [624, -100],
+      "id": "success_handler",
+      "name": "Success Handler"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Error path - log the error and throw\nconst data = $input.first().json;\n\nconsole.error('❌ Campaign automation failed:', {\n  error: data.error,\n  details: data.details,\n  timestamp: new Date().toISOString()\n});\n\n// Throw error to trigger N8N error handling\nthrow new Error(`Campaign automation failed: ${data.error || 'Unknown error'}`);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [624, 100],
+      "id": "error_handler",
+      "name": "Error Handler"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Check Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Success": {
+      "main": [
+        [
+          {
+            "node": "Success Handler",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0ffa89d5a49b5ff561a64c0f5929b81768437fdf047cd876ce47c0015bdbc826"
+  }
+}

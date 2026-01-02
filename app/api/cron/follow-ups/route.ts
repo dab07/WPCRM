@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import {supabase} from '../../../../supabase/supabase';
 import { sendWhatsAppMessage } from '../../../../lib/whatsapp-cloud';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 // Rate limiting: Track last execution time
 let lastExecutionTime = 0;

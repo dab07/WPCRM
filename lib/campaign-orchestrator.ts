@@ -1,8 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
 import { format, parseISO } from 'date-fns';
 import { generateAIResponse } from './gemini';
+import { supabaseAdmin } from '../supabase/supabase';
 
-interface Campaign {
+export interface Campaign {
   id: string;
   name: string;
   message_template: string;
@@ -15,7 +15,7 @@ interface Campaign {
   failed_count: number;
 }
 
-interface Contact {
+export interface Contact {
   id: string;
   name: string;
   phone_number: string;
@@ -26,13 +26,10 @@ interface Contact {
 }
 
 export class CampaignOrchestrator {
-  private supabase;
+  private supabase = supabaseAdmin;
 
   constructor() {
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    // No need to initialize supabase here anymore
   }
 
   /**
@@ -94,7 +91,7 @@ export class CampaignOrchestrator {
     }
 
     // Filter campaigns that should run now (check if scheduled time has passed)
-    return (campaigns || []).filter(campaign => {
+    return (campaigns || []).filter((campaign : Campaign) => {
       if (!campaign.scheduled_at) return false;
       const scheduledTime = parseISO(campaign.scheduled_at);
       return scheduledTime <= new Date();
@@ -369,6 +366,51 @@ Include appropriate emojis and maintain a warm, friendly tone.
     }
 
     return data;
+  }
+
+  /**
+   * Execute a single campaign by ID (for manual triggers)
+   */
+  async executeSingleCampaign(campaignId: string) {
+    try {
+      console.log(`Executing single campaign: ${campaignId}`);
+
+      // Get the specific campaign
+      const { data: campaign, error } = await this.supabase
+        .from('campaigns')
+        .select('*')
+        .eq('id', campaignId)
+        .single();
+
+      if (error || !campaign) {
+        throw new Error(`Campaign not found: ${campaignId}`);
+      }
+
+      if (campaign.status === 'running') {
+        throw new Error('Campaign is already running');
+      }
+
+      if (campaign.status === 'completed') {
+        throw new Error('Campaign is already completed');
+      }
+
+      // Execute the campaign
+      const result = await this.executeCampaign(campaign);
+      
+      console.log(`Single campaign ${campaignId} completed: ${result.sent} sent, ${result.failed} failed`);
+      
+      return {
+        processed: 1,
+        sent: result.sent,
+        failed: result.failed,
+        campaignId: campaignId,
+        campaignName: campaign.name
+      };
+
+    } catch (error) {
+      console.error(`Error executing single campaign ${campaignId}:`, error);
+      throw error;
+    }
   }
 
   /**
