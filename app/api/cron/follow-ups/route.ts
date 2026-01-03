@@ -5,27 +5,30 @@ import { sendWhatsAppMessage } from '../../../../lib/whatsapp-cloud';
 
 // Rate limiting: Track last execution time
 let lastExecutionTime = 0;
-const MIN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes minimum between executions
+const MIN_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 hours minimum between executions (for 3-day schedule)
 
 /**
  * Cron job to send follow-up messages for inactive conversations
- * Run this every hour via cron or n8n scheduler
+ * Run this every 3 days via N8N scheduler or daily for more frequent checks
  * 
  * Logic:
  * 1. Find conversations where last message was from customer
  * 2. Calculate hours since last customer message
  * 3. Match to appropriate follow-up rule based on inactivity duration
  * 4. Ensure we don't send duplicate follow-ups for the same rule
+ * 5. Rate limiting prevents too frequent executions
  */
 export async function GET() {
   // Rate limiting check
   const now = Date.now();
   if (now - lastExecutionTime < MIN_INTERVAL_MS) {
-    const waitTime = Math.ceil((MIN_INTERVAL_MS - (now - lastExecutionTime)) / 1000);
-    console.log(`[Follow-ups] ⏸️ Rate limited. Wait ${waitTime}s before next execution.`);
+    const waitTime = Math.ceil((MIN_INTERVAL_MS - (now - lastExecutionTime)) / 1000 / 60); // minutes
+    console.log(`[Follow-ups] ⏸️ Rate limited. Wait ${waitTime} minutes before next execution.`);
     return NextResponse.json({ 
-      message: `Rate limited. Please wait ${waitTime} seconds.`,
-      nextAllowedIn: waitTime 
+      success: false,
+      message: `Rate limited. Please wait ${waitTime} minutes.`,
+      nextAllowedInMinutes: waitTime,
+      rateLimited: true
     }, { status: 429 });
   }
   
@@ -42,7 +45,13 @@ export async function GET() {
       .order('inactivity_hours', { ascending: true });
 
     if (!rules || rules.length === 0) {
-      return NextResponse.json({ message: 'No active rules' });
+      console.log('[Follow-ups] ℹ️ No active follow-up rules found');
+      return NextResponse.json({ 
+        success: true,
+        message: 'No active follow-up rules found',
+        totalSent: 0,
+        totalChecked: 0
+      });
     }
 
     console.log(`[Follow-ups] Found ${rules.length} active rules`);
@@ -56,7 +65,13 @@ export async function GET() {
       .not('last_message_at', 'is', null);
 
     if (!conversations || conversations.length === 0) {
-      return NextResponse.json({ message: 'No conversations to check' });
+      console.log('[Follow-ups] ℹ️ No conversations to check');
+      return NextResponse.json({ 
+        success: true,
+        message: 'No conversations to check',
+        totalSent: 0,
+        totalChecked: 0
+      });
     }
 
     console.log(`[Follow-ups] Checking ${conversations.length} conversations`);

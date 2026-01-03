@@ -1,0 +1,147 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 10,
+              "triggerAtMinute": 0,
+              "weekdaysShort": ["mon", "wed", "fri"]
+            }
+          ]
+        },
+        "timezone": "UTC"
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 0],
+      "id": "schedule_trigger",
+      "name": "3-Day Follow-up Check"
+    },
+    {
+      "parameters": {
+        "url": "https://wpcrm.vercel.app/api/cron/follow-ups",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "N8N-Follow-up-Automation/1.0"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [200, 0],
+      "id": "call_follow_up_api",
+      "name": "Call Follow-up API",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "api_auth_token",
+          "name": "API Auth Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "success_check",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [400, 0],
+      "id": "check_success",
+      "name": "Check Success"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log successful follow-up execution\nconst data = $json;\n\nconsole.log('✅ Follow-up automation completed successfully:', {\n  totalSent: data.totalSent || 0,\n  totalChecked: data.totalChecked || 0,\n  message: data.message,\n  timestamp: new Date().toISOString()\n});\n\nreturn {\n  json: {\n    status: 'success',\n    totalSent: data.totalSent || 0,\n    totalChecked: data.totalChecked || 0,\n    message: data.message || 'Follow-up automation completed',\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, -100],
+      "id": "log_success",
+      "name": "Log Success"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log follow-up execution error\nconst data = $json;\n\nconsole.error('❌ Follow-up automation failed:', {\n  error: data.error || 'Unknown error',\n  message: data.message,\n  timestamp: new Date().toISOString()\n});\n\n// Don't throw error - just log and continue\nreturn {\n  json: {\n    status: 'error',\n    error: data.error || 'Unknown error',\n    message: data.message || 'Follow-up automation failed',\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 100],
+      "id": "log_error",
+      "name": "Log Error"
+    }
+  ],
+  "connections": {
+    "3-Day Follow-up Check": {
+      "main": [
+        [
+          {
+            "node": "Call Follow-up API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Follow-up API": {
+      "main": [
+        [
+          {
+            "node": "Check Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Success": {
+      "main": [
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "follow_up_automation_v1"
+  }
+}

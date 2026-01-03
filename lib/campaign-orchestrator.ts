@@ -36,7 +36,7 @@ export class CampaignOrchestrator {
    * Main function called by N8N daily at 9 AM
    * Processes all scheduled campaigns for today
    */
-  async processCampaigns(source: string = 'n8n_cron') {
+  async processCampaigns(source: string = 'n8n_schedule_trigger') {
     try {
       console.log(`[${source}] Starting campaign processing...`);
       
@@ -99,16 +99,13 @@ export class CampaignOrchestrator {
   }
 
   /**
-   * Execute a single campaign
+   * Execute a single campaign (optimized)
    */
   private async executeCampaign(campaign: Campaign) {
     try {
       console.log(`Executing campaign: ${campaign.name}`);
 
-      // Update campaign status to running
-      await this.updateCampaignStatus(campaign.id, 'running');
-
-      // Get eligible contacts
+      // Get eligible contacts first
       const contacts = await this.getEligibleContacts(campaign);
       
       if (contacts.length === 0) {
@@ -117,60 +114,162 @@ export class CampaignOrchestrator {
         return { sent: 0, failed: 0 };
       }
 
-      // Update total recipients
+      // Single update: set status to running and total recipients
       await this.supabase
         .from('campaigns')
-        .update({ total_recipients: contacts.length })
+        .update({ 
+          status: 'running',
+          total_recipients: contacts.length 
+        })
         .eq('id', campaign.id);
 
       let sentCount = 0;
       let failedCount = 0;
+      let deliveredCount = 0;
+      const messageRecords: any[] = [];
 
-      // Send messages to each contact
-      for (const contact of contacts) {
+      // Process contacts in batches to reduce memory usage
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
+        const batch = contacts.slice(i, i + BATCH_SIZE);
+        
+        console.log(`[Campaign ${campaign.name}] Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(contacts.length/BATCH_SIZE)} (${batch.length} contacts)`);
+        
+        // Process batch in parallel (but still respect WhatsApp rate limits)
+        const batchPromises = batch.map(async (contact, index) => {
+          try {
+            // Add staggered delay for WhatsApp rate limiting
+            await new Promise(resolve => setTimeout(resolve, index * 200));
+
+            // Generate personalized message
+            const personalizedMessage = await this.generatePersonalizedMessage(
+              campaign.message_template,
+              contact,
+              campaign.name
+            );
+
+            // Send WhatsApp message
+            const result = await this.sendWhatsAppMessage(contact.phone_number, personalizedMessage);
+            
+            if (result.success) {
+              // Prepare message record for batch insert
+              const conversationId = await this.getOrCreateConversationId(contact.id);
+              if (conversationId) {
+                messageRecords.push({
+                  conversation_id: conversationId,
+                  whatsapp_message_id: result.messageId,
+                  sender_type: 'ai',
+                  content: personalizedMessage,
+                  message_type: 'text',
+                  ai_intent: `campaign_${campaign.name}`,
+                  delivery_status: 'sent',
+                  metadata: {
+                    campaign_id: campaign.id,
+                    campaign_name: campaign.name,
+                    contact_id: contact.id
+                  }
+                });
+              }
+              
+              return { success: true, contact: contact.id, messageId: result.messageId };
+            } else {
+              console.error(`[Campaign] Failed to send to ${contact.phone_number}: ${result.error}`);
+              return { success: false, contact: contact.id, error: result.error };
+            }
+            
+          } catch (error) {
+            console.error(`Failed to send message to ${contact.phone_number}:`, error);
+            return { success: false, contact: contact.id, error };
+          }
+        });
+
+        // Wait for batch to complete
+        const batchResults = await Promise.all(batchPromises);
+        
+        // Count results for this batch
+        let batchSent = 0;
+        let batchFailed = 0;
+        
+        batchResults.forEach(result => {
+          if (result.success) {
+            batchSent++;
+            sentCount++;
+            deliveredCount++; // Assume delivered if sent successfully
+          } else {
+            batchFailed++;
+            failedCount++;
+          }
+        });
+
+        console.log(`[Campaign ${campaign.name}] Batch completed: ${batchSent} sent, ${batchFailed} failed`);
+
+        // Update campaign progress every batch with explicit logging
         try {
-          // Generate personalized message using Gemini AI
-          const personalizedMessage = await this.generatePersonalizedMessage(
-            campaign.message_template,
-            contact,
-            campaign.name
-          );
+          const { error: updateError } = await this.supabase
+            .from('campaigns')
+            .update({
+              sent_count: sentCount,
+              failed_count: failedCount,
+              delivered_count: deliveredCount
+            })
+            .eq('id', campaign.id);
 
-          // Send WhatsApp message
-          await this.sendWhatsAppMessage(contact.phone_number, personalizedMessage);
-          
-          // Create message record
-          await this.createMessageRecord(contact.id, personalizedMessage, campaign.name);
-          
-          sentCount++;
-          
-          // Rate limiting: Wait 1 second between messages to avoid WhatsApp limits
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
+          if (updateError) {
+            console.error(`[Campaign] Error updating counts:`, updateError);
+          } else {
+            console.log(`[Campaign ${campaign.name}] Updated counts: sent=${sentCount}, failed=${failedCount}, delivered=${deliveredCount}`);
+          }
         } catch (error) {
-          console.error(`Failed to send message to ${contact.phone_number}:`, error);
-          failedCount++;
+          console.error(`[Campaign] Error updating campaign progress:`, error);
         }
       }
 
-      // Update campaign with final counts
-      await this.supabase
+      // Batch insert message records
+      if (messageRecords.length > 0) {
+        console.log(`[Campaign ${campaign.name}] Inserting ${messageRecords.length} message records`);
+        const { error: insertError } = await this.supabase
+          .from('messages')
+          .insert(messageRecords);
+        
+        if (insertError) {
+          console.error(`[Campaign] Error inserting messages:`, insertError);
+        }
+      }
+
+      // Final campaign update with comprehensive logging
+      console.log(`[Campaign ${campaign.name}] Final update: sent=${sentCount}, failed=${failedCount}, delivered=${deliveredCount}`);
+      
+      const { error: finalUpdateError } = await this.supabase
         .from('campaigns')
         .update({
           status: 'completed',
           sent_count: sentCount,
           failed_count: failedCount,
-          delivered_count: sentCount // Assume delivered for now
+          delivered_count: deliveredCount
         })
         .eq('id', campaign.id);
 
-      console.log(`Campaign ${campaign.name} completed: ${sentCount} sent, ${failedCount} failed`);
+      if (finalUpdateError) {
+        console.error(`[Campaign] Error in final update:`, finalUpdateError);
+        throw new Error(`Failed to update campaign status: ${finalUpdateError.message}`);
+      }
+
+      console.log(`Campaign ${campaign.name} completed successfully: ${sentCount} sent, ${failedCount} failed, ${deliveredCount} delivered`);
       
-      return { sent: sentCount, failed: failedCount };
+      return { sent: sentCount, failed: failedCount, delivered: deliveredCount };
 
     } catch (error) {
       console.error(`Error executing campaign ${campaign.name}:`, error);
-      await this.updateCampaignStatus(campaign.id, 'paused');
+      
+      // Update campaign status to paused with error info
+      await this.supabase
+        .from('campaigns')
+        .update({ 
+          status: 'paused',
+          // Store error info in metadata if needed
+        })
+        .eq('id', campaign.id);
+        
       throw error;
     }
   }
@@ -217,13 +316,21 @@ export class CampaignOrchestrator {
       // If template contains AI placeholders or is generic, enhance with Gemini
       if (template.includes('{{ai_enhance}}') || template.length < 50) {
         const prompt = `
-Enhance this message for a WhatsApp campaign called "${campaignName}":
-Base message: "${message}"
-Customer details: Name: ${contact.name}, Company: ${contact.company || 'N/A'}
+You are a WhatsApp marketing expert. Enhance this campaign message to be more engaging and personal:
 
-Make it more personal and engaging while keeping it professional and concise (max 150 words).
-Include appropriate emojis and maintain a warm, friendly tone.
-`;
+Campaign: "${campaignName}"
+Original message: "${message}"
+Customer: ${contact.name} ${contact.company ? `from ${contact.company}` : ''}
+
+Requirements:
+- Keep it under 50 words
+- Make it personal and conversational
+- Include 1-2 relevant emojis
+- Maintain professional but friendly tone
+- Include a clear call-to-action
+- Make it sound natural for WhatsApp
+
+Return only the enhanced message, no explanations.`;
 
         const aiResponse = await generateAIResponse(prompt);
         
@@ -273,11 +380,11 @@ Include appropriate emojis and maintain a warm, friendly tone.
   }
 
   /**
-   * Create message record for tracking
+   * Get or create conversation ID (optimized)
    */
-  private async createMessageRecord(contactId: string, content: string, campaignName: string) {
+  private async getOrCreateConversationId(contactId: string): Promise<string | null> {
     try {
-      // Get or create conversation
+      // Try to get existing conversation
       let { data: conversation } = await this.supabase
         .from('conversations')
         .select('id')
@@ -285,47 +392,31 @@ Include appropriate emojis and maintain a warm, friendly tone.
         .eq('status', 'active')
         .single();
 
-      if (!conversation) {
-        const { data: newConversation, error: createError } = await this.supabase
-          .from('conversations')
-          .insert({
-            contact_id: contactId,
-            status: 'ai_handled',
-            last_message_from: 'ai',
-            last_message_at: new Date().toISOString()
-          })
-          .select('id')
-          .single();
-        
-        if (createError || !newConversation) {
-          console.error('Error creating conversation:', createError);
-          return; // Exit early if we can't create conversation
-        }
-        
-        conversation = newConversation;
+      if (conversation) {
+        return conversation.id;
       }
 
-      // Ensure conversation exists before creating message
-      if (!conversation || !conversation.id) {
-        console.error('No valid conversation found for contact:', contactId);
-        return;
-      }
-
-      // Create message record
-      await this.supabase
-        .from('messages')
+      // Create new conversation if none exists
+      const { data: newConversation, error } = await this.supabase
+        .from('conversations')
         .insert({
-          conversation_id: conversation.id,
-          sender_type: 'ai',
-          content: content,
-          message_type: 'text',
-          ai_intent: `campaign_${campaignName}`,
-          delivery_status: 'sent'
-        });
+          contact_id: contactId,
+          status: 'ai_handled',
+          last_message_from: 'ai',
+          last_message_at: new Date().toISOString()
+        })
+        .select('id')
+        .single();
 
+      if (error || !newConversation) {
+        console.error('Error creating conversation:', error);
+        return null;
+      }
+
+      return newConversation.id;
     } catch (error) {
-      console.error('Error creating message record:', error);
-      // Don't throw - message was sent successfully
+      console.error('Error getting/creating conversation:', error);
+      return null;
     }
   }
 
