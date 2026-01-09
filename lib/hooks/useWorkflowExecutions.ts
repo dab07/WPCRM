@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { api } from '../api-client';
+import { useState, useEffect, useCallback } from 'react';
+import { serviceRegistry } from '../services';
 
 export interface WorkflowExecution {
   id: string;
@@ -14,22 +14,25 @@ export function useWorkflowExecutions(limit: number = 10) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const loadWorkflows = async () => {
+  const loadWorkflows = useCallback(async () => {
     try {
       setError(null);
-      const data = await api.workflowExecutions.list();
-      setWorkflows((data || []).slice(0, limit) as WorkflowExecution[]);
+      const data = await serviceRegistry.workflowExecutions.list({
+        pageSize: limit,
+        page: 1
+      });
+      setWorkflows((data || []) as WorkflowExecution[]);
     } catch (err) {
       console.log('Workflow executions table not available:', err);
       setWorkflows([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [limit]);
 
   useEffect(() => {
     loadWorkflows();
-  }, [limit, loadWorkflows]);
+  }, [loadWorkflows]);
 
   return { workflows, loading, error, reload: loadWorkflows };
 }

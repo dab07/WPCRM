@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { campaignOrchestrator } from '../../../../lib/campaign-orchestrator';
+import { campaignOrchestrator } from '../../../../lib/services/campaigns/CampaignOrchestrator';
 
 /**
  * Execute a campaign - delegates to the campaign orchestrator

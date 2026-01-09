@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { campaignOrchestrator, type Campaign } from '../../../../lib/campaign-orchestrator';
+import { campaignOrchestrator, type Campaign } from '../../../../lib/services/campaigns/CampaignOrchestrator';
 
 /**
  * Unified Campaign Orchestrator API

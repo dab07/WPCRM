@@ -21,7 +21,7 @@
     },
     {
       "parameters": {
-        "url": "https://wpcrm.vercel.app/api/cron/follow-ups",
+        "url": "https://wpcrm.vercel.app/api/automation/follow-ups",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBearerAuth",
         "sendHeaders": true,

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { api } from '../api-client';
+import { useState, useEffect, useCallback } from 'react';
+import { serviceRegistry } from '../services';
 
 export interface TriggerExecution {
   id: string;
@@ -14,18 +14,17 @@ export function useTriggerExecutions(limit: number = 10) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const loadTriggers = async () => {
+  const loadTriggers = useCallback(async () => {
     try {
       setError(null);
-      const data = await api.triggers.list();
+      const data = await serviceRegistry.triggers.getActiveTriggers();
       const activeTriggers = (data || [])
-        .filter((t: any) => t.is_active)
         .slice(0, limit)
-        .map((t: any) => ({
+        .map((t) => ({
           id: t.id,
           name: t.name,
-          execution_count: 0, // Would need separate execution tracking
-          success_rate: 100,
+          execution_count: t.execution_count || 0,
+          success_rate: 100, // Would need separate execution tracking for actual success rate
           last_executed: t.created_at,
         }));
       setTriggers(activeTriggers);
@@ -35,11 +34,11 @@ export function useTriggerExecutions(limit: number = 10) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [limit]);
 
   useEffect(() => {
     loadTriggers();
-  }, [limit, loadTriggers]);
+  }, [loadTriggers]);
 
   return { triggers, loading, error, reload: loadTriggers };
 }

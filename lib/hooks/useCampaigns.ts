@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { api, Campaign } from '../api-client';
+import { serviceRegistry } from '../services';
+import type { Campaign, CreateCampaignRequest } from '../types/api/campaigns';
 
 export function useCampaigns() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -9,7 +10,7 @@ export function useCampaigns() {
   const loadCampaigns = async () => {
     try {
       setError(null);
-      const data = await api.campaigns.list();
+      const data = await serviceRegistry.campaigns.list();
       setCampaigns(data || []);
     } catch (err) {
       setError(err as Error);
@@ -23,9 +24,9 @@ export function useCampaigns() {
     loadCampaigns();
   }, []);
 
-  const createCampaign = async (campaignData: Partial<Campaign>) => {
+  const createCampaign = async (campaignData: CreateCampaignRequest) => {
     try {
-      await api.campaigns.create(campaignData);
+      await serviceRegistry.campaigns.create(campaignData);
       await loadCampaigns();
     } catch (err) {
       setError(err as Error);
@@ -35,7 +36,7 @@ export function useCampaigns() {
 
   const executeCampaign = async (campaignId: string) => {
     try {
-      await api.campaigns.execute(campaignId);
+      await serviceRegistry.campaigns.startCampaign(campaignId);
       await loadCampaigns();
     } catch (err) {
       setError(err as Error);

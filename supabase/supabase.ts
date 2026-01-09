@@ -62,6 +62,7 @@ export type Database = {
           last_message_from: 'customer' | 'agent' | 'ai';
           last_message_at: string;
           ai_confidence: number;
+          assigned_agent_id?: string;
           created_at: string;
           updated_at: string;
         };

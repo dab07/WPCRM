@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { api, Trigger } from '../api-client';
+import { serviceRegistry } from '../services';
+import type { Trigger, CreateTriggerRequest, UpdateTriggerRequest } from '../services/triggers/TriggersService';
 
 export function useTriggers() {
   const [triggers, setTriggers] = useState<Trigger[]>([]);
@@ -9,7 +10,7 @@ export function useTriggers() {
   const loadTriggers = async () => {
     try {
       setError(null);
-      const data = await api.triggers.list();
+      const data = await serviceRegistry.triggers.list();
       setTriggers(data || []);
     } catch (err) {
       setError(err as Error);
@@ -23,9 +24,9 @@ export function useTriggers() {
     loadTriggers();
   }, []);
 
-  const createTrigger = async (triggerData: Partial<Trigger>) => {
+  const createTrigger = async (triggerData: CreateTriggerRequest) => {
     try {
-      await api.triggers.create(triggerData);
+      await serviceRegistry.triggers.create(triggerData);
       await loadTriggers();
     } catch (err) {
       setError(err as Error);
@@ -33,9 +34,9 @@ export function useTriggers() {
     }
   };
 
-  const updateTrigger = async (id: string, updates: Partial<Trigger>) => {
+  const updateTrigger = async (id: string, updates: UpdateTriggerRequest) => {
     try {
-      await api.triggers.update(id, updates);
+      await serviceRegistry.triggers.update(id, updates);
       await loadTriggers();
     } catch (err) {
       setError(err as Error);
@@ -45,7 +46,7 @@ export function useTriggers() {
 
   const deleteTrigger = async (id: string) => {
     try {
-      await api.triggers.delete(id);
+      await serviceRegistry.triggers.delete(id);
       await loadTriggers();
     } catch (err) {
       setError(err as Error);

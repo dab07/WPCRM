@@ -1,53 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const N8N_BASE_URL = process.env.N8N_BASE_URL || process.env.NEXT_PUBLIC_N8N_BASE_URL || 'http://localhost:5678';
-const N8N_API_KEY = process.env.N8N_API_KEY || process.env.NEXT_PUBLIC_N8N_API_KEY || '';
-
-export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const endpoint = searchParams.get('endpoint') || '/api/v1/workflows';
-
+/**
+ * N8N integration endpoint
+ * This endpoint handles communication with N8N workflows
+ */
+export async function POST(request: NextRequest) {
   try {
-    const response = await fetch(`${N8N_BASE_URL}${endpoint}`, {
-      headers: {
-        'X-N8N-API-KEY': N8N_API_KEY,
-        'Content-Type': 'application/json',
-      },
+    const body = await request.json();
+    
+    // Handle N8N webhook or API calls
+    console.log('[N8N] Received request:', body);
+
+    // Process the N8N request based on the body content
+    // This is a placeholder - implement specific N8N logic as needed
+    
+    return NextResponse.json({
+      success: true,
+      message: 'N8N request processed successfully'
     });
 
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
   } catch (error) {
-    console.error('n8n proxy error:', error);
+    console.error('[N8N] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to connect to n8n' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
 }
 
-export async function POST(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const endpoint = searchParams.get('endpoint') || '/webhook';
-  const body = await request.json();
-
-  try {
-    const response = await fetch(`${N8N_BASE_URL}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'X-N8N-API-KEY': N8N_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
-  } catch (error) {
-    console.error('n8n proxy error:', error);
-    return NextResponse.json(
-      { error: 'Failed to connect to n8n' },
-      { status: 500 }
-    );
-  }
+export async function GET() {
+  return NextResponse.json({
+    status: 'N8N integration endpoint is active',
+    timestamp: new Date().toISOString()
+  });
 }

@@ -1,0 +1,469 @@
+import { GoogleGenAI } from "@google/genai";
+import { config } from '../../config/environment';
+import { externalServicesConfig } from '../../config/external-services';
+
+export interface BusinessCardData {
+  name?: string;
+  company?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  website?: string;
+  designation?: string;
+}
+
+export interface GeminiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  confidence?: number;
+  error?: string;
+}
+
+export class GeminiServiceError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode?: number,
+    public readonly originalError?: Error
+  ) {
+    super(message);
+    this.name = 'GeminiServiceError';
+  }
+}
+
+export class GeminiService {
+  private client: GoogleGenAI | null = null;
+  private readonly timeout: number;
+  private readonly retries: number;
+
+  constructor() {
+    this.timeout = externalServicesConfig.gemini.timeout;
+    this.retries = externalServicesConfig.gemini.retries;
+  }
+
+  private getClient(): GoogleGenAI {
+    // Only initialize on server-side
+    if (typeof window !== 'undefined') {
+      throw new GeminiServiceError('Gemini client can only be used on server-side');
+    }
+
+    if (!this.client) {
+      if (!config.gemini.apiKey) {
+        throw new GeminiServiceError('GEMINI_API_KEY is required');
+      }
+      
+      this.client = new GoogleGenAI({
+        apiKey: config.gemini.apiKey
+      });
+    }
+    
+    return this.client;
+  }
+
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string
+  ): Promise<T> {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt <= this.retries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+        
+        try {
+          const result = await operation();
+          clearTimeout(timeoutId);
+          return result;
+        } catch (error) {
+          clearTimeout(timeoutId);
+          throw error;
+        }
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        if (attempt < this.retries) {
+          // Exponential backoff
+          const delay = Math.pow(2, attempt) * 1000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+    }
+
+    console.error(`[Gemini Service] ${operationName} failed after retries:`, lastError);
+    throw new GeminiServiceError(
+      `${operationName} failed after ${this.retries} retries: ${lastError?.message}`,
+      undefined,
+      lastError || undefined
+    );
+  }
+
+  /**
+   * Extract business card information from text using Gemini
+   */
+  async extractBusinessCardFromText(text: string): Promise<GeminiResponse<BusinessCardData>> {
+    try {
+      const result = await this.executeWithRetry(async () => {
+        const client = this.getClient();
+        const response = await client.models.generateContent({
+          model: externalServicesConfig.gemini.model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `Extract business card information from the following text. Return ONLY a valid JSON object with these fields: name, company, phone, email, address, website, designation. If a field is not found, omit it. Do not include any markdown formatting or explanation.\n\nText: ${text}`
+                }
+              ]
+            }
+          ]
+        });
+      
+        const generatedText = response.text;
+
+        if (!generatedText) {
+          throw new GeminiServiceError('No response from Gemini');
+        }
+
+        // Clean and parse JSON
+        const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new GeminiServiceError('No JSON found in response');
+        }
+
+        const data = JSON.parse(jsonMatch[0]);
+        return data;
+      }, 'extractBusinessCardFromText');
+      
+      return {
+        success: true,
+        data: result,
+        confidence: 0.85
+      };
+    } catch (error) {
+      console.error('[Gemini Service] Error extracting business card:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Extract business card information from image using Gemini Vision
+   */
+  async extractBusinessCardFromImage(imageBase64: string): Promise<GeminiResponse<BusinessCardData>> {
+    try {
+      const result = await this.executeWithRetry(async () => {
+        const client = this.getClient();
+        const response = await client.models.generateContent({
+          model: externalServicesConfig.gemini.model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `Extract all business card information from this image. Return ONLY a valid JSON object with these fields: name, company, phone, email, address, website, designation. If a field is not found, omit it. Do not include any markdown formatting or explanation.`
+                },
+                {
+                  inlineData: {
+                    data: imageBase64,
+                    mimeType: 'image/jpeg'
+                  }
+                }
+              ]
+            }
+          ]
+        });
+
+        const generatedText = response.text;
+
+        if (!generatedText) {
+          throw new GeminiServiceError('No response from Gemini');
+        }
+
+        // Clean and parse JSON
+        const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new GeminiServiceError('No JSON found in response');
+        }
+
+        const data = JSON.parse(jsonMatch[0]);
+        return data;
+      }, 'extractBusinessCardFromImage');
+      
+      return {
+        success: true,
+        data: result,
+        confidence: 0.9
+      };
+    } catch (error) {
+      console.error('[Gemini Service] Error extracting business card from image:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Generate AI response for customer message
+   */
+  async generateAIResponse(
+    customerMessage: string,
+    conversationHistory: string[] = []
+  ): Promise<GeminiResponse<{
+    response: string;
+    intent: string;
+  }>> {
+    try {
+      const result = await this.executeWithRetry(async () => {
+        const context = conversationHistory.length > 0
+          ? `Previous conversation:\n${conversationHistory.join('\n')}\n\n`
+          : '';
+
+        const prompt = `${context}Customer message: ${customerMessage}
+
+You are a helpful customer service AI. Generate a professional, friendly response to the customer's message. Keep it concise and helpful.`;
+
+        const client = this.getClient();
+        const response = await client.models.generateContent({
+          model: externalServicesConfig.gemini.model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: prompt
+                }
+              ]
+            }
+          ]
+        });
+
+        const generatedText = response.text;
+
+        if (!generatedText) {
+          throw new GeminiServiceError('No response from Gemini');
+        }
+
+        return {
+          response: generatedText.trim(),
+          intent: 'general_inquiry'
+        };
+      }, 'generateAIResponse');
+
+      return {
+        success: true,
+        data: result,
+        confidence: 0.8
+      };
+    } catch (error) {
+      console.error('[Gemini Service] Error generating AI response:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Generate contextual message for Instagram reel/post
+   */
+  async generateInstagramMessage(
+    reelUrl: string,
+    caption: string,
+    hashtags: string[] = [],
+    customPrompt?: string
+  ): Promise<GeminiResponse<string>> {
+    try {
+      const result = await this.executeWithRetry(async () => {
+        const defaultPrompt = 'Generate a brief, engaging 20-30 word message about this Instagram reel to share with customers via WhatsApp. Include the reel link and make it sound natural and exciting.';
+        
+        const prompt = customPrompt || defaultPrompt;
+        
+        const contextInfo = `
+Instagram Reel URL: ${reelUrl}
+Caption: ${caption}
+Hashtags: ${hashtags.join(', ')}
+
+${prompt}`;
+
+        const client = this.getClient();
+        const response = await client.models.generateContent({
+          model: externalServicesConfig.gemini.model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: contextInfo
+                }
+              ]
+            }
+          ]
+        });
+
+        const generatedText = response.text;
+
+        if (!generatedText) {
+          throw new GeminiServiceError('No response from Gemini');
+        }
+
+        return generatedText.trim();
+      }, 'generateInstagramMessage');
+
+      return {
+        success: true,
+        data: result
+      };
+    } catch (error) {
+      console.error('[Gemini Service] Error generating Instagram message:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Analyze Instagram content for targeting
+   */
+  async analyzeInstagramContent(
+    caption: string,
+    hashtags: string[] = []
+  ): Promise<GeminiResponse<{
+    categories: string[];
+    sentiment: 'positive' | 'neutral' | 'negative';
+    targetAudience: string[];
+  }>> {
+    try {
+      const result = await this.executeWithRetry(async () => {
+        const prompt = `Analyze this Instagram content and return ONLY a JSON object with these fields:
+- categories: array of content categories (e.g., ["lifestyle", "business", "entertainment"])
+- sentiment: "positive", "neutral", or "negative"
+- targetAudience: array of audience types (e.g., ["young_adults", "professionals", "entrepreneurs"])
+
+Caption: ${caption}
+Hashtags: ${hashtags.join(', ')}`;
+
+        const client = this.getClient();
+        const response = await client.models.generateContent({
+          model: externalServicesConfig.gemini.model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: prompt
+                }
+              ]
+            }
+          ]
+        });
+
+        const generatedText = response.text;
+
+        if (!generatedText) {
+          throw new GeminiServiceError('No response from Gemini');
+        }
+
+        // Clean and parse JSON
+        const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new GeminiServiceError('No JSON found in response');
+        }
+
+        const analysis = JSON.parse(jsonMatch[0]);
+        return analysis;
+      }, 'analyzeInstagramContent');
+      
+      return {
+        success: true,
+        data: result
+      };
+    } catch (error) {
+      console.error('[Gemini Service] Error analyzing Instagram content:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Detect intent from customer message
+   */
+  detectIntent(message: string): {
+    intent: string;
+    confidence: number;
+  } {
+    const lowerMessage = message.toLowerCase();
+    
+    // Simple keyword-based intent detection
+    if (lowerMessage.includes('lead') || lowerMessage.includes('business card') || lowerMessage.includes('visiting card')) {
+      return { intent: 'business_card', confidence: 0.95 };
+    }
+    
+    if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('quote')) {
+      return { intent: 'pricing_inquiry', confidence: 0.9 };
+    }
+    
+    if (lowerMessage.includes('help') || lowerMessage.includes('support')) {
+      return { intent: 'support_request', confidence: 0.85 };
+    }
+    
+    return { intent: 'general_inquiry', confidence: 0.6 };
+  }
+}
+
+// Create singleton instance
+const geminiService = new GeminiService();
+
+// Legacy exports for backward compatibility
+export async function extractBusinessCardFromText(text: string): Promise<GeminiResponse<BusinessCardData>> {
+  return geminiService.extractBusinessCardFromText(text);
+}
+
+export async function extractBusinessCardFromImage(imageBase64: string): Promise<GeminiResponse<BusinessCardData>> {
+  return geminiService.extractBusinessCardFromImage(imageBase64);
+}
+
+export async function generateAIResponse(
+  customerMessage: string,
+  conversationHistory: string[] = []
+): Promise<GeminiResponse<{
+  response: string;
+  intent: string;
+}>> {
+  return geminiService.generateAIResponse(customerMessage, conversationHistory);
+}
+
+export async function generateInstagramMessage(
+  reelUrl: string,
+  caption: string,
+  hashtags: string[] = [],
+  customPrompt?: string
+): Promise<GeminiResponse<string>> {
+  return geminiService.generateInstagramMessage(reelUrl, caption, hashtags, customPrompt);
+}
+
+export async function analyzeInstagramContent(
+  caption: string,
+  hashtags: string[] = []
+): Promise<GeminiResponse<{
+  categories: string[];
+  sentiment: 'positive' | 'neutral' | 'negative';
+  targetAudience: string[];
+}>> {
+  return geminiService.analyzeInstagramContent(caption, hashtags);
+}
+
+export function detectIntent(message: string): {
+  intent: string;
+  confidence: number;
+} {
+  return geminiService.detectIntent(message);
+}
+
+export { geminiService };

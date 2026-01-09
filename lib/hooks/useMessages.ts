@@ -1,15 +1,16 @@
-import { useState, useEffect } from 'react';
-import { api, Message } from '../api-client';
+import { useState, useEffect, useCallback } from 'react';
+import { serviceRegistry } from '../services';
+import type { Message } from '../types/api/messages';
 
 export function useMessages(conversationId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const loadMessages = async () => {
+  const loadMessages = useCallback(async () => {
     try {
       setError(null);
-      const data = await api.messages.list(conversationId);
+      const data = await serviceRegistry.conversations.getMessages(conversationId);
       setMessages(data || []);
     } catch (err) {
       setError(err as Error);
@@ -17,7 +18,7 @@ export function useMessages(conversationId: string) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [conversationId]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -28,7 +29,11 @@ export function useMessages(conversationId: string) {
 
   const sendMessage = async (content: string) => {
     try {
-      await api.messages.send(conversationId, content.trim());
+      await serviceRegistry.conversations.addMessage({
+        conversation_id: conversationId,
+        content: content.trim(),
+        sender_type: 'agent' // Assuming agent is sending
+      });
       await loadMessages();
     } catch (err) {
       setError(err as Error);

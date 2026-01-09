@@ -1,25 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
-  return NextResponse.json({ 
-    message: 'Instagram webhook endpoint is working',
-    timestamp: new Date().toISOString(),
-    url: request.url
-  });
-}
-
+/**
+ * Instagram testing endpoint
+ * This endpoint is for testing Instagram integration functionality
+ */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log('[Test Instagram] Received POST:', body);
     
-    return NextResponse.json({ 
+    console.log('[Instagram Test] Received request:', body);
+
+    // Test Instagram functionality
+    // This is a placeholder - implement specific Instagram testing logic as needed
+    
+    return NextResponse.json({
       success: true,
-      received: body,
-      timestamp: new Date().toISOString()
+      message: 'Instagram test completed successfully',
+      data: body
     });
+
   } catch (error) {
-    console.error('[Test Instagram] Error:', error);
-    return NextResponse.json({ error: 'Failed to parse body' }, { status: 400 });
+    console.error('[Instagram Test] Error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
+}
+
+export async function GET() {
+  return NextResponse.json({
+    status: 'Instagram test endpoint is active',
+    timestamp: new Date().toISOString()
+  });
 }

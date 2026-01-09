@@ -5,3 +5,5 @@ export * from './useTriggers';
 export * from './useAgenticMetrics';
 export * from './useWorkflowExecutions';
 export * from './useTriggerExecutions';
+export * from './useContacts';
+export * from './useFollowUpRules';

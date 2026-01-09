@@ -1,181 +1,34 @@
 import { NextResponse } from 'next/server';
-import {supabase} from '../../../../supabase/supabase';
-import { sendWhatsAppMessage } from '../../../../lib/whatsapp-cloud';
-
-
-// Rate limiting: Track last execution time
-let lastExecutionTime = 0;
-const MIN_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 hours minimum between executions (for 3-day schedule)
+import { serviceRegistry } from '../../../../lib/services/ServiceRegistry';
 
 /**
- * Cron job to send follow-up messages for inactive conversations
- * Run this every 3 days via N8N scheduler or daily for more frequent checks
- * 
- * Logic:
- * 1. Find conversations where last message was from customer
- * 2. Calculate hours since last customer message
- * 3. Match to appropriate follow-up rule based on inactivity duration
- * 4. Ensure we don't send duplicate follow-ups for the same rule
- * 5. Rate limiting prevents too frequent executions
+ * Cron-specific endpoint for follow-up automation
+ * This endpoint is designed to be called by external cron services like Vercel Cron
  */
 export async function GET() {
-  // Rate limiting check
-  const now = Date.now();
-  if (now - lastExecutionTime < MIN_INTERVAL_MS) {
-    const waitTime = Math.ceil((MIN_INTERVAL_MS - (now - lastExecutionTime)) / 1000 / 60); // minutes
-    console.log(`[Follow-ups] ⏸️ Rate limited. Wait ${waitTime} minutes before next execution.`);
-    return NextResponse.json({ 
-      success: false,
-      message: `Rate limited. Please wait ${waitTime} minutes.`,
-      nextAllowedInMinutes: waitTime,
-      rateLimited: true
-    }, { status: 429 });
-  }
-  
-  lastExecutionTime = now;
   try {
-    console.log('[Follow-ups] 🔄 Starting follow-up check...');
+    console.log('[Cron Follow-ups] 🔄 Starting scheduled follow-up check...');
 
-    // Get active follow-up rules sorted by inactivity hours (ascending)
-    const { data: rules } = await supabase
-      .from('follow_up_rules')
-      .select('*')
-      .eq('is_active', true)
-      .eq('trigger_condition', 'inactivity')
-      .order('inactivity_hours', { ascending: true });
+    const result = await serviceRegistry.followUpBusiness.executeFollowUpWorkflow();
 
-    if (!rules || rules.length === 0) {
-      console.log('[Follow-ups] ℹ️ No active follow-up rules found');
-      return NextResponse.json({ 
-        success: true,
-        message: 'No active follow-up rules found',
-        totalSent: 0,
-        totalChecked: 0
-      });
+    if (result.rateLimited) {
+      console.log(`[Cron Follow-ups] ⏸️ Rate limited. Wait ${result.nextAllowedInMinutes} minutes before next execution.`);
+      return NextResponse.json(result, { status: 429 });
     }
 
-    console.log(`[Follow-ups] Found ${rules.length} active rules`);
-
-    // Find all active conversations where last message was from customer
-    const { data: conversations } = await supabase
-      .from('conversations')
-      .select('*, contact:contacts(*)')
-      .in('status', ['active', 'ai_handled'])
-      .eq('last_message_from', 'customer')
-      .not('last_message_at', 'is', null);
-
-    if (!conversations || conversations.length === 0) {
-      console.log('[Follow-ups] ℹ️ No conversations to check');
-      return NextResponse.json({ 
-        success: true,
-        message: 'No conversations to check',
-        totalSent: 0,
-        totalChecked: 0
-      });
-    }
-
-    console.log(`[Follow-ups] Checking ${conversations.length} conversations`);
-
-    let totalSent = 0;
-    const now = new Date();
-
-    for (const conversation of conversations) {
-      // Calculate hours since last customer message
-      const lastMessageTime = new Date(conversation.last_message_at);
-      const hoursSinceLastMessage = (now.getTime() - lastMessageTime.getTime()) / (1000 * 60 * 60);
-
-      // Get all follow-up messages we've already sent for this conversation
-      const { data: sentFollowUps } = await supabase
-        .from('messages')
-        .select('metadata')
-        .eq('conversation_id', conversation.id)
-        .eq('sender_type', 'ai')
-        .not('metadata->follow_up_rule_id', 'is', null)
-        .gte('created_at', conversation.last_message_at); // Only count follow-ups after last customer message
-
-      const sentRuleIds = new Set(
-        sentFollowUps?.map(m => m.metadata?.follow_up_rule_id).filter(Boolean) || []
-      );
-
-      // Find the appropriate rule based on inactivity duration
-      // Rules are sorted by inactivity_hours ascending (e.g., 72h, 168h, 336h)
-      let applicableRule = null;
-
-      for (const rule of rules) {
-        const requiredHours = rule.inactivity_hours || 72;
-        
-        // Check if enough time has passed for this rule
-        if (hoursSinceLastMessage >= requiredHours) {
-          // Check if we haven't sent this rule yet
-          if (!sentRuleIds.has(rule.id)) {
-            applicableRule = rule;
-            break; // Use the first matching rule (shortest duration not yet sent)
-          }
-        }
-      }
-
-      if (!applicableRule) {
-        continue; // No applicable rule for this conversation
-      }
-
-      // Send follow-up message
-      const message = applicableRule.message_template
-        .replace(/\{\{name\}\}/g, conversation.contact.name || 'there')
-        .replace(/\{\{company\}\}/g, conversation.contact.company || '');
-
-      console.log(`[Follow-ups] Sending ${applicableRule.name} to ${conversation.contact.name} (${hoursSinceLastMessage.toFixed(1)}h inactive)`);
-
-      const result = await sendWhatsAppMessage({
-        to: conversation.contact.phone_number,
-        message
-      });
-
-      if (result.success) {
-        // Save message to database with rule tracking
-        await supabase
-          .from('messages')
-          .insert({
-            conversation_id: conversation.id,
-            whatsapp_message_id: result.messageId,
-            sender_type: 'ai',
-            content: message,
-            message_type: 'text',
-            delivery_status: 'sent',
-            metadata: { 
-              follow_up_rule_id: applicableRule.id,
-              follow_up_rule_name: applicableRule.name,
-              hours_inactive: Math.round(hoursSinceLastMessage)
-            }
-          });
-
-        // Update conversation
-        await supabase
-          .from('conversations')
-          .update({
-            last_message_at: new Date().toISOString(),
-            last_message_from: 'ai'
-          })
-          .eq('id', conversation.id);
-
-        totalSent++;
-        console.log(`[Follow-ups] ✅ Sent "${applicableRule.name}" to ${conversation.contact.name}`);
-      } else {
-        console.error(`[Follow-ups] ❌ Failed to send to ${conversation.contact.name}:`, result.error);
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: `Sent ${totalSent} follow-up messages`,
-      totalSent,
-      totalChecked: conversations.length
-    });
+    console.log(`[Cron Follow-ups] ✅ Completed: ${result.message}`);
+    return NextResponse.json(result);
 
   } catch (error) {
-    console.error('[Follow-ups] ❌ Error:', error);
+    console.error('[Cron Follow-ups] ❌ Error:', error);
     return NextResponse.json(
       { error: 'Internal error' },
       { status: 500 }
     );
   }
+}
+
+// Also support POST for manual triggers
+export async function POST() {
+  return GET();
 }
