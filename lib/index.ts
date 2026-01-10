@@ -111,7 +111,6 @@ export {
   extractBusinessCardFromImage,
   generateAIResponse,
   generateInstagramMessage,
-  analyzeInstagramContent,
   detectIntent,
   InstagramService,
   InstagramServiceError,

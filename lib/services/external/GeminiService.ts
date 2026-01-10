@@ -417,16 +417,15 @@ Hashtags: ${hashtags.join(', ')}`;
   }
 }
 
-// Create singleton instance
-const geminiService = new GeminiService();
-
 // Legacy exports for backward compatibility
 export async function extractBusinessCardFromText(text: string): Promise<GeminiResponse<BusinessCardData>> {
-  return geminiService.extractBusinessCardFromText(text);
+  const service = new GeminiService();
+  return service.extractBusinessCardFromText(text);
 }
 
 export async function extractBusinessCardFromImage(imageBase64: string): Promise<GeminiResponse<BusinessCardData>> {
-  return geminiService.extractBusinessCardFromImage(imageBase64);
+  const service = new GeminiService();
+  return service.extractBusinessCardFromImage(imageBase64);
 }
 
 export async function generateAIResponse(
@@ -436,7 +435,8 @@ export async function generateAIResponse(
   response: string;
   intent: string;
 }>> {
-  return geminiService.generateAIResponse(customerMessage, conversationHistory);
+  const service = new GeminiService();
+  return service.generateAIResponse(customerMessage, conversationHistory);
 }
 
 export async function generateInstagramMessage(
@@ -445,25 +445,14 @@ export async function generateInstagramMessage(
   hashtags: string[] = [],
   customPrompt?: string
 ): Promise<GeminiResponse<string>> {
-  return geminiService.generateInstagramMessage(reelUrl, caption, hashtags, customPrompt);
+  const service = new GeminiService();
+  return service.generateInstagramMessage(reelUrl, caption, hashtags, customPrompt);
 }
 
-export async function analyzeInstagramContent(
-  caption: string,
-  hashtags: string[] = []
-): Promise<GeminiResponse<{
-  categories: string[];
-  sentiment: 'positive' | 'neutral' | 'negative';
-  targetAudience: string[];
-}>> {
-  return geminiService.analyzeInstagramContent(caption, hashtags);
-}
-
-export function detectIntent(message: string): {
+export async function detectIntent(message: string): Promise<{
   intent: string;
   confidence: number;
-} {
-  return geminiService.detectIntent(message);
+}> {
+  const service = new GeminiService();
+  return service.detectIntent(message);
 }
-
-export { geminiService };

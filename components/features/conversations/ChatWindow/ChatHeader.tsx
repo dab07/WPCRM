@@ -50,9 +50,13 @@ export default function ChatHeader({ conversation }: ChatHeaderProps) {
     <div className="bg-white border-b border-slate-200 px-6 py-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">{conversation.contact.name}</h2>
-          <p className="text-sm text-slate-500">{conversation.contact.phone_number}</p>
-          {conversation.contact.company && (
+          <h2 className="text-lg font-semibold text-slate-900">
+            {conversation.contact?.name || 'Unknown Contact'}
+          </h2>
+          <p className="text-sm text-slate-500">
+            {conversation.contact?.phone_number || 'No phone number'}
+          </p>
+          {conversation.contact?.company && (
             <p className="text-sm text-slate-600 mt-1">{conversation.contact.company}</p>
           )}
         </div>

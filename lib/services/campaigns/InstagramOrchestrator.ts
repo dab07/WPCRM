@@ -3,7 +3,7 @@ import {
   InstagramService
 } from '../external/InstagramService';
 import { GeminiService } from '../external/GeminiService';
-import { WhatsAppService, createWhatsAppService } from '../external/WhatsAppService';
+import { WhatsAppService, getWhatsAppService } from '../external/WhatsAppService';
 import { supabaseAdmin } from '../../../supabase/supabase';
 
 export interface InstagramBroadcastResult {
@@ -28,12 +28,19 @@ export class InstagramOrchestratorError extends Error {
 export class InstagramOrchestrator {
   private instagramService: InstagramService;
   private geminiService: GeminiService;
-  private whatsappService: WhatsAppService;
+  private whatsappService: WhatsAppService | null = null;
 
   constructor() {
     this.instagramService = new InstagramService();
     this.geminiService = new GeminiService();
-    this.whatsappService = createWhatsAppService();
+    // Don't initialize WhatsApp service here - do it lazily
+  }
+
+  private getWhatsAppService(): WhatsAppService {
+    if (!this.whatsappService) {
+      this.whatsappService = getWhatsAppService();
+    }
+    return this.whatsappService;
   }
 
   /**
@@ -118,7 +125,7 @@ export class InstagramOrchestrator {
               );
 
               // Send WhatsApp message
-              const whatsappResult = await this.whatsappService.sendMessage({
+              const whatsappResult = await this.getWhatsAppService().sendMessage({
                 to: contact.phone_number,
                 message: personalizedMessage
               });
@@ -211,15 +218,13 @@ export class InstagramOrchestrator {
   }
 }
 
-// Create singleton instance
-const instagramOrchestrator = new InstagramOrchestrator();
-
 // Legacy exports for backward compatibility
 export async function processInstagramPost(
   post: InstagramPost,
   instagramAccountId: string
 ): Promise<InstagramBroadcastResult> {
-  return instagramOrchestrator.processInstagramPost(post, instagramAccountId);
+  const orchestrator = new InstagramOrchestrator();
+  return orchestrator.processInstagramPost(post, instagramAccountId);
 }
 
 export async function triggerInstagramBroadcast(webhookData: {
@@ -230,7 +235,6 @@ export async function triggerInstagramBroadcast(webhookData: {
   caption?: string;
   account_id: string;
 }): Promise<InstagramBroadcastResult> {
-  return instagramOrchestrator.triggerInstagramBroadcast(webhookData);
+  const orchestrator = new InstagramOrchestrator();
+  return orchestrator.triggerInstagramBroadcast(webhookData);
 }
-
-export { instagramOrchestrator };

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { campaignOrchestrator } from '../../../../lib/services/campaigns/CampaignOrchestrator';
+import { CampaignOrchestrator } from '../../../../lib/services/campaigns/CampaignOrchestrator';
 
 /**
  * Execute a campaign - delegates to the campaign orchestrator
@@ -16,8 +16,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Create orchestrator instance lazily
+    const orchestrator = new CampaignOrchestrator();
+    
     // Use the orchestrator for consistent campaign execution
-    const result = await campaignOrchestrator.executeSingleCampaign(campaignId);
+    const result = await orchestrator.executeSingleCampaign(campaignId);
 
     return NextResponse.json({
       success: true,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { campaignOrchestrator, type Campaign } from '../../../../lib/services/campaigns/CampaignOrchestrator';
+import { CampaignOrchestrator, type Campaign } from '../../../../lib/services/campaigns/CampaignOrchestrator';
 
 /**
  * Unified Campaign Orchestrator API
@@ -22,13 +22,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Create orchestrator instance lazily
+    const orchestrator = new CampaignOrchestrator();
     let result;
 
     switch (action) {
       case 'process_scheduled':
         // Process all scheduled campaigns for today (called by N8N daily)
         console.log('[Campaign Orchestrator] Processing scheduled campaigns...');
-        result = await campaignOrchestrator.processCampaigns(source || 'api');
+        result = await orchestrator.processCampaigns(source || 'api');
         break;
 
       case 'execute_campaign':
@@ -40,13 +42,13 @@ export async function POST(request: NextRequest) {
           );
         }
         console.log(`[Campaign Orchestrator] Executing campaign: ${campaignId}`);
-        result = await campaignOrchestrator.executeSingleCampaign(campaignId);
+        result = await orchestrator.executeSingleCampaign(campaignId);
         break;
 
       default:
         // Default behavior: process scheduled campaigns (for backward compatibility)
         console.log('[Campaign Orchestrator] Default: Processing scheduled campaigns...');
-        result = await campaignOrchestrator.processCampaigns(source || 'api');
+        result = await orchestrator.processCampaigns(source || 'api');
         break;
     }
 
@@ -78,10 +80,13 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const action = url.searchParams.get('action') || 'status';
 
+    // Create orchestrator instance lazily
+    const orchestrator = new CampaignOrchestrator();
+
     switch (action) {
       case 'scheduled_today':
         // Get campaigns scheduled for today
-        const campaigns: Campaign[] = await campaignOrchestrator.getCampaigns();
+        const campaigns: Campaign[] = await orchestrator.getCampaigns();
         const scheduledToday = campaigns.filter((c: Campaign) => 
           c.status === 'scheduled' && 
           c.scheduled_at && 
@@ -98,7 +103,7 @@ export async function GET(request: NextRequest) {
       case 'status':
       default:
         // General status
-        const allCampaigns: Campaign[] = await campaignOrchestrator.getCampaigns();
+        const allCampaigns: Campaign[] = await orchestrator.getCampaigns();
         const stats = {
           total: allCampaigns.length,
           draft: allCampaigns.filter((c: Campaign) => c.status === 'draft').length,

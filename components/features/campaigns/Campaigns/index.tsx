@@ -1,28 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Send, Plus, Calendar, Clock, Users, CheckCircle } from 'lucide-react';
-import { campaignOrchestrator } from '../../../../lib/services/campaigns/CampaignOrchestrator';
+import { useCampaigns } from '../../../../lib/hooks';
 import { Campaign } from '../../../../lib/types/api/campaigns';
 
 export function CampaignsPanel() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { campaigns, loading, reload } = useCampaigns();
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  useEffect(() => {
-    loadCampaigns();
-  }, []);
-
-  const loadCampaigns = async () => {
-    try {
-      const data = await campaignOrchestrator.getCampaigns();
-      setCampaigns(data);
-    } catch (error) {
-      console.error('Error loading campaigns:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handleCreateSuccess = () => {
+    setShowCreateModal(false);
+    reload();
   };
 
   const getStatusColor = (status: Campaign['status']) => {
@@ -205,10 +194,7 @@ export function CampaignsPanel() {
       {showCreateModal && (
         <CreateCampaignModal
           onClose={() => setShowCreateModal(false)}
-          onSuccess={() => {
-            setShowCreateModal(false);
-            loadCampaigns();
-          }}
+          onSuccess={handleCreateSuccess}
         />
       )}
     </div>
@@ -216,6 +202,7 @@ export function CampaignsPanel() {
 }
 
 function CreateCampaignModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const { createCampaign } = useCampaigns();
   const [formData, setFormData] = useState({
     name: '',
     message_template: '',
@@ -230,7 +217,7 @@ function CreateCampaignModal({ onClose, onSuccess }: { onClose: () => void; onSu
     setSaving(true);
 
     try {
-      await campaignOrchestrator.createCampaign({
+      await createCampaign({
         name: formData.name,
         message_template: formData.message_template,
         target_tags: formData.target_tags,

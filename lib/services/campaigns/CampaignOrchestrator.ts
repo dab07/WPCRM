@@ -1,6 +1,6 @@
 import { format, parseISO } from 'date-fns';
 import { GeminiService } from '../external/GeminiService';
-import { WhatsAppService, createWhatsAppService } from '../external/WhatsAppService';
+import { WhatsAppService, getWhatsAppService } from '../external/WhatsAppService';
 import { supabaseAdmin } from '../../../supabase/supabase';
 
 export interface Campaign {
@@ -40,11 +40,18 @@ export class CampaignOrchestratorError extends Error {
 export class CampaignOrchestrator {
   private supabase = supabaseAdmin;
   private geminiService: GeminiService;
-  private whatsappService: WhatsAppService;
+  private whatsappService: WhatsAppService | null = null;
 
   constructor() {
     this.geminiService = new GeminiService();
-    this.whatsappService = createWhatsAppService();
+    // Don't initialize WhatsApp service here - do it lazily
+  }
+
+  private getWhatsAppService(): WhatsAppService {
+    if (!this.whatsappService) {
+      this.whatsappService = getWhatsAppService();
+    }
+    return this.whatsappService;
   }
 
   /**
@@ -187,7 +194,7 @@ export class CampaignOrchestrator {
             );
 
             // Send WhatsApp message
-            const result = await this.whatsappService.sendMessage({
+            const result = await this.getWhatsAppService().sendMessage({
               to: contact.phone_number,
               message: personalizedMessage
             });
@@ -628,12 +635,10 @@ Return only the enhanced message, no explanations.`;
   }
 }
 
-// Export singleton instance
-export const campaignOrchestrator = new CampaignOrchestrator();
-
 // Legacy exports for backward compatibility
 export async function processCampaigns(source?: string) {
-  return campaignOrchestrator.processCampaigns(source);
+  const orchestrator = new CampaignOrchestrator();
+  return orchestrator.processCampaigns(source);
 }
 
 export async function createCampaign(campaignData: {
@@ -642,13 +647,16 @@ export async function createCampaign(campaignData: {
   target_tags?: string[];
   scheduled_at?: string;
 }) {
-  return campaignOrchestrator.createCampaign(campaignData);
+  const orchestrator = new CampaignOrchestrator();
+  return orchestrator.createCampaign(campaignData);
 }
 
 export async function executeSingleCampaign(campaignId: string) {
-  return campaignOrchestrator.executeSingleCampaign(campaignId);
+  const orchestrator = new CampaignOrchestrator();
+  return orchestrator.executeSingleCampaign(campaignId);
 }
 
 export async function getCampaigns() {
-  return campaignOrchestrator.getCampaigns();
+  const orchestrator = new CampaignOrchestrator();
+  return orchestrator.getCampaigns();
 }

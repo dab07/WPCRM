@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { 
   extractBusinessCardFromText, 
   extractBusinessCardFromImage, 
@@ -7,11 +6,9 @@ import {
   detectIntent 
 } from '../../../../../lib/services/external/GeminiService';
 import { sendWhatsAppMessage } from '../../../../../lib/services/external/WhatsAppService';
+import { supabaseAdmin } from '../../../../../supabase/supabase';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabase = supabaseAdmin;
 
 const WEBHOOK_VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'your_verify_token';
 

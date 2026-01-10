@@ -3,6 +3,7 @@
 import { Workflow } from 'lucide-react';
 import { Card, CardHeader, CardContent, EmptyState } from '../../../ui';
 import { WorkflowExecution } from '../../../../lib/hooks/useWorkflowExecutions';
+import { formatDateTime } from '../../../../lib/utils/date-formatting';
 
 interface WorkflowsListProps {
   workflows: WorkflowExecution[];
@@ -55,7 +56,7 @@ function WorkflowItem({ workflow }: { workflow: WorkflowExecution }) {
       <div>
         <p className="font-medium text-slate-900">{workflow.workflow_name}</p>
         <p className="text-sm text-slate-600">
-          {new Date(workflow.started_at).toLocaleString()}
+          {formatDateTime(workflow.started_at)}
         </p>
       </div>
       <div className="flex items-center gap-3">

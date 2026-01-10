@@ -19,7 +19,6 @@ export {
   extractBusinessCardFromImage,
   generateAIResponse,
   generateInstagramMessage,
-  analyzeInstagramContent,
   detectIntent
 } from './GeminiService';
 

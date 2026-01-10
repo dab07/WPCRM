@@ -292,28 +292,30 @@ export class InstagramService {
   }
 }
 
-// Create singleton instance
-const instagramService = new InstagramService();
-
 // Legacy exports for backward compatibility
 export async function fetchInstagramPosts(accessToken: string, userId: string): Promise<InstagramPost[]> {
-  return instagramService.fetchInstagramPosts(accessToken, userId);
+  const service = new InstagramService();
+  return service.fetchInstagramPosts(accessToken, userId);
 }
 
 export async function storeInstagramPost(post: InstagramPost, accountId: string) {
-  return instagramService.storeInstagramPost(post, accountId);
+  const service = new InstagramService();
+  return service.storeInstagramPost(post, accountId);
 }
 
 export async function getBroadcastRules(accountId: string, postType: 'reel' | 'post'): Promise<InstagramBroadcastRule[]> {
-  return instagramService.getBroadcastRules(accountId, postType);
+  const service = new InstagramService();
+  return service.getBroadcastRules(accountId, postType);
 }
 
 export async function getTargetContacts(tags: string[]): Promise<any[]> {
-  return instagramService.getTargetContacts(tags);
+  const service = new InstagramService();
+  return service.getTargetContacts(tags);
 }
 
 export function matchesHashtagFilters(postHashtags: string[], filterHashtags: string[]): boolean {
-  return instagramService.matchesHashtagFilters(postHashtags, filterHashtags);
+  const service = new InstagramService();
+  return service.matchesHashtagFilters(postHashtags, filterHashtags);
 }
 
 export async function logBroadcast(
@@ -325,7 +327,8 @@ export async function logBroadcast(
   deliveryStatus: 'pending' | 'sent' | 'delivered' | 'failed' = 'pending',
   errorMessage?: string
 ) {
-  return instagramService.logBroadcast(
+  const service = new InstagramService();
+  return service.logBroadcast(
     postId,
     ruleId,
     contactId,
@@ -335,5 +338,3 @@ export async function logBroadcast(
     errorMessage
   );
 }
-
-export { instagramService };

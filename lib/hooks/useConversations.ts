@@ -3,7 +3,7 @@ import { serviceRegistry } from '../services';
 import type { Conversation } from '../types/api/conversations';
 import type { Contact } from '../types/api/contacts';
 
-export type ConversationWithContact = Conversation & { contact: Contact };
+export type ConversationWithContact = Conversation & { contact: Contact | null };
 
 export function useConversations() {
   const [conversations, setConversations] = useState<ConversationWithContact[]>([]);
@@ -13,18 +13,41 @@ export function useConversations() {
   const loadConversations = async () => {
     try {
       setError(null);
-      // Note: The service layer doesn't currently support joins, so we'll need to fetch contacts separately
-      // This is a temporary solution until we implement proper join support in the service layer
-      const conversationsData = await serviceRegistry.conversations.list();
-      
-      // For now, we'll cast the data assuming the database query includes contact data
-      // In a production system, we'd want to either:
-      // 1. Implement join support in the service layer
-      // 2. Fetch contacts separately and merge the data
-      setConversations(conversationsData as ConversationWithContact[] || []);
+      // Use a direct Supabase query to get conversations with contact data
+      const { data, error } = await serviceRegistry.conversations['supabase']
+        .from('conversations')
+        .select(`
+          *,
+          contact:contacts(*)
+        `)
+        .order('last_message_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      // Transform the data to match our expected structure
+      const conversationsWithContacts = (data || []).map(conv => ({
+        ...conv,
+        contact: conv.contact || {
+          id: '',
+          name: 'Unknown Contact',
+          phone_number: 'Unknown',
+          email: null,
+          company: null,
+          tags: [],
+          metadata: {},
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      }));
+
+      setConversations(conversationsWithContacts as ConversationWithContact[]);
     } catch (err) {
       setError(err as Error);
       console.error('Error loading conversations:', err);
+      // Set empty array on error to prevent crashes
+      setConversations([]);
     } finally {
       setLoading(false);
     }

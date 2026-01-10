@@ -1,5 +1,4 @@
-import { config } from '../../config/environment';
-import { externalServicesConfig } from '../../config/external-services';
+
 
 export interface WhatsAppConfig {
   provider: 'meta';
@@ -52,22 +51,25 @@ export class WhatsAppService {
 
   constructor(config: WhatsAppConfig) {
     this.config = config;
-    this.retryCount = externalServicesConfig.whatsapp.retries;
-    this.timeout = externalServicesConfig.whatsapp.timeout;
+    this.retryCount = 3; // Default retry count
+    this.timeout = 30000; // Default timeout
+    
+    console.log('[WhatsApp Service] Initializing with provider:', config.provider);
     
     if (config.provider !== 'meta') {
       throw new WhatsAppServiceError('Only Meta provider is supported', config.provider);
     }
     
-    const version = config.apiVersion || externalServicesConfig.whatsapp.apiVersion;
+    const version = config.apiVersion || 'v18.0';
     this.baseUrl = `https://graph.facebook.com/${version}/${config.phoneNumberId}`;
   }
-
+ 
   async sendMessage(params: SendMessageParams): Promise<SendMessageResult> {
-    // Validate message length
-    if (params.message.length > externalServicesConfig.whatsapp.maxMessageLength) {
+    // Validate message length (use hardcoded limit instead of config)
+    const maxMessageLength = 4096;
+    if (params.message.length > maxMessageLength) {
       throw new WhatsAppServiceError(
-        `Message exceeds maximum length of ${externalServicesConfig.whatsapp.maxMessageLength} characters`,
+        `Message exceeds maximum length of ${maxMessageLength} characters`,
         this.config.provider
       );
     }
@@ -98,6 +100,20 @@ export class WhatsAppService {
 
   private async sendMetaMessage(params: SendMessageParams): Promise<SendMessageResult> {
     const { to, message, type = 'text', templateName, templateParams } = params;
+    
+    // Handle development mode with mock service
+    if (this.config.phoneNumberId === 'dev-phone-id') {
+      console.log('[WhatsApp Service] Development mode - simulating message send:', {
+        to,
+        message: message.substring(0, 50) + '...',
+        type
+      });
+      
+      return {
+        success: true,
+        messageId: `dev-msg-${Date.now()}`,
+      };
+    }
     
     const payload: any = {
       messaging_product: 'whatsapp',
@@ -199,28 +215,100 @@ export class WhatsAppService {
 
 // Factory function to create WhatsApp service based on environment
 export function createWhatsAppService(): WhatsAppService {
-  const provider = process.env.WHATSAPP_PROVIDER as WhatsAppConfig['provider'] || 'meta';
+  try {
+    // Access environment variables directly - no config imports
+    const provider = 'meta'; // Only support meta for now
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+    const isDevelopment = process.env.NODE_ENV === 'development';
 
-  if (provider !== 'meta') {
-    throw new WhatsAppServiceError(`Only Meta provider is supported, got: ${provider}`, provider);
-  }
+    console.log('[WhatsApp Service] Creating service with:', {
+      provider,
+      hasPhoneNumberId: !!phoneNumberId,
+      hasAccessToken: !!accessToken,
+      isDevelopment
+    });
 
-  if (!config.whatsapp.phoneNumberId || !config.whatsapp.accessToken) {
-    throw new WhatsAppServiceError('Meta WhatsApp configuration is incomplete', 'meta');
+    // Always return a working service in development, even with missing config
+    if (isDevelopment) {
+      if (!phoneNumberId || !accessToken) {
+        console.warn('[WhatsApp Service] Development mode - using mock configuration due to missing environment variables');
+      }
+      return new WhatsAppService({
+        provider: 'meta',
+        phoneNumberId: phoneNumberId || 'dev-phone-id',
+        accessToken: accessToken || 'dev-access-token',
+        apiVersion: 'v18.0',
+      });
+    }
+
+    // Production mode - require real config
+    if (!phoneNumberId || !accessToken) {
+      throw new WhatsAppServiceError('Meta WhatsApp configuration is incomplete. Please set WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN environment variables.', 'meta');
+    }
+    
+    return new WhatsAppService({
+      provider: 'meta',
+      phoneNumberId,
+      accessToken,
+      apiVersion: 'v18.0',
+    });
+  } catch (error) {
+    console.error('[WhatsApp Service] Error creating service:', error);
+    
+    // Always return a mock service in development to prevent crashes
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[WhatsApp Service] Returning mock service due to error');
+      return new WhatsAppService({
+        provider: 'meta',
+        phoneNumberId: 'dev-phone-id',
+        accessToken: 'dev-access-token',
+        apiVersion: 'v18.0',
+      });
+    }
+    
+    throw error;
   }
-  
-  return new WhatsAppService({
-    provider: 'meta',
-    phoneNumberId: config.whatsapp.phoneNumberId,
-    accessToken: config.whatsapp.accessToken,
-    apiVersion: externalServicesConfig.whatsapp.apiVersion,
-  });
+}
+
+// Create a singleton instance to prevent multiple client creation
+let whatsappServiceInstance: WhatsAppService | null = null;
+
+export function getWhatsAppService(): WhatsAppService {
+  if (!whatsappServiceInstance) {
+    try {
+      whatsappServiceInstance = createWhatsAppService();
+    } catch (error) {
+      console.error('[WhatsApp Service] Failed to create service:', error);
+      // Return a mock service in development to prevent app crashes
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[WhatsApp Service] Using mock service due to initialization error');
+        whatsappServiceInstance = new WhatsAppService({
+          provider: 'meta',
+          phoneNumberId: 'dev-phone-id',
+          accessToken: 'dev-access-token',
+          apiVersion: 'v18.0',
+        });
+      } else {
+        throw error;
+      }
+    }
+  }
+  return whatsappServiceInstance;
 }
 
 // Legacy exports for backward compatibility
 export async function sendWhatsAppMessage(params: SendMessageParams): Promise<SendMessageResult> {
-  const service = createWhatsAppService();
-  return service.sendMessage(params);
+  try {
+    const service = getWhatsAppService();
+    return service.sendMessage(params);
+  } catch (error) {
+    console.error('[WhatsApp Service] Error in sendWhatsAppMessage:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to send message'
+    };
+  }
 }
 
 export async function sendWelcomeMessage(

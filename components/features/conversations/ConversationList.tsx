@@ -61,8 +61,12 @@ function ConversationItem({
             <User className="w-5 h-5 text-slate-600" />
           </div>
           <div>
-            <h3 className="font-semibold text-slate-900">{conversation.contact.name}</h3>
-            <p className="text-xs text-slate-500">{conversation.contact.phone_number}</p>
+            <h3 className="font-semibold text-slate-900">
+              {conversation.contact?.name || 'Unknown Contact'}
+            </h3>
+            <p className="text-xs text-slate-500">
+              {conversation.contact?.phone_number || 'No phone number'}
+            </p>
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -74,11 +78,11 @@ function ConversationItem({
         </div>
       </div>
 
-      {conversation.contact.company && (
+      {conversation.contact?.company && (
         <p className="text-sm text-slate-600 mb-1">{conversation.contact.company}</p>
       )}
 
-      {conversation.contact.tags.length > 0 && (
+      {conversation.contact?.tags && conversation.contact.tags.length > 0 && (
         <div className="flex gap-1 flex-wrap">
           {conversation.contact.tags.slice(0, 3).map((tag) => (
             <span key={tag} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
