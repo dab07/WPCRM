@@ -6,6 +6,8 @@ import { ConversationList } from '../../features/conversations/ConversationList'
 import { ChatWindow } from '../../features/conversations/ChatWindow';
 import { EmptyState } from '../../ui';
 import type { ConversationWithContact } from '../../../lib/hooks/useConversations';
+import type { Conversation } from '../../../lib/types/api/conversations';
+import type { Contact } from '../../../lib/types/api/contacts';
 
 interface ConversationsViewProps {
   selectedConversation: ConversationWithContact | null;
@@ -31,8 +33,8 @@ export function ConversationsView({
       </div>
 
       <div className="flex-1 bg-slate-50">
-        {selectedConversation ? (
-          <ChatWindow conversation={selectedConversation} />
+        {selectedConversation && selectedConversation.contact ? (
+          <ChatWindow conversation={selectedConversation as Conversation & { contact: Contact }} />
         ) : (
           <EmptyState
             icon={MessageSquare}
