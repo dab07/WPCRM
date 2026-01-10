@@ -1,4 +1,3 @@
-import { format, parseISO } from 'date-fns';
 import { GeminiService } from '../external/GeminiService';
 import { WhatsAppService, getWhatsAppService } from '../external/WhatsAppService';
 import { supabaseAdmin } from '../../../supabase/supabase';
@@ -103,14 +102,11 @@ export class CampaignOrchestrator {
    */
   private async getTodaysScheduledCampaigns(): Promise<Campaign[]> {
     try {
-      const today = format(new Date(), 'yyyy-MM-dd');
-      
+      // Get all scheduled campaigns first
       const { data: campaigns, error } = await this.supabase
         .from('campaigns')
         .select('*')
-        .eq('status', 'scheduled')
-        .gte('scheduled_at', `${today}T00:00:00`)
-        .lt('scheduled_at', `${today}T23:59:59`);
+        .eq('status', 'scheduled');
 
       if (error) {
         throw new CampaignOrchestratorError(
@@ -120,12 +116,25 @@ export class CampaignOrchestrator {
         );
       }
 
-      // Filter campaigns that should run now (check if scheduled time has passed)
-      return (campaigns || []).filter((campaign: Campaign) => {
+      const today = new Date().toDateString();
+      console.log(`[Campaign Orchestrator] Looking for campaigns scheduled for: ${today}`);
+
+      // Filter campaigns scheduled for today and ready to run
+      const todaysCampaigns = (campaigns || []).filter((campaign: Campaign) => {
         if (!campaign.scheduled_at) return false;
-        const scheduledTime = parseISO(campaign.scheduled_at);
-        return scheduledTime <= new Date();
+        
+        const scheduledDate = new Date(campaign.scheduled_at);
+        const scheduledDateString = scheduledDate.toDateString();
+        const isToday = scheduledDateString === today;
+        const isTimeToRun = scheduledDate <= new Date();
+        
+        console.log(`[Campaign] ${campaign.name}: scheduled=${campaign.scheduled_at}, isToday=${isToday}, isTimeToRun=${isTimeToRun}`);
+        
+        return isToday && isTimeToRun;
       });
+
+      console.log(`[Campaign Orchestrator] Found ${todaysCampaigns.length} campaigns scheduled for today`);
+      return todaysCampaigns;
     } catch (error) {
       if (error instanceof CampaignOrchestratorError) {
         throw error;
