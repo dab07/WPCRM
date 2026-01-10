@@ -26,8 +26,6 @@ export async function POST(request: NextRequest) {
       success: true,
       message: `Campaign "${result.campaignName}" executed successfully`,
       sentCount: result.sent,
-      failedCount: result.failed,
-      totalRecipients: result.sent + result.failed,
       campaignId: result.campaignId
     });
 
