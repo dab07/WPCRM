@@ -1,7 +1,6 @@
 'use client';
 
 import { MessageSquare, Clock, User } from 'lucide-react';
-
 import { useConversations } from '../../../lib/hooks';
 import { LoadingSpinner, EmptyState, StatusBadge } from '../../ui';
 import { formatRelativeTime } from '../../../lib/utils/formatting';

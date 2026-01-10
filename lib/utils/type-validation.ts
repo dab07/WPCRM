@@ -75,8 +75,8 @@ export const isValidDeliveryStatus = (value: unknown): value is 'pending' | 'sen
   return isString(value) && ['pending', 'sent', 'delivered', 'read', 'failed', 'received'].includes(value);
 };
 
-export const isValidCampaignStatus = (value: unknown): value is 'draft' | 'scheduled' | 'running' | 'completed' | 'failed' | 'paused' => {
-  return isString(value) && ['draft', 'scheduled', 'running', 'completed', 'failed', 'paused'].includes(value);
+export const isValidCampaignStatus = (value: unknown): value is 'draft' | 'scheduled' | 'running' | 'completed' | 'paused' => {
+  return isString(value) && ['draft', 'scheduled', 'running', 'completed', 'paused'].includes(value);
 };
 
 // Contact validation
@@ -333,8 +333,8 @@ export const validateCampaign = (data: unknown): Campaign => {
     throw new ValidationError('Delivered count must be a number', 'delivered_count');
   }
 
-  if (campaign.failed_count !== undefined && campaign.failed_count !== null && !isNumber(campaign.failed_count)) {
-    throw new ValidationError('Failed count must be a number', 'failed_count');
+  if (campaign.read_count !== undefined && campaign.read_count !== null && !isNumber(campaign.read_count)) {
+    throw new ValidationError('Read count must be a number', 'read_count');
   }
 
   if (!isValidDate(campaign.created_at)) {
@@ -350,7 +350,7 @@ export const validateCampaign = (data: unknown): Campaign => {
     name: campaign.name as string,
     message_template: campaign.message_template as string,
     target_tags: campaign.target_tags as string[],
-    status: campaign.status as 'draft' | 'scheduled' | 'running' | 'completed' | 'failed' | 'paused',
+    status: campaign.status as 'draft' | 'scheduled' | 'running' | 'completed' | 'paused',
     created_at: campaign.created_at as string,
     updated_at: campaign.updated_at as string
   };
@@ -358,10 +358,6 @@ export const validateCampaign = (data: unknown): Campaign => {
   // Only add optional properties if they have values
   if (campaign.scheduled_at !== undefined && campaign.scheduled_at !== null) {
     result.scheduled_at = campaign.scheduled_at as string;
-  }
-
-  if (campaign.total_recipients !== undefined && campaign.total_recipients !== null) {
-    result.total_recipients = campaign.total_recipients as number;
   }
 
   if (campaign.sent_count !== undefined && campaign.sent_count !== null) {
@@ -372,8 +368,8 @@ export const validateCampaign = (data: unknown): Campaign => {
     result.delivered_count = campaign.delivered_count as number;
   }
 
-  if (campaign.failed_count !== undefined && campaign.failed_count !== null) {
-    result.failed_count = campaign.failed_count as number;
+  if (campaign.read_count !== undefined && campaign.read_count !== null) {
+    result.read_count = campaign.read_count as number;
   }
 
   return result;
@@ -608,7 +604,7 @@ export const validateCreateCampaignRequest = (data: unknown): CreateCampaignRequ
   }
 
   if (request.status !== undefined && request.status !== null) {
-    result.status = request.status as 'draft' | 'scheduled' | 'running' | 'completed' | 'failed' | 'paused';
+    result.status = request.status as 'draft' | 'scheduled' | 'running' | 'completed' | 'paused';
   }
 
   return result;

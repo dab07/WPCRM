@@ -10,10 +10,9 @@ export interface Campaign {
   target_tags: string[];
   status: 'draft' | 'scheduled' | 'running' | 'completed' | 'paused';
   scheduled_at: string | null;
-  total_recipients: number;
   sent_count: number;
   delivered_count: number;
-  failed_count: number;
+  read_count: number;
 }
 
 export interface Contact {
@@ -71,26 +70,22 @@ export class CampaignOrchestrator {
       }
 
       let totalSent = 0;
-      let totalFailed = 0;
 
       // Process each campaign
       for (const campaign of scheduledCampaigns) {
         try {
           const result = await this.executeCampaign(campaign);
           totalSent += result.sent;
-          totalFailed += result.failed;
         } catch (error) {
           console.error(`Failed to execute campaign ${campaign.id}:`, error);
-          totalFailed++;
         }
       }
 
-      console.log(`Campaign processing completed: ${scheduledCampaigns.length} campaigns, ${totalSent} sent, ${totalFailed} failed`);
+      console.log(`Campaign processing completed: ${scheduledCampaigns.length} campaigns, ${totalSent} sent`);
       
       return {
         processed: scheduledCampaigns.length,
-        sent: totalSent,
-        failed: totalFailed
+        sent: totalSent
       };
 
     } catch (error) {
@@ -163,13 +158,11 @@ export class CampaignOrchestrator {
       await this.supabase
         .from('campaigns')
         .update({ 
-          status: 'running',
-          total_recipients: contacts.length 
+          status: 'running'
         })
         .eq('id', campaign.id);
 
       let sentCount = 0;
-      let failedCount = 0;
       let deliveredCount = 0;
       const messageRecords: any[] = [];
 
@@ -236,20 +229,17 @@ export class CampaignOrchestrator {
         
         // Count results for this batch
         let batchSent = 0;
-        let batchFailed = 0;
         
         batchResults.forEach(result => {
           if (result.success) {
             batchSent++;
             sentCount++;
             deliveredCount++; // Assume delivered if sent successfully
-          } else {
-            batchFailed++;
-            failedCount++;
           }
+          // Note: Failed messages are not tracked in the current schema
         });
 
-        console.log(`[Campaign ${campaign.name}] Batch completed: ${batchSent} sent, ${batchFailed} failed`);
+        console.log(`[Campaign ${campaign.name}] Batch completed: ${batchSent} sent`);
 
         // Update campaign progress every batch with explicit logging
         try {
@@ -257,15 +247,15 @@ export class CampaignOrchestrator {
             .from('campaigns')
             .update({
               sent_count: sentCount,
-              failed_count: failedCount,
-              delivered_count: deliveredCount
+              delivered_count: deliveredCount,
+              read_count: 0
             })
             .eq('id', campaign.id);
 
           if (updateError) {
             console.error(`[Campaign] Error updating counts:`, updateError);
           } else {
-            console.log(`[Campaign ${campaign.name}] Updated counts: sent=${sentCount}, failed=${failedCount}, delivered=${deliveredCount}`);
+            console.log(`[Campaign ${campaign.name}] Updated counts: sent=${sentCount}, delivered=${deliveredCount}`);
           }
         } catch (error) {
           console.error(`[Campaign] Error updating campaign progress:`, error);
@@ -285,15 +275,15 @@ export class CampaignOrchestrator {
       }
 
       // Final campaign update with comprehensive logging
-      console.log(`[Campaign ${campaign.name}] Final update: sent=${sentCount}, failed=${failedCount}, delivered=${deliveredCount}`);
+      console.log(`[Campaign ${campaign.name}] Final update: sent=${sentCount}, delivered=${deliveredCount}`);
       
       const { error: finalUpdateError } = await this.supabase
         .from('campaigns')
         .update({
           status: 'completed',
           sent_count: sentCount,
-          failed_count: failedCount,
-          delivered_count: deliveredCount
+          delivered_count: deliveredCount,
+          read_count: 0
         })
         .eq('id', campaign.id);
 
@@ -305,9 +295,9 @@ export class CampaignOrchestrator {
         );
       }
 
-      console.log(`Campaign ${campaign.name} completed successfully: ${sentCount} sent, ${failedCount} failed, ${deliveredCount} delivered`);
+      console.log(`Campaign ${campaign.name} completed successfully: ${sentCount} sent, ${deliveredCount} delivered`);
       
-      return { sent: sentCount, failed: failedCount, delivered: deliveredCount };
+      return { sent: sentCount, delivered: deliveredCount };
 
     } catch (error) {
       console.error(`Error executing campaign ${campaign.name}:`, error);
@@ -509,10 +499,9 @@ Return only the enhanced message, no explanations.`;
         .insert({
           ...campaignData,
           status: campaignData.scheduled_at ? 'scheduled' : 'draft',
-          total_recipients: 0,
           sent_count: 0,
           delivered_count: 0,
-          failed_count: 0
+          read_count: 0
         })
         .select()
         .single();
@@ -577,12 +566,11 @@ Return only the enhanced message, no explanations.`;
       // Execute the campaign
       const result = await this.executeCampaign(campaign);
       
-      console.log(`Single campaign ${campaignId} completed: ${result.sent} sent, ${result.failed} failed`);
+      console.log(`Single campaign ${campaignId} completed: ${result.sent} sent`);
       
       return {
         processed: 1,
         sent: result.sent,
-        failed: result.failed,
         delivered: result.delivered,
         campaignId: campaignId,
         campaignName: campaign.name

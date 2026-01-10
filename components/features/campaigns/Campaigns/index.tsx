@@ -132,7 +132,7 @@ export function CampaignsPanel() {
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto">
           {campaigns.map((campaign) => (
             <div key={campaign.id} className="bg-white p-6 rounded-lg border border-slate-200">
               <div className="flex items-start justify-between mb-4">
@@ -169,19 +169,13 @@ export function CampaignsPanel() {
                 {campaign.status === 'completed' && (
                   <div className="flex gap-4 text-sm">
                     <div className="text-center">
-                      <p className="font-medium text-slate-900">{campaign.total_recipients}</p>
-                      <p className="text-slate-500">Recipients</p>
-                    </div>
-                    <div className="text-center">
                       <p className="font-medium text-green-600">{campaign.sent_count}</p>
                       <p className="text-slate-500">Sent</p>
                     </div>
-                    {(campaign.failed_count || 0) > 0 && (
-                      <div className="text-center">
-                        <p className="font-medium text-red-600">{campaign.failed_count}</p>
-                        <p className="text-slate-500">Failed</p>
-                      </div>
-                    )}
+                    <div className="text-center">
+                      <p className="font-medium text-blue-600">{campaign.read_count}</p>
+                      <p className="text-slate-500">Read</p>
+                    </div>
                   </div>
                 )}
               </div>

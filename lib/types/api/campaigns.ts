@@ -5,11 +5,10 @@ export interface Campaign {
   message_template: string;
   target_tags: string[];
   scheduled_at?: string | null;
-  status: 'draft' | 'scheduled' | 'running' | 'completed' | 'failed' | 'paused';
-  total_recipients?: number;
+  status: 'draft' | 'scheduled' | 'running' | 'completed' | 'paused';
   sent_count?: number;
   delivered_count?: number;
-  failed_count?: number;
+  read_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -19,7 +18,7 @@ export interface CreateCampaignRequest {
   message_template: string;
   target_tags: string[];
   scheduled_at?: string;
-  status?: 'draft' | 'scheduled' | 'running' | 'completed' | 'failed' | 'paused';
+  status?: 'draft' | 'scheduled' | 'running' | 'completed' | 'paused';
 }
 
 export interface UpdateCampaignRequest {
@@ -27,5 +26,5 @@ export interface UpdateCampaignRequest {
   message_template?: string;
   target_tags?: string[];
   scheduled_at?: string | null;
-  status?: 'draft' | 'scheduled' | 'running' | 'completed' | 'failed' | 'paused';
+  status?: 'draft' | 'scheduled' | 'running' | 'completed' | 'paused';
 }

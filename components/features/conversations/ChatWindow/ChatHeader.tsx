@@ -15,7 +15,7 @@ interface Agent {
 }
 
 interface ChatHeaderProps {
-  conversation: Conversation & { contact: Contact };
+  conversation: Conversation & { contact: Contact | null };
 }
 
 export default function ChatHeader({ conversation }: ChatHeaderProps) {

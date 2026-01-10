@@ -72,18 +72,14 @@ export class CampaignsService extends AbstractBaseService<Campaign> {
 
   async create(data: CreateCampaignRequest): Promise<Campaign> {
     try {
-      // Calculate total recipients based on target tags
-      const totalRecipients = await this.calculateTotalRecipients(data.target_tags);
-
       const { data: campaign, error } = await this.supabase
         .from(this.tableName)
         .insert({
           ...data,
           status: data.status || 'draft',
-          total_recipients: totalRecipients,
           sent_count: 0,
           delivered_count: 0,
-          failed_count: 0
+          read_count: 0
         })
         .select()
         .single();
@@ -104,11 +100,6 @@ export class CampaignsService extends AbstractBaseService<Campaign> {
         ...data,
         updated_at: new Date().toISOString()
       };
-
-      // Recalculate total recipients if target tags changed
-      if (data.target_tags) {
-        updateData.total_recipients = await this.calculateTotalRecipients(data.target_tags);
-      }
 
       const { data: campaign, error } = await this.supabase
         .from(this.tableName)
@@ -197,7 +188,8 @@ export class CampaignsService extends AbstractBaseService<Campaign> {
         throw this.createError('VALIDATION_ERROR', 'Campaign must be in draft or scheduled status to start');
       }
 
-      if ((campaign.total_recipients ?? 0) === 0) {
+      const targetContacts = await this.getTargetContacts(id);
+      if (targetContacts.length === 0) {
         throw this.createError('VALIDATION_ERROR', 'Campaign has no target recipients');
       }
 
@@ -246,23 +238,12 @@ export class CampaignsService extends AbstractBaseService<Campaign> {
     }
   }
 
-  async failCampaign(id: string): Promise<Campaign> {
-    try {
-      return await this.update(id, { 
-        status: 'failed'
-        // Could add a failure_reason field to store the reason
-      });
-    } catch (error) {
-      this.handleError(error);
-    }
-  }
-
   async updateCampaignStats(
     id: string, 
     stats: { 
       sent_count?: number; 
       delivered_count?: number; 
-      failed_count?: number; 
+      read_count?: number; 
     }
   ): Promise<Campaign> {
     try {
@@ -271,14 +252,14 @@ export class CampaignsService extends AbstractBaseService<Campaign> {
       const updatedStats = {
         sent_count: stats.sent_count ?? campaign.sent_count ?? 0,
         delivered_count: stats.delivered_count ?? campaign.delivered_count ?? 0,
-        failed_count: stats.failed_count ?? campaign.failed_count ?? 0
+        read_count: stats.read_count ?? campaign.read_count ?? 0
       };
 
       // Auto-complete campaign if all messages have been processed
       let status = campaign.status;
-      const totalProcessed = updatedStats.delivered_count + updatedStats.failed_count;
+      const totalProcessed = updatedStats.delivered_count;
       
-      if (campaign.status === 'running' && totalProcessed >= (campaign.total_recipients ?? 0)) {
+      if (campaign.status === 'running' && totalProcessed >= updatedStats.sent_count) {
         status = 'completed';
       }
 
@@ -313,11 +294,11 @@ export class CampaignsService extends AbstractBaseService<Campaign> {
     }
   }
 
-  async incrementFailedCount(id: string): Promise<Campaign> {
+  async incrementReadCount(id: string): Promise<Campaign> {
     try {
       const campaign = await this.get(id);
       return await this.updateCampaignStats(id, {
-        failed_count: (campaign.failed_count ?? 0) + 1
+        read_count: (campaign.read_count ?? 0) + 1
       });
     } catch (error) {
       this.handleError(error);
@@ -325,27 +306,6 @@ export class CampaignsService extends AbstractBaseService<Campaign> {
   }
 
   // Helper methods
-  private async calculateTotalRecipients(targetTags: string[]): Promise<number> {
-    try {
-      if (targetTags.length === 0) {
-        return 0;
-      }
-
-      const { count, error } = await this.supabase
-        .from('contacts')
-        .select('*', { count: 'exact', head: true })
-        .overlaps('tags', targetTags);
-
-      if (error) {
-        throw this.createError('FETCH_ERROR', `Failed to calculate recipients: ${error.message}`, error);
-      }
-
-      return count || 0;
-    } catch (error) {
-      this.handleError(error);
-    }
-  }
-
   async getScheduledCampaigns(): Promise<Campaign[]> {
     try {
       const now = new Date().toISOString();

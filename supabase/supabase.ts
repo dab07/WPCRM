@@ -44,10 +44,9 @@ export type Database = {
           target_tags: string[];
           status: 'draft' | 'scheduled' | 'running' | 'completed' | 'paused';
           scheduled_at: string | null;
-          total_recipients: number;
           sent_count: number;
           delivered_count: number;
-          failed_count: number;
+          read_count: number;
           created_at: string;
           updated_at: string;
         };
