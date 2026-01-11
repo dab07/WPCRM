@@ -5,7 +5,7 @@ import {
   generateAIResponse, 
   detectIntent 
 } from '../../../../../lib/services/external/GeminiService';
-import { sendWhatsAppMessage } from '../../../../../lib/services/external/WhatsAppService';
+import { sendWhatsAppMessage, sendInteractiveMessage } from '../../../../../lib/services/external/WhatsAppService';
 import { supabaseAdmin } from '../../../../../supabase/supabase';
 
 const supabase = supabaseAdmin;
@@ -67,6 +67,8 @@ export async function POST(request: NextRequest) {
       await handleTextMessage(message, contact, conversation, messageId);
     } else if (messageType === 'image') {
       await handleImageMessage(message, contact, conversation, messageId);
+    } else if (messageType === 'interactive') {
+      await handleInteractiveMessage(message, contact, conversation, messageId);
     }
 
     return NextResponse.json({ success: true });
@@ -182,6 +184,155 @@ async function handleTextMessage(
     return;
   }
 
+  // Handle scheduling intents
+  if (intent === 'schedule_call') {
+    const callMessage = `📞 *Quick Call Scheduled*
+
+Perfect! I'll arrange a quick 15-30 minute consultation call for you.
+
+Our team will contact you within 24 hours to schedule a convenient time.
+
+In the meantime:
+🌐 Learn more: https://zavops.com
+📧 Email us: contact@zavops.com
+
+Is there anything specific you'd like to discuss during the call?`;
+
+    await sendWhatsAppMessage({
+      to: contact.phone_number,
+      message: callMessage
+    });
+    return;
+  }
+
+  if (intent === 'schedule_meeting') {
+    const meetingMessage = `🤝 *Detailed Meeting Request*
+
+Excellent! I'll set up a comprehensive meeting to discuss your business needs in detail.
+
+Our business development team will reach out within 24 hours to schedule.
+
+What we'll cover:
+• Your current challenges
+• Growth opportunities  
+• Custom solutions for your business
+• Next steps
+
+🌐 More info: https://zavops.com
+📧 Contact: contact@zavops.com
+
+What specific areas would you like to focus on?`;
+
+    await sendWhatsAppMessage({
+      to: contact.phone_number,
+      message: meetingMessage
+    });
+    return;
+  }
+
+  if (intent === 'talk_to_expert') {
+    const expertMessage = `💬 *Expert Consultation*
+
+Great choice! I'm connecting you with one of our specialists.
+
+Our expert will be available to chat with you shortly. They can help with:
+• Technical questions
+• Solution recommendations
+• Custom requirements
+• Implementation guidance
+
+🌐 Visit: https://zavops.com
+📧 Direct contact: expert@zavops.com
+
+What's your main area of interest or challenge?`;
+
+    await sendWhatsAppMessage({
+      to: contact.phone_number,
+      message: expertMessage
+    });
+    return;
+  }
+
+  // Handle greeting intent with ZavOps information
+  if (intent === 'greeting') {
+    // Get the greeting response from database
+    const { data: aiIntent } = await supabase
+      .from('ai_intents')
+      .select('response_template')
+      .eq('intent_name', 'greeting')
+      .eq('is_active', true)
+      .single();
+
+    const greetingMessage = aiIntent?.response_template || 
+      "Hello! 👋 Welcome to ZavOps! We're excited to connect with you.\nVisit our website: https://zavops.com";
+
+    // Send first message (greeting from database)
+    const result = await sendWhatsAppMessage({
+      to: contact.phone_number,
+      message: greetingMessage
+    });
+
+    if (result.success) {
+      // Save response to database
+      await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversation.id,
+          whatsapp_message_id: result.messageId,
+          sender_type: 'ai',
+          content: greetingMessage,
+          message_type: 'text',
+          delivery_status: 'sent',
+          ai_intent: 'greeting_response',
+          ai_confidence: 0.95
+        });
+
+      // Update conversation
+      await supabase
+        .from('conversations')
+        .update({
+          status: 'ai_handled',
+          ai_confidence_score: 0.95,
+          last_message_at: new Date().toISOString(),
+          last_message_from: 'ai'
+        })
+        .eq('id', conversation.id);
+
+      // Send follow-up message with interactive buttons after a short delay
+      setTimeout(async () => {
+        // Send interactive message with buttons
+        const result2 = await sendInteractiveMessage(
+          contact.phone_number,
+          "Ready to grow your business? Let's connect! Choose how you'd like to proceed:",
+          [
+            { id: 'schedule_call', title: '📞 Schedule Call' },
+            { id: 'schedule_meeting', title: '🤝 Book Meeting' },
+            { id: 'talk_expert', title: '💬 Talk to Expert' }
+          ],
+          '🗓️ Schedule with ZavOps',
+          'Visit zavops.com for more info'
+        );
+
+        if (result2.success) {
+          // Save follow-up message to database
+          await supabase
+            .from('messages')
+            .insert({
+              conversation_id: conversation.id,
+              whatsapp_message_id: result2.messageId,
+              sender_type: 'ai',
+              content: 'Interactive scheduling widget sent',
+              message_type: 'interactive',
+              delivery_status: 'sent',
+              ai_intent: 'scheduling_widget',
+              ai_confidence: 0.95
+            });
+        }
+      }, 3000); // 3 second delay
+    }
+    return;
+  }
+
   // Generate AI response
   const aiResponse = await generateAIResponse(text);
   
@@ -221,6 +372,121 @@ async function handleTextMessage(
       })
       .eq('id', conversation.id);
   }
+}
+
+/**
+ * Handle interactive message (button clicks)
+ */
+async function handleInteractiveMessage(
+  message: any,
+  contact: any,
+  conversation: any,
+  messageId: string
+) {
+  console.log('[Webhook] 🔘 Interactive message received');
+
+  const interactive = message.interactive;
+  const buttonReply = interactive?.button_reply;
+  const listReply = interactive?.list_reply;
+  
+  let selectedId = '';
+  let selectedTitle = '';
+
+  if (buttonReply) {
+    selectedId = buttonReply.id;
+    selectedTitle = buttonReply.title;
+  } else if (listReply) {
+    selectedId = listReply.id;
+    selectedTitle = listReply.title;
+  }
+
+  console.log('[Webhook] Button clicked:', selectedId, selectedTitle);
+
+  // Save the interaction to database
+  await supabase
+    .from('messages')
+    .insert({
+      conversation_id: conversation.id,
+      whatsapp_message_id: messageId,
+      sender_type: 'customer',
+      content: `Button clicked: ${selectedTitle}`,
+      message_type: 'interactive',
+      delivery_status: 'delivered',
+      ai_intent: selectedId,
+      metadata: { button_id: selectedId, button_title: selectedTitle }
+    });
+
+  // Handle different button actions
+  if (selectedId === 'schedule_call') {
+    const callMessage = `📞 *Call Scheduling*
+
+Perfect! I'll arrange a quick consultation call for you.
+
+Our team will contact you within 24 hours to schedule a convenient time.
+
+What's the best time to reach you?
+• Morning (9 AM - 12 PM)
+• Afternoon (12 PM - 5 PM)  
+• Evening (5 PM - 8 PM)
+
+📧 Email: contact@zavops.com
+🌐 Website: zavops.com`;
+
+    await sendWhatsAppMessage({
+      to: contact.phone_number,
+      message: callMessage
+    });
+
+  } else if (selectedId === 'schedule_meeting') {
+    const meetingMessage = `🤝 *Meeting Scheduling*
+
+Excellent! I'll set up a comprehensive meeting to discuss your business needs.
+
+Our business development team will reach out within 24 hours.
+
+Please share:
+• Your preferred meeting format (In-person/Video call)
+• Best days/times for you
+• Specific topics you'd like to discuss
+
+📧 Email: contact@zavops.com
+🌐 Website: zavops.com`;
+
+    await sendWhatsAppMessage({
+      to: contact.phone_number,
+      message: meetingMessage
+    });
+
+  } else if (selectedId === 'talk_expert') {
+    const expertMessage = `💬 *Expert Consultation*
+
+Great choice! I'm connecting you with one of our specialists.
+
+An expert will be available to chat with you shortly.
+
+In the meantime, feel free to share:
+• Your main challenge or goal
+• Your industry/business type
+• Any specific questions you have
+
+📧 Direct contact: expert@zavops.com
+🌐 Website: zavops.com`;
+
+    await sendWhatsAppMessage({
+      to: contact.phone_number,
+      message: expertMessage
+    });
+  }
+
+  // Update conversation
+  await supabase
+    .from('conversations')
+    .update({
+      status: 'ai_handled',
+      last_message_at: new Date().toISOString(),
+      last_message_from: 'customer'
+    })
+    .eq('id', conversation.id);
 }
 
 /**

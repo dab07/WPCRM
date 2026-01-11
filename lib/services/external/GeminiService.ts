@@ -224,7 +224,11 @@ export class GeminiService {
 
         const prompt = `${context}Customer message: ${customerMessage}
 
-You are a helpful customer service AI. Generate a professional, friendly response to the customer's message. Keep it concise and helpful.`;
+You are a helpful customer service AI. Generate a professional, friendly response to the customer's message. Keep it concise and helpful.\n
+Points to remeber befopre generating response
+1. Respond only with the exact campaign message I provide. Do not add any introduction, explanation, enhancement, thank you, or follow-up. Output nothing else.
+2. Do NOT say things like 'Thanks for reaching out', 'I've enhanced your message', 'Let me know if you need adjustments', or reference WhatsApp marketing/AI
+`;
 
         const client = this.getClient();
         const response = await client.models.generateContent({
@@ -401,6 +405,24 @@ Hashtags: ${hashtags.join(', ')}`;
     const lowerMessage = message.toLowerCase();
     
     // Simple keyword-based intent detection
+    if (lowerMessage.includes('hi') || lowerMessage.includes('hello') || lowerMessage.includes('hey') || 
+        lowerMessage.includes('good morning') || lowerMessage.includes('good afternoon') || 
+        lowerMessage.includes('good evening') || lowerMessage.includes('greetings')) {
+      return { intent: 'greeting', confidence: 0.95 };
+    }
+    
+    if (lowerMessage.includes('call') && (lowerMessage.includes('schedule') || lowerMessage === 'call')) {
+      return { intent: 'schedule_call', confidence: 0.9 };
+    }
+    
+    if (lowerMessage.includes('meeting') && (lowerMessage.includes('schedule') || lowerMessage === 'meeting')) {
+      return { intent: 'schedule_meeting', confidence: 0.9 };
+    }
+    
+    if (lowerMessage.includes('expert') || lowerMessage.includes('specialist')) {
+      return { intent: 'talk_to_expert', confidence: 0.9 };
+    }
+    
     if (lowerMessage.includes('lead') || lowerMessage.includes('business card') || lowerMessage.includes('visiting card')) {
       return { intent: 'business_card', confidence: 0.95 };
     }

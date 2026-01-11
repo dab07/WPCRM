@@ -11,9 +11,47 @@ export interface WhatsAppConfig {
 export interface SendMessageParams {
   to: string;
   message: string;
-  type?: 'text' | 'template';
+  type?: 'text' | 'template' | 'interactive';
   templateName?: string;
   templateParams?: string[];
+  interactive?: InteractiveMessage;
+}
+
+export interface InteractiveMessage {
+  type: 'button' | 'list';
+  header?: {
+    type: 'text';
+    text: string;
+  };
+  body: {
+    text: string;
+  };
+  footer?: {
+    text: string;
+  };
+  action: ButtonAction | ListAction;
+}
+
+export interface ButtonAction {
+  buttons: Array<{
+    type: 'reply';
+    reply: {
+      id: string;
+      title: string;
+    };
+  }>;
+}
+
+export interface ListAction {
+  button: string;
+  sections: Array<{
+    title: string;
+    rows: Array<{
+      id: string;
+      title: string;
+      description?: string;
+    }>;
+  }>;
 }
 
 export interface SendMessageResult {
@@ -99,7 +137,7 @@ export class WhatsAppService {
   }
 
   private async sendMetaMessage(params: SendMessageParams): Promise<SendMessageResult> {
-    const { to, message, type = 'text', templateName, templateParams } = params;
+    const { to, message, type = 'text', templateName, templateParams, interactive } = params;
     
     // Handle development mode with mock service
     if (this.config.phoneNumberId === 'dev-phone-id') {
@@ -124,6 +162,9 @@ export class WhatsAppService {
     if (type === 'text') {
       payload.type = 'text';
       payload.text = { body: message };
+    } else if (type === 'interactive' && interactive) {
+      payload.type = 'interactive';
+      payload.interactive = interactive;
     } else if (type === 'template' && templateName) {
       payload.type = 'template';
       payload.template = {
@@ -356,4 +397,42 @@ export async function markMessageAsRead(_messageId: string): Promise<boolean> {
     console.error('[WhatsApp Service] Error marking as read:', error);
     return false;
   }
+}
+
+// Helper function for interactive messages
+export async function sendInteractiveMessage(
+  to: string,
+  body: string,
+  buttons: Array<{ id: string; title: string }>,
+  header?: string,
+  footer?: string
+): Promise<SendMessageResult> {
+  const interactive: InteractiveMessage = {
+    type: 'button',
+    body: { text: body },
+    action: {
+      buttons: buttons.map(btn => ({
+        type: 'reply' as const,
+        reply: {
+          id: btn.id,
+          title: btn.title
+        }
+      }))
+    }
+  };
+
+  if (header) {
+    interactive.header = { type: 'text', text: header };
+  }
+
+  if (footer) {
+    interactive.footer = { text: footer };
+  }
+
+  return sendWhatsAppMessage({
+    to,
+    message: '', // Not used for interactive messages
+    type: 'interactive',
+    interactive
+  });
 }
