@@ -3,17 +3,56 @@ import { CampaignOrchestrator } from '@/lib/services/campaigns/CampaignOrchestra
 
 export async function POST(request: NextRequest) {
   try {
+    // Parse request body
     const body = await request.json();
-    const { campaignId } = body;
+    console.log('[Campaign Orchestrator API] Received request:', JSON.stringify(body, null, 2));
+    
+    const { campaignId, action, source, timestamp } = body;
 
-    if (!campaignId) {
+    // Verify authentication for N8N requests
+    const authHeader = request.headers.get('authorization');
+    const expectedToken = process.env.N8N_API_KEY;
+    
+    if (expectedToken && (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.slice(7) !== expectedToken)) {
+      console.log('[Campaign Orchestrator API] Authentication failed');
       return NextResponse.json(
-        { error: 'Campaign ID is required' },
-        { status: 400 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
 
     const orchestrator = new CampaignOrchestrator();
+
+    // Handle scheduled processing from N8N
+    if (action === 'process_scheduled') {
+      console.log(`[Campaign Orchestrator API] Processing scheduled campaigns from ${source} at ${timestamp}`);
+      
+      const result = await orchestrator.processCampaigns(source);
+      
+      return NextResponse.json({
+        success: true,
+        processed: result.processed || 0,
+        sent: result.sent || 0,
+        failed: result.failed || 0,
+        timestamp: new Date().toISOString(),
+        source
+      });
+    }
+
+    // Handle single campaign execution (requires campaignId)
+    if (!campaignId) {
+      console.log('[Campaign Orchestrator API] No campaignId provided and action is not process_scheduled');
+      return NextResponse.json(
+        { 
+          error: 'Campaign ID is required for single campaign execution',
+          received_action: action,
+          available_actions: ['process_scheduled', 'single_campaign']
+        },
+        { status: 400 }
+      );
+    }
+
+    console.log(`[Campaign Orchestrator API] Executing single campaign: ${campaignId}`);
     const result = await orchestrator.executeSingleCampaign(campaignId);
 
     return NextResponse.json({
@@ -25,6 +64,7 @@ export async function POST(request: NextRequest) {
     console.error('[Campaign Orchestrator API] Error:', error);
     return NextResponse.json(
       { 
+        success: false,
         error: 'Failed to execute campaign',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
