@@ -1,7 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
 import { config } from '../../config/environment';
-import * as fs from 'fs';
-import * as path from 'path';
 
 export interface CampaignImageConfig {
   campaignName: string;
@@ -57,6 +55,14 @@ export class CampaignImageService {
    */
   private async getZavopsLogoBase64(): Promise<string | null> {
     try {
+      // Only available on server-side
+      if (typeof window !== 'undefined') {
+        return null;
+      }
+
+      const fs = await import('fs');
+      const path = await import('path');
+      
       const logoPath = path.join(process.cwd(), 'logos', 'Zavops-Icon-Combo.png.webp');
       
       if (!fs.existsSync(logoPath)) {
