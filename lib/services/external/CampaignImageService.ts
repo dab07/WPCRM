@@ -1,6 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
 import { config } from '../../config/environment';
-
 export interface CampaignImageConfig {
   campaignName: string;
   theme?: string | null;
@@ -59,7 +58,8 @@ export class CampaignImageService {
       if (typeof window !== 'undefined') {
         return null;
       }
-
+      
+      // Dynamic imports for server-side only
       const fs = await import('fs');
       const path = await import('path');
       
@@ -173,8 +173,15 @@ Generate this image now.`;
   </text>
 </svg>`;
 
-      // Convert SVG to base64
-      const svgBase64 = Buffer.from(svg).toString('base64');
+      // Convert SVG to base64 (server-side only)
+      let svgBase64: string;
+      if (typeof window !== 'undefined') {
+        // Client-side fallback
+        svgBase64 = btoa(svg);
+      } else {
+        // Server-side
+        svgBase64 = Buffer.from(svg).toString('base64');
+      }
 
       return {
         success: true,

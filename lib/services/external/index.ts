@@ -33,12 +33,8 @@ export {
   logBroadcast
 } from './InstagramService';
 
-export { 
-  CampaignImageService, 
-  CampaignImageServiceError,
-  generateCampaignImage,
-  generateCampaignImageSVG
-} from './CampaignImageService';
+// Note: CampaignImageService is server-only and should be imported directly
+// from './CampaignImageService' in API routes only
 
 // Type exports
 export type { 
@@ -57,7 +53,5 @@ export type {
   InstagramBroadcastRule 
 } from './InstagramService';
 
-export type { 
-  CampaignImageConfig, 
-  GeneratedImageResult 
-} from './CampaignImageService';
+// Note: CampaignImageService types are server-only
+// Import directly from './CampaignImageService' in API routes
