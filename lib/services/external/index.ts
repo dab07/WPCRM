@@ -33,6 +33,13 @@ export {
   logBroadcast
 } from './InstagramService';
 
+export { 
+  CampaignImageService, 
+  CampaignImageServiceError,
+  generateCampaignImage,
+  generateCampaignImageSVG
+} from './CampaignImageService';
+
 // Type exports
 export type { 
   WhatsAppConfig, 
@@ -49,3 +56,8 @@ export type {
   InstagramPost, 
   InstagramBroadcastRule 
 } from './InstagramService';
+
+export type { 
+  CampaignImageConfig, 
+  GeneratedImageResult 
+} from './CampaignImageService';

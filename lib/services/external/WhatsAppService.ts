@@ -11,10 +11,13 @@ export interface WhatsAppConfig {
 export interface SendMessageParams {
   to: string;
   message: string;
-  type?: 'text' | 'template' | 'interactive';
+  type?: 'text' | 'template' | 'interactive' | 'image';
   templateName?: string;
   templateParams?: string[];
   interactive?: InteractiveMessage;
+  imageBase64?: string;
+  imageCaption?: string;
+  imageMimeType?: string;
 }
 
 export interface InteractiveMessage {
@@ -137,14 +140,15 @@ export class WhatsAppService {
   }
 
   private async sendMetaMessage(params: SendMessageParams): Promise<SendMessageResult> {
-    const { to, message, type = 'text', templateName, templateParams, interactive } = params;
+    const { to, message, type = 'text', templateName, templateParams, interactive, imageBase64, imageCaption, imageMimeType } = params;
     
     // Handle development mode with mock service
     if (this.config.phoneNumberId === 'dev-phone-id') {
       console.log('[WhatsApp Service] Development mode - simulating message send:', {
         to,
         message: message.substring(0, 50) + '...',
-        type
+        type,
+        hasImage: !!imageBase64
       });
       
       return {
@@ -162,6 +166,15 @@ export class WhatsAppService {
     if (type === 'text') {
       payload.type = 'text';
       payload.text = { body: message };
+    } else if (type === 'image' && imageBase64) {
+      payload.type = 'image';
+      payload.image = {
+        data: imageBase64,
+        mime_type: imageMimeType || 'image/jpeg'
+      };
+      if (imageCaption) {
+        payload.image.caption = imageCaption;
+      }
     } else if (type === 'interactive' && interactive) {
       payload.type = 'interactive';
       payload.interactive = interactive;
@@ -399,7 +412,7 @@ export async function markMessageAsRead(_messageId: string): Promise<boolean> {
   }
 }
 
-// Helper function for interactive messages
+// Helper function for interactive messages with fallback
 export async function sendInteractiveMessage(
   to: string,
   body: string,
@@ -407,6 +420,7 @@ export async function sendInteractiveMessage(
   header?: string,
   footer?: string
 ): Promise<SendMessageResult> {
+  // First try interactive message
   const interactive: InteractiveMessage = {
     type: 'button',
     body: { text: body },
@@ -429,10 +443,34 @@ export async function sendInteractiveMessage(
     interactive.footer = { text: footer };
   }
 
-  return sendWhatsAppMessage({
+  const interactiveResult = await sendWhatsAppMessage({
     to,
     message: '', // Not used for interactive messages
     type: 'interactive',
     interactive
   });
+
+  // If interactive message fails, fall back to text with buttons as options
+  if (!interactiveResult.success) {
+    console.log('[WhatsApp Service] Interactive message failed, falling back to text');
+    
+    let fallbackMessage = '';
+    if (header) fallbackMessage += `*${header}*\n\n`;
+    fallbackMessage += body + '\n\n';
+    
+    buttons.forEach((btn, index) => {
+      fallbackMessage += `${index + 1}. ${btn.title}\n`;
+    });
+    
+    fallbackMessage += '\nReply with the number of your choice.';
+    if (footer) fallbackMessage += `\n\n${footer}`;
+
+    return sendWhatsAppMessage({
+      to,
+      message: fallbackMessage,
+      type: 'text'
+    });
+  }
+
+  return interactiveResult;
 }

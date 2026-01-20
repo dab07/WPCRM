@@ -255,6 +255,8 @@ What's your main area of interest or challenge?`;
 
   // Handle greeting intent with ZavOps information
   if (intent === 'greeting') {
+    console.log('[Webhook] 👋 Processing greeting intent');
+    
     // Get the greeting response from database
     const { data: aiIntent } = await supabase
       .from('ai_intents')
@@ -266,11 +268,15 @@ What's your main area of interest or challenge?`;
     const greetingMessage = aiIntent?.response_template || 
       "Hello! 👋 Welcome to ZavOps! We're excited to connect with you.\nVisit our website: https://zavops.com";
 
+    console.log('[Webhook] Sending greeting message:', greetingMessage.substring(0, 50) + '...');
+
     // Send first message (greeting from database)
     const result = await sendWhatsAppMessage({
       to: contact.phone_number,
       message: greetingMessage
     });
+
+    console.log('[Webhook] Greeting message result:', result);
 
     if (result.success) {
       // Save response to database
@@ -298,8 +304,12 @@ What's your main area of interest or challenge?`;
         })
         .eq('id', conversation.id);
 
+      console.log('[Webhook] 🕐 Scheduling interactive widget in 3 seconds...');
+
       // Send follow-up message with interactive buttons after a short delay
       setTimeout(async () => {
+        console.log('[Webhook] 🔘 Sending interactive widget...');
+        
         // Send interactive message with buttons
         const result2 = await sendInteractiveMessage(
           contact.phone_number,
@@ -312,6 +322,8 @@ What's your main area of interest or challenge?`;
           '🗓️ Schedule with ZavOps',
           'Visit zavops.com for more info'
         );
+
+        console.log('[Webhook] Interactive widget result:', result2);
 
         if (result2.success) {
           // Save follow-up message to database
@@ -327,8 +339,13 @@ What's your main area of interest or challenge?`;
               ai_intent: 'scheduling_widget',
               ai_confidence: 0.95
             });
+          console.log('[Webhook] ✅ Interactive widget sent and saved to database');
+        } else {
+          console.error('[Webhook] ❌ Failed to send interactive widget:', result2.error);
         }
       }, 3000); // 3 second delay
+    } else {
+      console.error('[Webhook] ❌ Failed to send greeting message:', result.error);
     }
     return;
   }

@@ -1,5 +1,6 @@
 import { GeminiService } from '../external/GeminiService';
 import { WhatsAppService, getWhatsAppService } from '../external/WhatsAppService';
+import { CampaignImageService } from '../external/CampaignImageService';
 import { supabaseAdmin } from '../../../supabase/supabase';
 
 export interface Campaign {
@@ -38,10 +39,12 @@ export class CampaignOrchestratorError extends Error {
 export class CampaignOrchestrator {
   private supabase = supabaseAdmin;
   private geminiService: GeminiService;
+  private campaignImageService: CampaignImageService;
   private whatsappService: WhatsAppService | null = null;
 
   constructor() {
     this.geminiService = new GeminiService();
+    this.campaignImageService = new CampaignImageService();
     // Don't initialize WhatsApp service here - do it lazily
   }
 
@@ -195,11 +198,26 @@ export class CampaignOrchestrator {
               campaign.name
             );
 
-            // Send WhatsApp message
-            const result = await this.getWhatsAppService().sendMessage({
+            // Generate campaign image for all campaigns
+            const imageResult = await this.campaignImageService.generateCampaignImageSVG({
+              campaignName: campaign.name,
+              theme: null
+            });
+
+            // Send WhatsApp message with image and text
+            const sendParams: any = {
               to: contact.phone_number,
               message: personalizedMessage
-            });
+            };
+
+            if (imageResult?.success && imageResult.imageBase64) {
+              sendParams.type = 'image';
+              sendParams.imageBase64 = imageResult.imageBase64;
+              sendParams.imageCaption = personalizedMessage;
+              sendParams.imageMimeType = imageResult.mimeType || 'image/svg+xml';
+            }
+
+            const result = await this.getWhatsAppService().sendMessage(sendParams);
             
             if (result.success) {
               // Prepare message record for batch insert
@@ -210,13 +228,14 @@ export class CampaignOrchestrator {
                   whatsapp_message_id: result.messageId,
                   sender_type: 'ai',
                   content: personalizedMessage,
-                  message_type: 'text',
+                  message_type: 'image',
                   ai_intent: `campaign_${campaign.name}`,
                   delivery_status: 'sent',
                   metadata: {
                     campaign_id: campaign.id,
                     campaign_name: campaign.name,
-                    contact_id: contact.id
+                    contact_id: contact.id,
+                    has_image: !!imageResult?.success
                   }
                 });
               }
