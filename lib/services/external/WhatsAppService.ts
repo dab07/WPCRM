@@ -167,12 +167,34 @@ export class WhatsAppService {
       payload.type = 'text';
       payload.text = { body: message };
     } else if (type === 'image' && imageBase64) {
+      // For WhatsApp Business API, we need to upload media first, then send
+      // For now, let's convert base64 to a data URL and send as link
+      // TODO: Implement proper media upload to WhatsApp
+      
       payload.type = 'image';
-      payload.image = {
-        data: imageBase64,
-        mime_type: imageMimeType || 'image/jpeg'
-      };
-      if (imageCaption) {
+      
+      // Try to upload the image and get media ID (simplified approach)
+      try {
+        const mediaId = await this.uploadImageMedia(imageBase64, imageMimeType || 'image/svg+xml');
+        if (mediaId) {
+          payload.image = { id: mediaId };
+        } else {
+          // Fallback: send as text message with image description
+          payload.type = 'text';
+          payload.text = { 
+            body: `${imageCaption || message}\n\n📸 [Campaign Image - ${imageMimeType}]` 
+          };
+        }
+      } catch (error) {
+        console.error('[WhatsApp Service] Failed to upload image, sending text only:', error);
+        payload.type = 'text';
+        payload.text = { 
+          body: `${imageCaption || message}\n\n📸 [Campaign Image]` 
+        };
+      }
+      
+      // Add caption if provided and we successfully uploaded image
+      if (payload.type === 'image' && imageCaption) {
         payload.image.caption = imageCaption;
       }
     } else if (type === 'interactive' && interactive) {
@@ -233,6 +255,51 @@ export class WhatsAppService {
         undefined,
         error instanceof Error ? error : undefined
       );
+    }
+  }
+
+  /**
+   * Upload image media to WhatsApp and get Media ID
+   */
+  private async uploadImageMedia(imageBase64: string, mimeType: string): Promise<string | null> {
+    try {
+      // Handle development mode
+      if (this.config.phoneNumberId === 'dev-phone-id') {
+        console.log('[WhatsApp Service] Development mode - simulating media upload');
+        return `dev-media-${Date.now()}`;
+      }
+
+      // Convert base64 to buffer
+      const imageBuffer = Buffer.from(imageBase64, 'base64');
+      
+      // Create form data for media upload
+      const formData = new FormData();
+      const blob = new Blob([imageBuffer], { type: mimeType });
+      formData.append('file', blob, 'campaign-image.svg');
+      formData.append('type', mimeType);
+      formData.append('messaging_product', 'whatsapp');
+
+      const response = await fetch(`https://graph.facebook.com/v18.0/${this.config.phoneNumberId}/media`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.config.accessToken}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('[WhatsApp Service] Media upload failed:', data);
+        return null;
+      }
+
+      console.log('[WhatsApp Service] Media uploaded successfully:', data.id);
+      return data.id;
+
+    } catch (error) {
+      console.error('[WhatsApp Service] Error uploading media:', error);
+      return null;
     }
   }
 

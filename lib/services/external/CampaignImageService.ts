@@ -63,19 +63,44 @@ export class CampaignImageService {
       const fs = await import('fs');
       const path = await import('path');
       
-      const logoPath = path.join(process.cwd(), 'logos', 'Zavops-Icon-Combo.png.webp');
+      // Try multiple possible logo paths
+      const possiblePaths = [
+        path.join(process.cwd(), 'public', 'logos', 'Zavops-Icon-Combo.png'),
+        path.join(process.cwd(), 'public', 'images', 'zavops-logo.png'),
+        path.join(process.cwd(), 'logos', 'Zavops-Icon-Combo.png.webp'),
+        path.join(process.cwd(), 'assets', 'zavops-logo.png')
+      ];
       
-      if (!fs.existsSync(logoPath)) {
-        console.warn('[Campaign Image Service] Zavops logo not found at:', logoPath);
-        return null;
+      for (const logoPath of possiblePaths) {
+        if (fs.existsSync(logoPath)) {
+          const logoBuffer = fs.readFileSync(logoPath);
+          return logoBuffer.toString('base64');
+        }
       }
-
-      const logoBuffer = fs.readFileSync(logoPath);
-      return logoBuffer.toString('base64');
+      
+      // If no logo file found, create a simple text-based logo
+      console.warn('[Campaign Image Service] Creating fallback text logo');
+      return this.createFallbackLogo();
+      
     } catch (error) {
       console.error('[Campaign Image Service] Error loading logo:', error);
-      return null;
+      return this.createFallbackLogo();
     }
+  }
+
+  /**
+   * Create a simple text-based logo as fallback
+   */
+  private createFallbackLogo(): string {
+    const logoSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="120" height="40" xmlns="http://www.w3.org/2000/svg">
+  <rect width="120" height="40" fill="#667eea" rx="8"/>
+  <text x="60" y="25" font-size="16" font-weight="bold" text-anchor="middle" fill="white" font-family="Arial, sans-serif">
+    Zavops
+  </text>
+</svg>`;
+    
+    return Buffer.from(logoSvg).toString('base64');
   }
 
   /**
@@ -139,10 +164,10 @@ Generate this image now.`;
    */
   async generateCampaignImageSVG(config: CampaignImageConfig): Promise<GeneratedImageResult> {
     try {
-      // Attempt to load logo
-      await this.getZavopsLogoBase64();
+      // Get logo (fallback will be created if file not found)
+      const logoBase64 = await this.getZavopsLogoBase64();
 
-      // Create SVG with campaign theme
+      // Create SVG with campaign theme and logo
       const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="1080" height="1080" xmlns="http://www.w3.org/2000/svg">
   <!-- Background gradient -->
@@ -151,6 +176,11 @@ Generate this image now.`;
       <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
     </linearGradient>
+    ${logoBase64 ? `
+    <pattern id="logoPattern" x="0" y="0" width="120" height="40" patternUnits="userSpaceOnUse">
+      <image href="data:image/svg+xml;base64,${logoBase64}" width="120" height="40"/>
+    </pattern>
+    ` : ''}
   </defs>
   
   <!-- Background -->
@@ -162,15 +192,27 @@ Generate this image now.`;
   <circle cx="540" cy="200" r="60" fill="#43e97b" opacity="0.2"/>
   
   <!-- Main campaign text -->
-  <text x="540" y="500" font-size="100" font-weight="bold" text-anchor="middle" fill="white" font-family="Arial, sans-serif">
+  <text x="540" y="500" font-size="80" font-weight="bold" text-anchor="middle" fill="white" font-family="Arial, sans-serif">
     ${config.campaignName}
   </text>
   
-  <!-- Zavops logo placeholder (top right) -->
-  <rect x="900" y="50" width="100" height="100" fill="white" rx="10" opacity="0.9"/>
-  <text x="950" y="110" font-size="24" font-weight="bold" text-anchor="middle" fill="#667eea" font-family="Arial, sans-serif">
+  <!-- Subtitle if theme provided -->
+  ${config.theme ? `
+  <text x="540" y="580" font-size="40" text-anchor="middle" fill="white" opacity="0.9" font-family="Arial, sans-serif">
+    ${config.theme}
+  </text>
+  ` : ''}
+  
+  <!-- Zavops logo (top right) -->
+  ${logoBase64 ? `
+  <rect x="900" y="50" width="130" height="50" fill="white" rx="10" opacity="0.95"/>
+  <image href="data:image/svg+xml;base64,${logoBase64}" x="905" y="55" width="120" height="40"/>
+  ` : `
+  <rect x="900" y="50" width="130" height="50" fill="white" rx="10" opacity="0.95"/>
+  <text x="965" y="80" font-size="20" font-weight="bold" text-anchor="middle" fill="#667eea" font-family="Arial, sans-serif">
     Zavops
   </text>
+  `}
 </svg>`;
 
       // Convert SVG to base64 (server-side only)

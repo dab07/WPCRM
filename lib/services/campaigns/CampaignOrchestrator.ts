@@ -198,10 +198,10 @@ export class CampaignOrchestrator {
               campaign.name
             );
 
-            // Generate campaign image for all campaigns
+            // Generate campaign image with Zavops branding
             const imageResult = await this.campaignImageService.generateCampaignImageSVG({
               campaignName: campaign.name,
-              theme: null
+              theme: campaign.name.includes('Festival') ? 'Celebrate with us!' : null
             });
 
             // Send WhatsApp message with image and text
@@ -215,6 +215,9 @@ export class CampaignOrchestrator {
               sendParams.imageBase64 = imageResult.imageBase64;
               sendParams.imageCaption = personalizedMessage;
               sendParams.imageMimeType = imageResult.mimeType || 'image/svg+xml';
+            } else {
+              // Fallback to text if image generation fails
+              sendParams.type = 'text';
             }
 
             const result = await this.getWhatsAppService().sendMessage(sendParams);
@@ -228,14 +231,14 @@ export class CampaignOrchestrator {
                   whatsapp_message_id: result.messageId,
                   sender_type: 'ai',
                   content: personalizedMessage,
-                  message_type: 'image',
+                  message_type: imageResult?.success ? 'image' : 'text',
                   ai_intent: `campaign_${campaign.name}`,
                   delivery_status: 'sent',
                   metadata: {
                     campaign_id: campaign.id,
                     campaign_name: campaign.name,
                     contact_id: contact.id,
-                    has_image: !!imageResult?.success
+                    has_image: false
                   }
                 });
               }
@@ -301,7 +304,10 @@ export class CampaignOrchestrator {
           console.error(`[Campaign] Error inserting messages:`, insertError);
         }
       }
-
+      /*
+      todo
+      if sent count. = 0, then directly throw error 
+      */
       // Final campaign update with comprehensive logging
       console.log(`[Campaign ${campaign.name}] Final update: sent=${sentCount}, delivered=${deliveredCount}`);
       
