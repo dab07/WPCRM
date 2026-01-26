@@ -65,6 +65,7 @@ export class CampaignImageService {
       
       // Try multiple possible logo paths
       const possiblePaths = [
+        path.join(process.cwd(), 'public', 'logos', 'zavops-logo.svg'),
         path.join(process.cwd(), 'public', 'logos', 'Zavops-Icon-Combo.png'),
         path.join(process.cwd(), 'public', 'images', 'zavops-logo.png'),
         path.join(process.cwd(), 'logos', 'Zavops-Icon-Combo.png.webp'),
