@@ -238,7 +238,7 @@ export class CampaignOrchestrator {
                     campaign_id: campaign.id,
                     campaign_name: campaign.name,
                     contact_id: contact.id,
-                    has_image: false
+                    has_image: !!imageResult?.success
                   }
                 });
               }
