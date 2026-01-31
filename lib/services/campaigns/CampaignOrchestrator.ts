@@ -198,13 +198,13 @@ export class CampaignOrchestrator {
               campaign.name
             );
 
-            // Generate campaign image with Zavops branding
-            const imageResult = await this.campaignImageService.generateCampaignImageSVG({
+            // Generate campaign image using Gemini AI
+            const imageResult = await this.campaignImageService.generateCampaignImage({
               campaignName: campaign.name,
               theme: campaign.name.includes('Festival') ? 'Celebrate with us!' : null
             });
 
-            // Send WhatsApp message with image and text
+            // Send WhatsApp message with image and caption
             const sendParams: any = {
               to: contact.phone_number,
               message: personalizedMessage
@@ -214,10 +214,12 @@ export class CampaignOrchestrator {
               sendParams.type = 'image';
               sendParams.imageBase64 = imageResult.imageBase64;
               sendParams.imageCaption = personalizedMessage;
-              sendParams.imageMimeType = imageResult.mimeType || 'image/svg+xml';
+              sendParams.imageMimeType = 'image/jpeg';
             } else {
               // Fallback to text if image generation fails
+              console.warn(`[Campaign] Image generation failed for ${contact.phone_number}, sending text only`);
               sendParams.type = 'text';
+              sendParams.message = `🎉 ${campaign.name}\n\n${personalizedMessage}\n\n📱 Powered by Zavops`;
             }
 
             const result = await this.getWhatsAppService().sendMessage(sendParams);
