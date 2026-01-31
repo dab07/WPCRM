@@ -175,7 +175,7 @@ export class WhatsAppService {
       
       // Try to upload the image and get media ID (simplified approach)
       try {
-        const mediaId = await this.uploadImageMedia(imageBase64, imageMimeType || 'image/svg+xml');
+        const mediaId = await this.uploadImageMedia(imageBase64, imageMimeType || 'image/jpeg');
         if (mediaId) {
           payload.image = { id: mediaId };
         } else {
@@ -275,7 +275,16 @@ export class WhatsAppService {
       // Create form data for media upload
       const formData = new FormData();
       const blob = new Blob([imageBuffer], { type: mimeType });
-      formData.append('file', blob, 'campaign-image.svg');
+      
+      // Use appropriate file extension based on MIME type
+      let fileName = 'campaign-image.jpg';
+      if (mimeType === 'image/png') {
+        fileName = 'campaign-image.png';
+      } else if (mimeType === 'image/webp') {
+        fileName = 'campaign-image.webp';
+      }
+      
+      formData.append('file', blob, fileName);
       formData.append('type', mimeType);
       formData.append('messaging_product', 'whatsapp');
 

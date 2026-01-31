@@ -234,13 +234,14 @@ export class CampaignOrchestrator {
                   sender_type: 'ai',
                   content: personalizedMessage,
                   message_type: imageResult?.success ? 'image' : 'text',
-                  ai_intent: `campaign_${campaign.name}`,
                   delivery_status: 'sent',
                   metadata: {
                     campaign_id: campaign.id,
                     campaign_name: campaign.name,
                     contact_id: contact.id,
-                    has_image: !!imageResult?.success
+                    has_image: !!imageResult?.success,
+                    image_type: imageResult?.success ? 'jpeg' : null,
+                    ai_intent: `campaign_${campaign.name}` // Store in metadata instead of separate column
                   }
                 });
               }
