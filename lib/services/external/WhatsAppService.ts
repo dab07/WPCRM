@@ -263,20 +263,21 @@ export class WhatsAppService {
    */
   private async uploadImageMedia(imageBase64: string, mimeType: string): Promise<string | null> {
     try {
-      // Handle development mode
+      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!allowedMimeTypes.includes(mimeType)) {
+        console.error(`[WhatsApp Service] Invalid MIME type: ${mimeType}. Allowed: ${allowedMimeTypes.join(', ')}`);
+        return null;
+      }
+
       if (this.config.phoneNumberId === 'dev-phone-id') {
         console.log('[WhatsApp Service] Development mode - simulating media upload');
         return `dev-media-${Date.now()}`;
       }
 
-      // Convert base64 to buffer
       const imageBuffer = Buffer.from(imageBase64, 'base64');
-      
-      // Create form data for media upload
       const formData = new FormData();
       const blob = new Blob([imageBuffer], { type: mimeType });
       
-      // Use appropriate file extension based on MIME type
       let fileName = 'campaign-image.jpg';
       if (mimeType === 'image/png') {
         fileName = 'campaign-image.png';
@@ -285,7 +286,7 @@ export class WhatsAppService {
       }
       
       formData.append('file', blob, fileName);
-      formData.append('type', mimeType);
+      formData.append('type', 'image');  
       formData.append('messaging_product', 'whatsapp');
 
       const response = await fetch(`https://graph.facebook.com/v18.0/${this.config.phoneNumberId}/media`, {

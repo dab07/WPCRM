@@ -50,58 +50,6 @@ export class CampaignImageService {
   }
 
   /**
-   * Load Zavops logo as base64
-   */
-  private async getZavopsLogoBase64(): Promise<string | null> {
-    try {
-      // Only available on server-side
-      if (typeof window !== 'undefined') {
-        return null;
-      }
-      
-      // Dynamic imports for server-side only
-      const fs = await import('fs');
-      const path = await import('path');
-      
-      // Try multiple possible logo paths
-      const possiblePaths = [
-        path.join(process.cwd(), 'public', 'logos', 'zavops-logo.jpg'),
-        path.join(process.cwd(), 'logos', 'Zavops-Icon-Combo.png'),
-      ];
-      
-      for (const logoPath of possiblePaths) {
-        if (fs.existsSync(logoPath)) {
-          const logoBuffer = fs.readFileSync(logoPath);
-          return logoBuffer.toString('base64');
-        }
-      }
-      
-      // If no logo file found, create a simple text-based logo
-      console.warn('[Campaign Image Service] Creating fallback text logo');
-      return this.createFallbackLogo();
-      
-    } catch (error) {
-      console.error('[Campaign Image Service] Error loading logo:', error);
-      return this.createFallbackLogo();
-    }
-  }
-
-  /**
-   * Create a simple text-based logo as fallback
-   */
-  private createFallbackLogo(): string {
-    const logoJPG = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="120" height="40" xmlns="http://www.w3.org/2000/svg">
-  <rect width="120" height="40" fill="#667eea" rx="8"/>
-  <text x="60" y="25" font-size="16" font-weight="bold" text-anchor="middle" fill="white" font-family="Arial, sans-serif">
-    Zavops
-  </text>
-</svg>`;
-    
-    return Buffer.from(logoJPG).toString('base64');
-  }
-
-  /**
    * Generate campaign image using Gemini
    * Gemini understands the campaign name and generates appropriate greeting and design
    */
@@ -167,7 +115,10 @@ Generate this image now.`;
     try {
       // Create a simple base64 JPEG (1x1 blue pixel as placeholder)
       // This is a minimal implementation - replace with proper image generation
+      // TODO: Use config.campaignName and config.theme for actual image generation
       const simpleJpeg = '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwA/8A8A';
+      
+      console.log(`[Campaign Image Service] Generating JPEG for campaign: ${config.campaignName}`);
       
       return {
         success: true,
