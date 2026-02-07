@@ -141,7 +141,7 @@ export class WhatsAppService {
 
   private async sendMetaMessage(params: SendMessageParams): Promise<SendMessageResult> {
     const { to, message, type = 'text', templateName, templateParams, interactive, imageBase64, imageCaption, imageMimeType } = params;
-    
+    console.log('[WhatsApp Service] Image MimeTytpe', imageMimeType);
     // Handle development mode with mock service
     if (this.config.phoneNumberId === 'dev-phone-id') {
       console.log('[WhatsApp Service] Development mode - simulating message send:', {
@@ -263,7 +263,7 @@ export class WhatsAppService {
    */
   private async uploadImageMedia(imageBase64: string, mimeType: string): Promise<string | null> {
     try {
-      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      const allowedMimeTypes = ['image/jpeg', 'image/png'];
       if (!allowedMimeTypes.includes(mimeType)) {
         console.error(`[WhatsApp Service] Invalid MIME type: ${mimeType}. Allowed: ${allowedMimeTypes.join(', ')}`);
         return null;

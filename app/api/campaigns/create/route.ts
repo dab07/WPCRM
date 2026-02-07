@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     // Preview image generation if requested
     if (body.preview_image) {
       const imageService = new CampaignImageService();
-      const imageResult = await imageService.generateCampaignImageSVG({
+      const imageResult = await imageService.generateCampaignImage({
         campaignName: name,
         theme: null
       });

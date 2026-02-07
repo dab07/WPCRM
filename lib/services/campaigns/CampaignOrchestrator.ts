@@ -130,8 +130,7 @@ export class CampaignOrchestrator {
         const scheduledDateString = scheduledDate.toDateString();
         const isToday = scheduledDateString === today;
         const isTimeToRun = scheduledDate <= new Date();
-        
-        console.log(`[Campaign] ${campaign.name}: scheduled=${campaign.scheduled_at}, isToday=${isToday}, isTimeToRun=${isTimeToRun}`);
+      
         
         return isToday && isTimeToRun;
       });
