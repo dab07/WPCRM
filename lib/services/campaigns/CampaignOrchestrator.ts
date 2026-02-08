@@ -2,6 +2,7 @@ import { GeminiService } from '../external/GeminiService';
 import { WhatsAppService, getWhatsAppService } from '../external/WhatsAppService';
 import { CampaignImageService } from '../external/CampaignImageService';
 import { supabaseAdmin } from '../../../supabase/supabase';
+import { config } from '@/lib/config';
 
 export interface Campaign {
   id: string;
@@ -62,7 +63,7 @@ export class CampaignOrchestrator {
   async processCampaigns(source: string = 'n8n_schedule_trigger') {
     try {
       console.log(`[${source}] Starting campaign processing...`);
-      
+      console.log(`gemini api kay: ${config.gemini}`)
       // Get campaigns scheduled for today
       const scheduledCampaigns = await this.getTodaysScheduledCampaigns();
       

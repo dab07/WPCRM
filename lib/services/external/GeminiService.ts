@@ -396,6 +396,67 @@ Hashtags: ${hashtags.join(', ')}`;
   }
 
   /**
+   * Generate campaign image SVG
+   */
+  async generateCampaignImageSVG(config: {
+    campaignName: string;
+    theme?: string | null;
+  }): Promise<GeminiResponse<{
+    imageBase64: string;
+    mimeType: string;
+  }>> {
+    try {
+      // Create SVG with campaign theme
+      const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1080" height="1080" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1080" height="1080" fill="url(#bgGradient)"/>
+  
+  <!-- Decorative elements -->
+  <circle cx="100" cy="100" r="80" fill="#f093fb" opacity="0.3"/>
+  <circle cx="980" cy="980" r="100" fill="#4facfe" opacity="0.3"/>
+  <circle cx="540" cy="200" r="60" fill="#43e97b" opacity="0.2"/>
+  
+  <!-- Main campaign text -->
+  <text x="540" y="500" font-size="100" font-weight="bold" text-anchor="middle" fill="white" font-family="Arial, sans-serif">
+    ${config.campaignName}
+  </text>
+  
+  <!-- Zavops logo placeholder (top right) -->
+  <rect x="900" y="50" width="100" height="100" fill="white" rx="10" opacity="0.9"/>
+  <text x="950" y="110" font-size="24" font-weight="bold" text-anchor="middle" fill="#667eea" font-family="Arial, sans-serif">
+    Zavops
+  </text>
+</svg>`;
+
+      // Convert SVG to base64
+      const svgBase64 = Buffer.from(svg).toString('base64');
+
+      return {
+        success: true,
+        data: {
+          imageBase64: svgBase64,
+          mimeType: 'image/svg+xml'
+        }
+      };
+    } catch (error) {
+      console.error('[Gemini Service] Error generating SVG:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
    * Detect intent from customer message
    */
   detectIntent(message: string): {
@@ -477,4 +538,15 @@ export async function detectIntent(message: string): Promise<{
 }> {
   const service = new GeminiService();
   return service.detectIntent(message);
+}
+
+export async function generateCampaignImageSVG(config: {
+  campaignName: string;
+  theme?: string | null;
+}): Promise<GeminiResponse<{
+  imageBase64: string;
+  mimeType: string;
+}>> {
+  const service = new GeminiService();
+  return service.generateCampaignImageSVG(config);
 }
