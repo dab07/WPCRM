@@ -234,14 +234,9 @@ export class CampaignOrchestrator {
                   content: personalizedMessage,
                   message_type: imageResult?.success ? 'image' : 'text',
                   delivery_status: 'sent',
-                  metadata: {
-                    campaign_id: campaign.id,
-                    campaign_name: campaign.name,
-                    contact_id: contact.id,
-                    has_image: !!imageResult?.success,
-                    image_type: imageResult?.success ? 'jpeg' : null,
-                    ai_intent: `campaign_${campaign.name}` // Store in metadata instead of separate column
-                  }
+                  ai_intent: `campaign_${campaign.name}`
+                  // Note: metadata field temporarily removed due to schema cache issue
+                  // Re-enable after running: NOTIFY pgrst, 'reload schema';
                 });
               }
               

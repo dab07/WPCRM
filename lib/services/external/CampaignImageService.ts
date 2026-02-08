@@ -54,6 +54,12 @@ export class CampaignImageService {
    * Gemini understands the campaign name and generates appropriate greeting and design
    */
   async generateCampaignImage(config: CampaignImageConfig): Promise<GeneratedImageResult> {
+    // Skip Gemini AI call and use JPEG fallback directly to avoid quota issues
+    // TODO: Re-enable Gemini when you have proper quota or implement actual image generation
+    console.log(`[Campaign Image Service] Generating JPEG image for campaign: ${config.campaignName}`);
+    return this.generateCampaignImageJPEG(config);
+    
+    /* Gemini AI image generation (disabled due to quota limits)
     try {
       const prompt = `Create a professional WhatsApp campaign greeting image for: "${config.campaignName}"
 
@@ -100,12 +106,11 @@ Generate this image now.`;
       return this.generateCampaignImageJPEG(config);
 
     } catch (error) {
-      console.error('[Campaign Image Service] Error generating campaign image:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : '[CampaignImageService] Image generation failed'
-      };
+      console.error('[Campaign Image Service] Error generating campaign image with Gemini, using JPEG fallback:', error);
+      // Always return JPEG fallback even if Gemini fails
+      return this.generateCampaignImageJPEG(config);
     }
+    */
   }
 
   /**

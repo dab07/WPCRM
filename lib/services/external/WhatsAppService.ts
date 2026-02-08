@@ -95,8 +95,6 @@ export class WhatsAppService {
     this.retryCount = 3; // Default retry count
     this.timeout = 30000; // Default timeout
     
-    console.log('[WhatsApp Service] Initializing with provider:', config.provider);
-    
     if (config.provider !== 'meta') {
       throw new WhatsAppServiceError('Only Meta provider is supported', config.provider);
     }
