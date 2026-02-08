@@ -233,10 +233,7 @@ export class CampaignOrchestrator {
                   sender_type: 'ai',
                   content: personalizedMessage,
                   message_type: imageResult?.success ? 'image' : 'text',
-                  delivery_status: 'sent',
-                  ai_intent: `campaign_${campaign.name}`
-                  // Note: metadata field temporarily removed due to schema cache issue
-                  // Re-enable after running: NOTIFY pgrst, 'reload schema';
+                  delivery_status: 'sent'
                 });
               }
               
