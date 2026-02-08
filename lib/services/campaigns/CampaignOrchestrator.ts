@@ -214,7 +214,7 @@ export class CampaignOrchestrator {
               sendParams.type = 'image';
               sendParams.imageBase64 = imageResult.imageBase64;
               sendParams.imageCaption = personalizedMessage;
-              sendParams.imageMimeType = 'image/jpeg';
+              sendParams.imageMimeType = imageResult.mimeType || 'image/png'; // Use actual MIME type from Imagen
             } else {
               // Fallback to text if image generation fails
               console.warn(`[Campaign] Image generation failed for ${contact.phone_number}, sending text only`);

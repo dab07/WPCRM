@@ -30,12 +30,12 @@ export class CampaignImageService {
   }
 
   /**
-   * Generate campaign image using Gemini
-   * Currently uses SVG fallback - can be extended to use Gemini image generation
+   * Generate campaign image using Gemini Imagen
+   * Returns PNG image suitable for WhatsApp
    */
   async generateCampaignImage(config: CampaignImageConfig): Promise<GeneratedImageResult> {
     try {
-      const result = await this.geminiService.generateCampaignImageSVG(config);
+      const result = await this.geminiService.generateCampaignImage(config);
       
       if (result.success && result.data) {
         return {

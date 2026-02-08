@@ -396,9 +396,10 @@ Hashtags: ${hashtags.join(', ')}`;
   }
 
   /**
-   * Generate campaign image SVG
+   * Generate campaign image using Gemini 2.5 Flash Image (free tier: 500/day)
+   * Returns PNG image as base64
    */
-  async generateCampaignImageSVG(config: {
+  async generateCampaignImage(config: {
     campaignName: string;
     theme?: string | null;
   }): Promise<GeminiResponse<{
@@ -406,49 +407,64 @@ Hashtags: ${hashtags.join(', ')}`;
     mimeType: string;
   }>> {
     try {
-      // Create SVG with campaign theme
-      const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="1080" height="1080" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background gradient -->
-  <defs>
-    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-  
-  <!-- Background -->
-  <rect width="1080" height="1080" fill="url(#bgGradient)"/>
-  
-  <!-- Decorative elements -->
-  <circle cx="100" cy="100" r="80" fill="#f093fb" opacity="0.3"/>
-  <circle cx="980" cy="980" r="100" fill="#4facfe" opacity="0.3"/>
-  <circle cx="540" cy="200" r="60" fill="#43e97b" opacity="0.2"/>
-  
-  <!-- Main campaign text -->
-  <text x="540" y="500" font-size="100" font-weight="bold" text-anchor="middle" fill="white" font-family="Arial, sans-serif">
-    ${config.campaignName}
-  </text>
-  
-  <!-- Zavops logo placeholder (top right) -->
-  <rect x="900" y="50" width="100" height="100" fill="white" rx="10" opacity="0.9"/>
-  <text x="950" y="110" font-size="24" font-weight="bold" text-anchor="middle" fill="#667eea" font-family="Arial, sans-serif">
-    Zavops
-  </text>
-</svg>`;
+      const result = await this.executeWithRetry(async () => {
+        const client = this.getClient();
+        
+        // Create a detailed prompt for image generation
+        const prompt = `Professional WhatsApp campaign greeting image for "${config.campaignName}".
 
-      // Convert SVG to base64
-      const svgBase64 = Buffer.from(svg).toString('base64');
+Style: Modern, celebratory, professional business aesthetic
+Layout: Square format (1:1 aspect ratio)
+Elements:
+- Large bold text displaying "${config.campaignName}" as the main focal point
+- Vibrant gradient background (purple to blue tones)
+- Decorative celebratory elements (confetti, sparkles, or geometric shapes)
+- Small "Zavops" branding in top-right corner
+- Professional quality suitable for business messaging
+- Warm, inviting, and festive atmosphere
+
+Theme: ${config.theme || 'Professional celebration and engagement'}
+
+Make it eye-catching but professional, suitable for WhatsApp business communication.`;
+
+        // Use Gemini 2.5 Flash Image (500 free requests/day vs Imagen's 10-100/day)
+        const response = await client.models.generateImages({
+          model: 'gemini-2.5-flash-image',
+          prompt: prompt,
+          config: {
+            numberOfImages: 1,
+            aspectRatio: '1:1', // Square format for WhatsApp
+          }
+        });
+
+        if (!response.generatedImages || response.generatedImages.length === 0) {
+          throw new GeminiServiceError('No images generated');
+        }
+
+        const generatedImage = response.generatedImages[0];
+        
+        if (!generatedImage || !generatedImage.image) {
+          throw new GeminiServiceError('Invalid image data structure');
+        }
+        
+        const imageBytes = generatedImage.image.imageBytes;
+
+        if (!imageBytes) {
+          throw new GeminiServiceError('No image data received');
+        }
+
+        return {
+          imageBase64: imageBytes,
+          mimeType: 'image/png'
+        };
+      }, 'generateCampaignImage');
 
       return {
         success: true,
-        data: {
-          imageBase64: svgBase64,
-          mimeType: 'image/svg+xml'
-        }
+        data: result
       };
     } catch (error) {
-      console.error('[Gemini Service] Error generating SVG:', error);
+      console.error('[Gemini Service] Error generating campaign image:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -540,7 +556,7 @@ export async function detectIntent(message: string): Promise<{
   return service.detectIntent(message);
 }
 
-export async function generateCampaignImageSVG(config: {
+export async function generateCampaignImage(config: {
   campaignName: string;
   theme?: string | null;
 }): Promise<GeminiResponse<{
@@ -548,5 +564,5 @@ export async function generateCampaignImageSVG(config: {
   mimeType: string;
 }>> {
   const service = new GeminiService();
-  return service.generateCampaignImageSVG(config);
+  return service.generateCampaignImage(config);
 }
