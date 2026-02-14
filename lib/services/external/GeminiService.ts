@@ -427,35 +427,60 @@ Theme: ${config.theme || 'Professional celebration and engagement'}
 
 Make it eye-catching but professional, suitable for WhatsApp business communication.`;
 
-        // Use Gemini 2.5 Flash Image (500 free requests/day vs Imagen's 10-100/day)
-        const response = await client.models.generateImages({
-          model: 'models/gemini-2.5-flash-image',
-          prompt: prompt,
-          config: {
-            numberOfImages: 1,
-            aspectRatio: '1:1', // Square format for WhatsApp
+        const model = 'gemini-2.5-flash-image';
+        const contents = [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: prompt
+              }
+            ]
           }
+        ];
+        
+        const generationConfig = {
+          responseModalities: ['IMAGE', 'TEXT']
+        };
+
+        // Use generateContentStream as per official API
+        const response = await client.models.generateContentStream({
+          model,
+          contents,
+          config: generationConfig
         });
 
-        if (!response.generatedImages || response.generatedImages.length === 0) {
-          throw new GeminiServiceError('No images generated');
+        let imageBase64: string | null = null;
+        let mimeType = 'image/png';
+
+        // Process the stream to extract image data
+        for await (const chunk of response) {
+          if (!chunk.candidates || !chunk.candidates[0]?.content || !chunk.candidates[0].content.parts) {
+            continue;
+          }
+
+          // Look for inlineData in parts
+          const parts = chunk.candidates[0].content.parts;
+          for (const part of parts) {
+            if (part.inlineData && part.inlineData.data) {
+              imageBase64 = part.inlineData.data;
+              mimeType = part.inlineData.mimeType || 'image/png';
+              break;
+            }
+          }
+
+          if (imageBase64) {
+            break;
+          }
         }
 
-        const generatedImage = response.generatedImages[0];
-        
-        if (!generatedImage || !generatedImage.image) {
-          throw new GeminiServiceError('Invalid image data structure');
-        }
-        
-        const imageBytes = generatedImage.image.imageBytes;
-
-        if (!imageBytes) {
-          throw new GeminiServiceError('No image data received');
+        if (!imageBase64) {
+          throw new GeminiServiceError('No image data received from Gemini');
         }
 
         return {
-          imageBase64: imageBytes,
-          mimeType: 'image/png'
+          imageBase64,
+          mimeType
         };
       }, 'generateCampaignImage');
 
