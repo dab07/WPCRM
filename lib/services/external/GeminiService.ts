@@ -429,7 +429,7 @@ Make it eye-catching but professional, suitable for WhatsApp business communicat
 
         // Use Gemini 2.5 Flash Image (500 free requests/day vs Imagen's 10-100/day)
         const response = await client.models.generateImages({
-          model: 'gemini-2.5-flash',
+          model: 'models/gemini-2.5-flash-image',
           prompt: prompt,
           config: {
             numberOfImages: 1,
