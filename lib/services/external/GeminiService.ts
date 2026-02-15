@@ -398,6 +398,7 @@ Hashtags: ${hashtags.join(', ')}`;
   /**
    * Generate campaign image using Gemini 2.5 Flash Image (free tier: 500/day)
    * Returns PNG image as base64
+   * Note: No retry logic to avoid rate limiting
    */
   async generateCampaignImage(config: {
     campaignName: string;
@@ -407,11 +408,10 @@ Hashtags: ${hashtags.join(', ')}`;
     mimeType: string;
   }>> {
     try {
-      const result = await this.executeWithRetry(async () => {
-        const client = this.getClient();
-        
-        // Create a detailed prompt for image generation
-        const prompt = `Professional WhatsApp campaign greeting image for "${config.campaignName}".
+      const client = this.getClient();
+      
+      // Create a detailed prompt for image generation
+      const prompt = `Professional WhatsApp campaign greeting image for "${config.campaignName}".
 
 Style: Modern, celebratory, professional business aesthetic
 Layout: Square format (1:1 aspect ratio)
@@ -427,66 +427,63 @@ Theme: ${config.theme || 'Professional celebration and engagement'}
 
 Make it eye-catching but professional, suitable for WhatsApp business communication.`;
 
-        const model = 'gemini-2.5-flash-image';
-        const contents = [
-          {
-            role: 'user',
-            parts: [
-              {
-                text: prompt
-              }
-            ]
-          }
-        ];
-        
-        const generationConfig = {
-          responseModalities: ['IMAGE', 'TEXT']
-        };
-
-        // Use generateContentStream as per official API
-        const response = await client.models.generateContentStream({
-          model,
-          contents,
-          config: generationConfig
-        });
-
-        let imageBase64: string | null = null;
-        let mimeType = 'image/png';
-
-        // Process the stream to extract image data
-        for await (const chunk of response) {
-          if (!chunk.candidates || !chunk.candidates[0]?.content || !chunk.candidates[0].content.parts) {
-            continue;
-          }
-
-          // Look for inlineData in parts
-          const parts = chunk.candidates[0].content.parts;
-          for (const part of parts) {
-            if (part.inlineData && part.inlineData.data) {
-              imageBase64 = part.inlineData.data;
-              mimeType = part.inlineData.mimeType || 'image/png';
-              break;
+      const model = 'gemini-2.5-flash-image';
+      const contents = [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: prompt
             }
-          }
+          ]
+        }
+      ];
+      
+      const generationConfig = {
+        responseModalities: ['IMAGE', 'TEXT']
+      };
 
-          if (imageBase64) {
+      // Use generateContentStream as per official API - single request only
+      const response = await client.models.generateContentStream({
+        model,
+        contents,
+        config: generationConfig
+      });
+
+      let imageBase64: string | null = null;
+      let mimeType = 'image/png';
+
+      // Process the stream to extract image data
+      for await (const chunk of response) {
+        if (!chunk.candidates || !chunk.candidates[0]?.content || !chunk.candidates[0].content.parts) {
+          continue;
+        }
+
+        // Look for inlineData in parts
+        const parts = chunk.candidates[0].content.parts;
+        for (const part of parts) {
+          if (part.inlineData && part.inlineData.data) {
+            imageBase64 = part.inlineData.data;
+            mimeType = part.inlineData.mimeType || 'image/png';
             break;
           }
         }
 
-        if (!imageBase64) {
-          throw new GeminiServiceError('No image data received from Gemini');
+        if (imageBase64) {
+          break;
         }
+      }
 
-        return {
-          imageBase64,
-          mimeType
-        };
-      }, 'generateCampaignImage');
+      if (!imageBase64) {
+        throw new GeminiServiceError('No image data received from Gemini');
+      }
 
       return {
         success: true,
-        data: result
+        data: {
+          imageBase64,
+          mimeType
+        }
       };
     } catch (error) {
       console.error('[Gemini Service] Error generating campaign image:', error);
