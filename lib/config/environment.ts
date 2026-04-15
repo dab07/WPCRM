@@ -32,6 +32,26 @@ export const config = {
     userId: process.env.INSTAGRAM_USER_ID,
     webhookVerifyToken: process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,
   },
+
+  // [NEW: brand-sync] — added 2026-04-11
+  shopify: {
+    shopDomain: process.env.SHOPIFY_SHOP_DOMAIN ?? '',
+    accessToken: process.env.SHOPIFY_ACCESS_TOKEN ?? '',
+  },
+
+  klaviyo: {
+    apiKey: process.env.KLAVIYO_API_KEY ?? '',
+  },
+
+  omnisend: {
+    apiKey: process.env.OMNISEND_API_KEY ?? '',
+  },
+
+  metaAds: {
+    accessToken: process.env.META_ADS_ACCESS_TOKEN ?? '',
+    adAccountId: process.env.META_ADS_ACCOUNT_ID ?? '',
+    apiVersion: process.env.META_ADS_API_VERSION ?? 'v19.0',
+  },
   
   // Application
   app: {

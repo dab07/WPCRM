@@ -55,3 +55,16 @@ export type {
 
 // Note: CampaignImageService types are server-only
 // Import directly from './CampaignImageService' in API routes
+
+// [NEW: brand-sync + campaign-execution] — added 2026-04-11
+export { ShopifyService, ShopifyServiceError } from './ShopifyService';
+export type { ShopifyCustomer, ShopifyOrder, ShopifyAbandonedCart, ShopifySyncResult } from './ShopifyService';
+
+export { KlaviyoService, KlaviyoServiceError } from './KlaviyoService';
+export type { KlaviyoList, KlaviyoFlow, KlaviyoMetric, KlaviyoCampaignResult, KlaviyoSyncResult } from './KlaviyoService';
+
+export { OmnisendService, OmnisendServiceError } from './OmnisendService';
+export type { OmnisendContact, OmnisendCampaign, OmnisendMetrics, OmnisendSyncResult } from './OmnisendService';
+
+export { MetaAdsService, MetaAdsServiceError } from './MetaAdsService';
+export type { MetaCustomAudience, MetaAudienceSyncParams, MetaAdSet } from './MetaAdsService';

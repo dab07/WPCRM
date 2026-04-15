@@ -206,9 +206,7 @@ export class GeminiService {
     }
   }
 
-  /**
-   * Generate AI response for customer message
-   */
+ 
   async generateAIResponse(
     customerMessage: string,
     conversationHistory: string[] = []
