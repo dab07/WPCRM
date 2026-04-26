@@ -31,7 +31,7 @@ export const externalServicesConfig = {
     maxPostsPerRequest: 25,
   },
   
-  // [NEW: brand-sync] — added 2026-04-11
+
   shopify: {
     timeout: 30000,
     retries: 3,

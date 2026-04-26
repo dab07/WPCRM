@@ -1,4 +1,3 @@
-// [NEW: brand-sync] — added 2026-04-11
 import { config } from '../../config/environment';
 import { externalServicesConfig } from '../../config/external-services';
 
@@ -14,10 +13,7 @@ export interface ShopifyCustomer {
   created_at: string;
   updated_at: string;
   accepts_marketing: boolean;
-  default_address?: {
-    country: string;
-    city: string;
-  };
+  default_address?: { country: string; city: string };
 }
 
 export interface ShopifyOrder {
@@ -48,12 +44,7 @@ export interface ShopifyAbandonedCart {
   email: string;
   customer: { id: number } | null;
   total_price: string;
-  line_items: Array<{
-    title: string;
-    quantity: number;
-    price: string;
-    product_id: number;
-  }>;
+  line_items: Array<{ title: string; quantity: number; price: string; product_id: number }>;
   abandoned_checkout_url: string;
   created_at: string;
   updated_at: string;
@@ -76,18 +67,62 @@ export class ShopifyServiceError extends Error {
   }
 }
 
+// In-memory token cache (per process). Tokens expire in 24h; we refresh 5 min early.
+let cachedToken: string | null = null;
+let tokenExpiresAt = 0;
+const TOKEN_BUFFER_MS = 5 * 60 * 1000;
+
 export class ShopifyService {
+  private readonly shopDomain: string;
+  private readonly clientId: string;
+  private readonly clientSecret: string;
   private readonly baseUrl: string;
-  private readonly accessToken: string;
   private readonly timeout: number;
   private readonly retries: number;
 
   constructor() {
-    const shopDomain = config.shopify.shopDomain;
-    this.accessToken = config.shopify.accessToken;
-    this.baseUrl = `https://${shopDomain}/admin/api/2024-01`;
+    this.shopDomain = config.shopify.shopDomain;
+    this.clientId = config.shopify.clientId;
+    this.clientSecret = config.shopify.clientSecret;
+    this.baseUrl = `https://${this.shopDomain}/admin/api/2024-01`;
     this.timeout = externalServicesConfig.shopify.timeout;
     this.retries = externalServicesConfig.shopify.retries;
+  }
+
+  private async fetchAccessToken(): Promise<string> {
+    const url = `https://${this.shopDomain}/admin/oauth/access_token`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+      }).toString(),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new ShopifyServiceError(
+        `Shopify OAuth token request failed (${res.status}): ${text}`,
+        res.status
+      );
+    }
+
+    const data = (await res.json()) as { access_token: string; expires_in: number };
+
+    cachedToken = data.access_token;
+    tokenExpiresAt = Date.now() + data.expires_in * 1000 - TOKEN_BUFFER_MS;
+
+    return cachedToken;
+  }
+
+  private async getAccessToken(): Promise<string> {
+    if (cachedToken && Date.now() < tokenExpiresAt) {
+      return cachedToken;
+    }
+    return this.fetchAccessToken();
   }
 
   private async fetchWithRetry<T>(path: string): Promise<T> {
@@ -95,18 +130,26 @@ export class ShopifyService {
 
     for (let attempt = 0; attempt <= this.retries; attempt++) {
       try {
+        const token = await this.getAccessToken();
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
         try {
           const res = await fetch(`${this.baseUrl}${path}`, {
             headers: {
-              'X-Shopify-Access-Token': this.accessToken,
+              'X-Shopify-Access-Token': token,
               'Content-Type': 'application/json',
             },
             signal: controller.signal,
           });
           clearTimeout(timeoutId);
+
+          // 401 = token rejected — clear cache so next attempt re-fetches
+          if (res.status === 401 && attempt === 0) {
+            cachedToken = null;
+            tokenExpiresAt = 0;
+            throw new ShopifyServiceError('Token rejected (401) — will refresh', 401);
+          }
 
           if (!res.ok) {
             throw new ShopifyServiceError(

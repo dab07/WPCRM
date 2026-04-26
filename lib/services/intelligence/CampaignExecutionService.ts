@@ -219,7 +219,7 @@ export class CampaignExecutionService {
       await this.metaAds.syncAudienceMembers({
         audienceId: audience.id,
         emails,
-        phones: phones.length > 0 ? phones : undefined,
+        ...(phones.length > 0 && { phones }),
       });
     }
 

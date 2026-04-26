@@ -1,24 +1,23 @@
 // Environment configuration
 export const config = {
-  // Supabase
+
   supabase: {
     url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
     anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   },
-  
-  // AI Services
+
   gemini: {
     apiKey: process.env.GEMINI_API_KEY!,
   },
   
-  // N8N
+
   n8n: {
     baseUrl: process.env.N8N_BASE_URL || 'http://localhost:5678',
     apiKey: process.env.NEXT_PUBLIC_N8N_API_KEY!,
     authEnabled: process.env.N8N_API_KEY_AUTH_ENABLED === 'true',
   },
   
-  // WhatsApp
+
   whatsapp: {
     accessToken: process.env.WHATSAPP_ACCESS_TOKEN,
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
@@ -26,17 +25,18 @@ export const config = {
     provider: process.env.WHATSAPP_PROVIDER || 'meta',
   },
   
-  // Instagram
+
   instagram: {
     accessToken: process.env.INSTAGRAM_ACCESS_TOKEN,
     userId: process.env.INSTAGRAM_USER_ID,
     webhookVerifyToken: process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,
   },
 
-  // [NEW: brand-sync] — added 2026-04-11
+
   shopify: {
     shopDomain: process.env.SHOPIFY_SHOP_DOMAIN ?? '',
-    accessToken: process.env.SHOPIFY_ACCESS_TOKEN ?? '',
+    clientId: process.env.SHOPIFY_CLIENT_ID ?? '',
+    clientSecret: process.env.SHOPIFY_SECRET ?? '',
   },
 
   klaviyo: {
@@ -52,8 +52,7 @@ export const config = {
     adAccountId: process.env.META_ADS_ACCOUNT_ID ?? '',
     apiVersion: process.env.META_ADS_API_VERSION ?? 'v19.0',
   },
-  
-  // Application
+
   app: {
     environment: process.env.NODE_ENV || 'development',
     isDevelopment: process.env.NODE_ENV === 'development',
@@ -61,7 +60,6 @@ export const config = {
   },
 } as const;
 
-// Validation
 const requiredEnvVars = [
   'NEXT_PUBLIC_SUPABASE_URL',
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',
@@ -85,7 +83,6 @@ export const validateEnvironment = (): void => {
     );
   }
   
-  // Log warnings for optional variables
   const missingOptional = optionalEnvVars.filter(key => !process.env[key]);
   if (missingOptional.length > 0 && config.app.isDevelopment) {
     console.warn(
