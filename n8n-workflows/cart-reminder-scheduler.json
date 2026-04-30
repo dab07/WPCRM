@@ -1,0 +1,519 @@
+{
+  "name": "Workflow 2 — Cart Reminder (every 15 min)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 15 }]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 0],
+      "id": "schedule_15min",
+      "name": "Every 15 Minutes"
+    },
+
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/abandoned_carts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "recovered",          "value": "eq.false" },
+            { "name": "reminded_at",        "value": "is.null" },
+            { "name": "external_created_at","value": "lte.{{ new Date(Date.now() - 3600000).toISOString() }}" },
+            { "name": "select",             "value": "id,brand_id,email,customer_external_id,total_price,line_items,checkout_url,external_created_at" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [220, 0],
+      "id": "fetch_pending_carts",
+      "name": "Fetch Pending Carts",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase_service_key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Pass each cart as a separate item for the loop\nconst carts = $input.first().json;\nif (!Array.isArray(carts) || carts.length === 0) return [];\nreturn carts.map(cart => ({ json: cart }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "id": "split_carts",
+      "name": "Split Into Items"
+    },
+
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/orders",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "brand_id",           "value": "=eq.{{ $json.brand_id }}" },
+            { "name": "email",              "value": "=eq.{{ $json.email }}" },
+            { "name": "external_created_at","value": "=gt.{{ $json.external_created_at }}" },
+            { "name": "select",             "value": "id" },
+            { "name": "limit",              "value": "1" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [660, 0],
+      "id": "check_recovery",
+      "name": "Step 1 — Check Recovery",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase_service_key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Merge recovery result back with the cart item\nconst cart   = $('Split Into Items').item.json;\nconst orders = $input.first().json;\nconst alreadyRecovered = Array.isArray(orders) && orders.length > 0;\n\nreturn [{ json: { ...cart, already_recovered: alreadyRecovered } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0],
+      "id": "merge_recovery_flag",
+      "name": "Merge Recovery Flag"
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "not_recovered",
+              "leftValue": "={{ $json.already_recovered }}",
+              "rightValue": false,
+              "operator": { "type": "boolean", "operation": "equal" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "id": "if_not_recovered",
+      "name": "Already Recovered?"
+    },
+
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/abandoned_carts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "id", "value": "=eq.{{ $json.id }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"recovered\": true }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1320, -120],
+      "id": "mark_recovered",
+      "name": "Mark recovered=true (skip)",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase_service_key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "brand_id",          "value": "=eq.{{ $json.brand_id }}" },
+            { "name": "email",             "value": "=eq.{{ $json.email }}" },
+            { "name": "select",            "value": "id,first_name,accepts_marketing" },
+            { "name": "limit",             "value": "1" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1320, 120],
+      "id": "check_suppression",
+      "name": "Step 2 — Check Suppression",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase_service_key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const cart    = $('if_not_recovered').item.json;\nconst contacts = $input.first().json;\n\n// If contact exists and has opted out, suppress\nconst contact = Array.isArray(contacts) && contacts.length > 0 ? contacts[0] : null;\nconst suppressed = contact ? contact.accepts_marketing === false : false;\nconst firstName  = contact?.first_name ?? 'there';\n\nreturn [{ json: { ...cart, suppressed, first_name: firstName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 120],
+      "id": "merge_suppression",
+      "name": "Merge Suppression Flag"
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "not_suppressed",
+              "leftValue": "={{ $json.suppressed }}",
+              "rightValue": false,
+              "operator": { "type": "boolean", "operation": "equal" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1760, 120],
+      "id": "if_not_suppressed",
+      "name": "Suppressed?"
+    },
+
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/brands",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "id",     "value": "=eq.{{ $json.brand_id }}" },
+            { "name": "select", "value": "id,name,brand_category,email_platform" },
+            { "name": "limit",  "value": "1" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1980, 120],
+      "id": "fetch_brand_config",
+      "name": "Step 3 — Fetch Brand Config",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase_service_key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const cart  = $('if_not_suppressed').item.json;\nconst brands = $input.first().json;\n\nif (!Array.isArray(brands) || brands.length === 0) {\n  throw new Error(`Brand not found for id: ${cart.brand_id}`);\n}\n\nconst brand = brands[0];\n\n// Summarise line items for the prompt\nconst lineItemsSummary = (cart.line_items ?? []).map(i => `${i.quantity}x ${i.title} ($${i.price})`).join(', ');\n\nreturn [{\n  json: {\n    ...cart,\n    brand_name:     brand.name,\n    brand_category: brand.brand_category ?? 'retail',\n    email_platform: brand.email_platform ?? 'klaviyo',\n    line_items_summary: lineItemsSummary\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 120],
+      "id": "merge_brand_config",
+      "name": "Merge Brand Config"
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "Content-Type",      "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 1000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"You are a retention copywriter for {{ $json.brand_name }}, a {{ $json.brand_category }} brand.\\nA customer named {{ $json.first_name }} has left the following items in their cart: {{ $json.line_items_summary }}. The cart total is ${{ $json.total_price }}. Cart recovery link: {{ $json.checkout_url }}.\\nWrite a friendly, helpful reminder message.\\nOutput JSON only — no explanation, no markdown:\\n{\\\"email_subject\\\": string, \\\"email_body_html\\\": string (include the checkout_url as the CTA link), \\\"sms_message\\\": string (under 160 characters, include checkout_url)}\"\n    }\n  ]\n}",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2420, 120],
+      "id": "generate_content_claude",
+      "name": "Step 4 — Generate Content (Claude)",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "anthropic_api_key",
+          "name": "Anthropic API Key"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Parse Claude's JSON response and merge with cart context\nconst cart     = $('Merge Brand Config').item.json;\nconst response = $input.first().json;\n\n// Claude returns content[0].text — parse the JSON string inside\nlet generated;\ntry {\n  const rawText = response.content?.[0]?.text ?? '{}';\n  // Strip any accidental markdown fences\n  const cleaned = rawText.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  generated = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error(`Failed to parse Claude response: ${e.message}`);\n}\n\nreturn [{\n  json: {\n    ...cart,\n    email_subject:   generated.email_subject,\n    email_body_html: generated.email_body_html,\n    sms_message:     generated.sms_message\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 120],
+      "id": "parse_claude_response",
+      "name": "Parse Claude Response"
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "is_klaviyo",
+              "leftValue": "={{ $json.email_platform }}",
+              "rightValue": "klaviyo",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2860, 120],
+      "id": "route_by_platform",
+      "name": "Step 5 — Route by Platform"
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://a.klaviyo.com/api/campaigns/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "revision",     "value": "2024-02-15" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"type\": \"campaign\",\n    \"attributes\": {\n      \"name\": \"Cart Recovery — {{ $json.email }} — {{ $now }}\",\n      \"audiences\": {\n        \"included\": []\n      },\n      \"send_options\": { \"use_smart_sending\": false },\n      \"tracking_options\": { \"is_tracking_opens\": true, \"is_tracking_clicks\": true },\n      \"send_strategy\": { \"method\": \"immediate\" },\n      \"message\": {\n        \"channel\": \"email\",\n        \"label\": \"Cart Recovery\",\n        \"content\": {\n          \"subject\":    \"{{ $json.email_subject }}\",\n          \"preview_text\": \"You left something behind!\",\n          \"from_email\": \"noreply@{{ $json.brand_name.toLowerCase().replace(/\\\\s+/g, '') }}.com\",\n          \"from_label\": \"{{ $json.brand_name }}\",\n          \"reply_to_email\": \"noreply@{{ $json.brand_name.toLowerCase().replace(/\\\\s+/g, '') }}.com\",\n          \"body\": \"{{ $json.email_body_html }}\"\n        }\n      }\n    }\n  }\n}",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [3080, 0],
+      "id": "send_klaviyo",
+      "name": "Step 5a — Send via Klaviyo",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "klaviyo_api_key",
+          "name": "Klaviyo API Key"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.omnisend.com/v3/campaigns",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\":   \"Cart Recovery — {{ $json.email }} — {{ $now }}\",\n  \"type\":   \"regular\",\n  \"status\": \"draft\",\n  \"options\": {\n    \"sendToContacts\": [\"{{ $json.email }}\"]\n  },\n  \"content\": {\n    \"subject\":   \"{{ $json.email_subject }}\",\n    \"fromName\":  \"{{ $json.brand_name }}\",\n    \"fromEmail\": \"noreply@{{ $json.brand_name.toLowerCase().replace(/\\\\s+/g, '') }}.com\",\n    \"body\":      \"{{ $json.email_body_html }}\"\n  }\n}",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [3080, 240],
+      "id": "send_omnisend",
+      "name": "Step 5b — Send via Omnisend",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "omnisend_api_key",
+          "name": "Omnisend API Key"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Merge outputs from both branches back into a single item\nconst cart = $('Parse Claude Response').item.json;\nreturn [{ json: { cart_id: cart.id } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3300, 120],
+      "id": "merge_send_branches",
+      "name": "Merge Send Branches"
+    },
+
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/abandoned_carts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "id", "value": "=eq.{{ $json.cart_id }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"reminded_at\": \"{{ $now }}\" }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [3520, 120],
+      "id": "update_reminded_at",
+      "name": "Step 6 — Update reminded_at",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase_service_key",
+          "name": "Supabase Service Key"
+        }
+      }
+    }
+  ],
+
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [[{ "node": "Fetch Pending Carts",          "type": "main", "index": 0 }]]
+    },
+    "Fetch Pending Carts": {
+      "main": [[{ "node": "Split Into Items",             "type": "main", "index": 0 }]]
+    },
+    "Split Into Items": {
+      "main": [[{ "node": "Step 1 — Check Recovery",      "type": "main", "index": 0 }]]
+    },
+    "Step 1 — Check Recovery": {
+      "main": [[{ "node": "Merge Recovery Flag",          "type": "main", "index": 0 }]]
+    },
+    "Merge Recovery Flag": {
+      "main": [[{ "node": "Already Recovered?",           "type": "main", "index": 0 }]]
+    },
+    "Already Recovered?": {
+      "main": [
+        [{ "node": "Step 2 — Check Suppression",          "type": "main", "index": 0 }],
+        [{ "node": "Mark recovered=true (skip)",          "type": "main", "index": 0 }]
+      ]
+    },
+    "Step 2 — Check Suppression": {
+      "main": [[{ "node": "Merge Suppression Flag",       "type": "main", "index": 0 }]]
+    },
+    "Merge Suppression Flag": {
+      "main": [[{ "node": "Suppressed?",                  "type": "main", "index": 0 }]]
+    },
+    "Suppressed?": {
+      "main": [
+        [{ "node": "Step 3 — Fetch Brand Config",         "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Step 3 — Fetch Brand Config": {
+      "main": [[{ "node": "Merge Brand Config",           "type": "main", "index": 0 }]]
+    },
+    "Merge Brand Config": {
+      "main": [[{ "node": "Step 4 — Generate Content (Claude)", "type": "main", "index": 0 }]]
+    },
+    "Step 4 — Generate Content (Claude)": {
+      "main": [[{ "node": "Parse Claude Response",        "type": "main", "index": 0 }]]
+    },
+    "Parse Claude Response": {
+      "main": [[{ "node": "Step 5 — Route by Platform",  "type": "main", "index": 0 }]]
+    },
+    "Step 5 — Route by Platform": {
+      "main": [
+        [{ "node": "Step 5a — Send via Klaviyo",          "type": "main", "index": 0 }],
+        [{ "node": "Step 5b — Send via Omnisend",         "type": "main", "index": 0 }]
+      ]
+    },
+    "Step 5a — Send via Klaviyo": {
+      "main": [[{ "node": "Merge Send Branches",          "type": "main", "index": 0 }]]
+    },
+    "Step 5b — Send via Omnisend": {
+      "main": [[{ "node": "Merge Send Branches",          "type": "main", "index": 0 }]]
+    },
+    "Merge Send Branches": {
+      "main": [[{ "node": "Step 6 — Update reminded_at", "type": "main", "index": 0 }]]
+    }
+  },
+
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0ffa89d5a49b5ff561a64c0f5929b81768437fdf047cd876ce47c0015bdbc826"
+  }
+}

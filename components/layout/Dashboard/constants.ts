@@ -5,6 +5,7 @@ export const TABS: TabConfig[] = [
   { id: 'conversations', label: 'Conversations'},
   { id: 'contacts', label: 'Contacts'},
   { id: 'campaigns', label: 'Campaigns'},
+  { id: 'shopify', label: 'Shopify'},
   { id: 'triggers', label: 'Triggers'},
   { id: 'workflows', label: 'N8N'},
   { id: 'instagram', label: 'Instagram'},

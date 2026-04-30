@@ -1,0 +1,61 @@
+{
+  "name": "Collision Guard + Channel Assignment (Reusable Sub-Workflow)",
+  "nodes": [
+    {
+      "id": "manual_trigger",
+      "name": "When Called by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {}
+    },
+    {
+      "id": "check_collision",
+      "name": "Collision Guard — Check Recent Sends",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [220, 0],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/campaign_assets",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "brand_id",   "value": "=eq.{{ $json.brand_id }}" },
+            { "name": "status",     "value": "=eq.executed" },
+            { "name": "created_at", "value": "=gte.{{ new Date(Date.now() - 7*86400000).toISOString() }}" },
+            { "name": "select",     "value": "id,opportunity_id,channel,created_at,opportunities(target_segment)" },
+            { "name": "limit",      "value": "500" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "supabase_service_key", "name": "Supabase Service Key" } }
+    },
+    {
+      "id": "evaluate_collision",
+      "name": "Evaluate Collision + Assign Channel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "parameters": {
+        "jsCode": "// Input expected on $json:\n//   brand_id, contact_email, stage, opportunity_stage (alias for stage)\n// Returns: { allowed: bool, reason: string, assigned_channels: string[] }\n\nconst input        = $input.first().json;\nconst recentAssets = $('Collision Guard — Check Recent Sends').first().json;\n\nconst contactEmail    = input.contact_email ?? '';\nconst stage           = input.stage ?? input.opportunity_stage ?? 'post_purchase';\n\n// ---------------------------------------------------------------\n// COLLISION CHECK\n// Check if this contact's email appears in any target_segment of\n// an executed campaign asset in the last 7 days.\n// ---------------------------------------------------------------\nconst assets = Array.isArray(recentAssets) ? recentAssets : [];\nconst alreadySent = assets.some(a => {\n  const seg = a.opportunities?.target_segment ?? '';\n  return seg.includes(contactEmail);\n});\n\nif (alreadySent) {\n  return [{ json: { allowed: false, reason: 'Contact received a campaign in the last 7 days', assigned_channels: [] } }];\n}\n\n// ---------------------------------------------------------------\n// CHANNEL ASSIGNMENT RULE (deterministic — not AI-decided)\n// ---------------------------------------------------------------\nlet assigned_channels = [];\n\nif (stage === 'pre_purchase') {\n  // abandoned cart / welcome — email + sms\n  assigned_channels = ['email', 'sms'];\n} else if (stage === 'first_purchase') {\n  // nurture — email only\n  assigned_channels = ['email'];\n} else if (stage === 'post_purchase') {\n  const segment = (input.target_segment ?? '').toLowerCase();\n  if (segment.includes('at-risk') || segment.includes('lapsed') ||\n      segment.includes('inactive') || segment.includes('win_back') ||\n      segment.includes('win back')) {\n    // Highest urgency — whatsapp + email\n    assigned_channels = ['whatsapp', 'email'];\n  } else {\n    // Repeat / repurchase window — email primary, sms secondary\n    assigned_channels = ['email', 'sms'];\n  }\n}\n\nreturn [{ json: { allowed: true, reason: 'OK', assigned_channels } }];"
+      }
+    }
+  ],
+  "connections": {
+    "When Called by Another Workflow": {
+      "main": [[{ "node": "Collision Guard — Check Recent Sends", "type": "main", "index": 0 }]]
+    },
+    "Collision Guard — Check Recent Sends": {
+      "main": [[{ "node": "Evaluate Collision + Assign Channel", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0ffa89d5a49b5ff561a64c0f5929b81768437fdf047cd876ce47c0015bdbc826"
+  }
+}

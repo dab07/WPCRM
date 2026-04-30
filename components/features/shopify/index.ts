@@ -1,0 +1,1 @@
+export { ShopifyPanel } from './ShopifyPanel';

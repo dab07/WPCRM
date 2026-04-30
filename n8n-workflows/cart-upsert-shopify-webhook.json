@@ -1,0 +1,135 @@
+{
+  "name": "Workflow 1 — Cart Upsert (Shopify carts/update)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shopify-cart-update",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "wh_cart_upsert",
+      "name": "Shopify carts/update Webhook",
+      "webhookId": "shopify-cart-update"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract cart payload and shop domain from the Shopify webhook\nconst body   = $input.first().json.body ?? $input.first().json;\nconst headers = $input.first().json.headers ?? {};\n\n// Shopify sends the shop domain in the X-Shopify-Shop-Domain header\nconst shopDomain = headers['x-shopify-shop-domain'] ?? headers['X-Shopify-Shop-Domain'] ?? '';\n\nif (!shopDomain) throw new Error('Missing X-Shopify-Shop-Domain header');\nif (!body.id)    throw new Error('Missing cart id in payload');\n\n// Normalise line_items to a clean array\nconst lineItems = (body.line_items ?? []).map(item => ({\n  variant_id:   item.variant_id,\n  product_id:   item.product_id,\n  title:        item.title,\n  quantity:     item.quantity,\n  price:        item.price,\n  sku:          item.sku ?? null\n}));\n\nreturn [{\n  json: {\n    shop_domain:          shopDomain,\n    external_id:          String(body.id),\n    token:                body.token ?? null,\n    email:                body.email ?? null,\n    customer_external_id: body.customer?.id ? String(body.customer.id) : null,\n    total_price:          parseFloat(body.total_price ?? '0'),\n    line_items:           lineItems,\n    checkout_url:         body.abandoned_checkout_url ?? null,\n    external_created_at:  body.created_at ?? null,\n    external_updated_at:  body.updated_at ?? null\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "extract_cart_data",
+      "name": "Extract Cart Data"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/brands",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "domain", "value": "=eq.{{ $json.shop_domain }}" },
+            { "name": "select", "value": "id,name" },
+            { "name": "limit",  "value": "1" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [440, 0],
+      "id": "lookup_brand",
+      "name": "Lookup Brand by Shop Domain",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase_service_key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cart   = $('Extract Cart Data').first().json;\nconst brands = $input.first().json;\n\nif (!Array.isArray(brands) || brands.length === 0) {\n  throw new Error(`No brand found for shop domain: ${cart.shop_domain}`);\n}\n\nreturn [{\n  json: {\n    ...cart,\n    brand_id: brands[0].id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "id": "merge_brand_id",
+      "name": "Merge brand_id"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/abandoned_carts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Prefer", "value": "resolution=merge-duplicates,return=representation" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"brand_id\":             \"{{ $json.brand_id }}\",\n  \"external_id\":          \"{{ $json.external_id }}\",\n  \"token\":                {{ $json.token ? JSON.stringify($json.token) : 'null' }},\n  \"email\":                {{ $json.email ? JSON.stringify($json.email) : 'null' }},\n  \"customer_external_id\": {{ $json.customer_external_id ? JSON.stringify($json.customer_external_id) : 'null' }},\n  \"total_price\":          {{ $json.total_price }},\n  \"line_items\":           {{ JSON.stringify($json.line_items) }},\n  \"checkout_url\":         {{ $json.checkout_url ? JSON.stringify($json.checkout_url) : 'null' }},\n  \"external_created_at\":  {{ $json.external_created_at ? JSON.stringify($json.external_created_at) : 'null' }},\n  \"external_updated_at\":  {{ $json.external_updated_at ? JSON.stringify($json.external_updated_at) : 'null' }}\n}",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [880, 0],
+      "id": "upsert_cart",
+      "name": "Upsert abandoned_carts",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase_service_key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1100, 0],
+      "id": "respond_ok",
+      "name": "Respond 200 OK"
+    }
+  ],
+  "connections": {
+    "Shopify carts/update Webhook": {
+      "main": [[{ "node": "Extract Cart Data",            "type": "main", "index": 0 }]]
+    },
+    "Extract Cart Data": {
+      "main": [[{ "node": "Lookup Brand by Shop Domain",  "type": "main", "index": 0 }]]
+    },
+    "Lookup Brand by Shop Domain": {
+      "main": [[{ "node": "Merge brand_id",               "type": "main", "index": 0 }]]
+    },
+    "Merge brand_id": {
+      "main": [[{ "node": "Upsert abandoned_carts",       "type": "main", "index": 0 }]]
+    },
+    "Upsert abandoned_carts": {
+      "main": [[{ "node": "Respond 200 OK",               "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0ffa89d5a49b5ff561a64c0f5929b81768437fdf047cd876ce47c0015bdbc826"
+  }
+}

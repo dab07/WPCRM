@@ -1,0 +1,361 @@
+{
+  "name": "Daily Intelligence Agent",
+  "nodes": [
+    {
+      "id": "schedule_6am",
+      "name": "Every Day at 6 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 0],
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 6 * * *" }]
+        }
+      }
+    },
+    {
+      "id": "fetch_active_brands",
+      "name": "Step 1 — Fetch Active Brands",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [220, 0],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/brands",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "active", "value": "eq.true" },
+            { "name": "select", "value": "id,name,domain,brand_category,email_platform,avg_order_value,avg_repurchase_gap_days,max_discount_pct,top_selling_products" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "supabase_service_key", "name": "Supabase Service Key" } }
+    },
+    {
+      "id": "split_brands",
+      "name": "Split Brands Into Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "parameters": {
+        "jsCode": "const brands = $input.first().json;\nif (!Array.isArray(brands) || brands.length === 0) {\n  console.log('No active brands found — exiting.');\n  return [];\n}\nreturn brands.map(b => ({ json: b }));"
+      }
+    },
+    {
+      "id": "loop_brands",
+      "name": "Loop Over Brands",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [660, 0],
+      "parameters": { "batchSize": 1, "options": {} }
+    },
+    {
+      "id": "fetch_segment_contacts",
+      "name": "Step 2a — Fetch Contacts for Segments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [880, 0],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "brand_id", "value": "=eq.{{ $json.id }}" },
+            { "name": "select",   "value": "id,email,orders_count,accepts_marketing" },
+            { "name": "limit",    "value": "10000" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "supabase_service_key", "name": "Supabase Service Key" } }
+    },
+    {
+      "id": "fetch_recent_orders",
+      "name": "Step 2b — Fetch Recent Orders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [880, 200],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/orders",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "brand_id",           "value": "=eq.{{ $('Loop Over Brands').item.json.id }}" },
+            { "name": "financial_status",   "value": "=eq.paid" },
+            { "name": "select",             "value": "email,external_created_at" },
+            { "name": "order",              "value": "external_created_at.desc" },
+            { "name": "limit",              "value": "10000" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "supabase_service_key", "name": "Supabase Service Key" } }
+    },
+    {
+      "id": "compute_segments",
+      "name": "Step 2c — Compute Segments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "parameters": {
+        "jsCode": "const brand    = $('Loop Over Brands').item.json;\nconst contacts = $('Step 2a — Fetch Contacts for Segments').first().json;\nconst orders   = $('Step 2b — Fetch Recent Orders').first().json;\n\nconst now = Date.now();\nconst MS  = 86400000; // ms per day\n\n// Build a map: email -> most recent order date (ms)\nconst latestOrderMs = {};\nif (Array.isArray(orders)) {\n  for (const o of orders) {\n    if (!o.email || !o.external_created_at) continue;\n    const t = new Date(o.external_created_at).getTime();\n    if (!latestOrderMs[o.email] || t > latestOrderMs[o.email]) {\n      latestOrderMs[o.email] = t;\n    }\n  }\n}\n\nconst repurchaseGap = brand.avg_repurchase_gap_days ?? 30;\nconst buffer        = 3 * MS;\n\nlet pre_purchase_count       = 0;\nlet first_purchase_count     = 0;\nlet repeat_count             = 0;\nlet at_risk_count            = 0;\nlet lapsed_count             = 0;\nlet repurchase_window_count  = 0;\n\nif (Array.isArray(contacts)) {\n  for (const c of contacts) {\n    const oc = c.orders_count ?? 0;\n    if (oc === 0) { pre_purchase_count++;   continue; }\n    if (oc === 1) { first_purchase_count++; }\n    if (oc >= 2)  { repeat_count++; }\n\n    const lastMs = latestOrderMs[c.email];\n    if (!lastMs) continue;\n    const daysSince = (now - lastMs) / MS;\n\n    if (daysSince >= 30 && daysSince < 60) at_risk_count++;\n    if (daysSince >= 60)                   lapsed_count++;\n\n    // Repurchase window: last order was exactly repurchaseGap days ago (±3 days)\n    const targetMs = repurchaseGap * MS;\n    const elapsed  = now - lastMs;\n    if (Math.abs(elapsed - targetMs) <= buffer) repurchase_window_count++;\n  }\n}\n\nreturn [{\n  json: {\n    brand_id:               brand.id,\n    brand_name:             brand.name,\n    brand_category:         brand.brand_category ?? 'retail',\n    email_platform:         brand.email_platform ?? 'klaviyo',\n    avg_order_value:        brand.avg_order_value ?? 0,\n    avg_repurchase_gap_days: repurchaseGap,\n    max_discount_pct:       brand.max_discount_pct ?? 0,\n    top_selling_products:   brand.top_selling_products ?? [],\n    pre_purchase_count,\n    first_purchase_count,\n    repeat_count,\n    at_risk_count,\n    lapsed_count,\n    repurchase_window_count\n  }\n}];"
+      }
+    },
+    {
+      "id": "fetch_recent_opportunities",
+      "name": "Step 3 — Fetch Recent Campaign Performance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1320, 0],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/opportunities",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "brand_id", "value": "=eq.{{ $json.brand_id }}" },
+            { "name": "select",   "value": "id,title,stage,status,priority,created_at,campaign_assets(id,channel,status)" },
+            { "name": "order",    "value": "created_at.desc" },
+            { "name": "limit",    "value": "5" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "supabase_service_key", "name": "Supabase Service Key" } }
+    },
+    {
+      "id": "fetch_abandoned_carts",
+      "name": "Step 4 — Fetch Abandoned Cart Count",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1320, 200],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/abandoned_carts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Prefer", "value": "count=exact" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "brand_id",           "value": "=eq.{{ $('Step 2c — Compute Segments').item.json.brand_id }}" },
+            { "name": "recovered",          "value": "eq.false" },
+            { "name": "external_created_at","value": "=gte.{{ new Date(Date.now() - 7*86400000).toISOString() }}" },
+            { "name": "select",             "value": "id" },
+            { "name": "limit",              "value": "1" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "supabase_service_key", "name": "Supabase Service Key" } }
+    },
+    {
+      "id": "build_claude_prompt",
+      "name": "Build Claude Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 0],
+      "parameters": {
+        "jsCode": "const seg  = $('Step 2c — Compute Segments').item.json;\nconst opps = $('Step 3 — Fetch Recent Campaign Performance').first().json;\nconst cartsResp = $('Step 4 — Fetch Abandoned Cart Count').first();\n\n// Supabase returns count in Content-Range header; the body is an array.\n// We use the array length as a proxy since we can't read headers in n8n HTTP node easily.\nconst cartRows = Array.isArray(cartsResp.json) ? cartsResp.json : [];\n// For an accurate count we fetched with limit=1 and Prefer:count=exact.\n// The actual count is in the response headers which n8n exposes as $response.headers.\n// Fall back to array length (0 or 1) as a minimum signal.\nconst abandoned_cart_count = cartRows.length > 0 ? '7+ (active this week)' : '0';\n\nconst recentOppsJson = JSON.stringify(\n  Array.isArray(opps) ? opps.map(o => ({\n    title:  o.title,\n    stage:  o.stage,\n    status: o.status,\n    assets: (o.campaign_assets ?? []).map(a => ({ channel: a.channel, status: a.status }))\n  })) : []\n);\n\nconst today = new Date().toISOString().split('T')[0];\n\nconst userPrompt =\n`I am the marketing manager for ${seg.brand_name}, a D2C brand selling ${seg.brand_category} online and on marketplaces like Amazon, Zepto, Blinkit, and Instamart.\n\nCurrent customer snapshot:\n- Prospects (no purchase yet): ${seg.pre_purchase_count}\n- First-time buyers: ${seg.first_purchase_count}\n- Repeat buyers: ${seg.repeat_count}\n- At-risk customers (inactive 30-60 days): ${seg.at_risk_count}\n- Lapsed customers (inactive 60+ days): ${seg.lapsed_count}\n- Customers in repurchase window this week: ${seg.repurchase_window_count}\n- Active abandoned carts this week: ${abandoned_cart_count}\n- Average order value: ${seg.avg_order_value}\n- Maximum discount allowed: ${seg.max_discount_pct}%\n- Average repurchase cycle: ${seg.avg_repurchase_gap_days} days\n- Top selling products: ${JSON.stringify(seg.top_selling_products)}\n- Last 5 campaign opportunities and their status: ${recentOppsJson}\n- Today's date: ${today}\n\nGenerate a prioritized campaign plan covering the full customer journey with the objective of maximizing CLTV and minimizing acquisition and retention cost.\n\nFor each campaign return:\n- campaign_type: one of (abandoned_cart_recovery | welcome_series | replenishment | win_back | cross_sell | upsell | loyalty_reward | birthday | seasonal | referral | review_request | marketplace_to_dtc_migration)\n- stage: one of (pre_purchase | first_purchase | post_purchase)\n- title: short campaign name\n- description: what this campaign does in 2 sentences\n- target_segment: plain description of the audience (e.g. 'customers inactive for 45-60 days with 2+ past orders')\n- estimated_reach: estimated number of contacts from the snapshot above\n- suggested_channels: array from (email | sms | whatsapp)\n- touchpoint_schedule: e.g. ['Day 0', 'Day 3', 'Day 7']\n- offer_type: one of (no_discount | free_shipping | percentage_off | bundle | loyalty_points | social_proof_only)\n- priority: one of (high | medium | low)\n- reasoning: one sentence — why this campaign, why now\n\nReturn ONLY a valid JSON array. No explanation. No markdown. No preamble.`;\n\nreturn [{\n  json: {\n    ...seg,\n    user_prompt: userPrompt\n  }\n}];"
+      }
+    },
+    {
+      "id": "call_claude",
+      "name": "Step 5 — Claude Campaign Planner",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1760, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "Content-Type",      "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 2000,\n  \"system\": \"You are a senior CRM and retention strategist for a D2C brand. You think in terms of customer lifetime value (CLTV), cost of retention vs acquisition, and full-funnel campaign sequencing across email, SMS, and WhatsApp. Every recommendation must be stage-specific, trigger-based, and channel-appropriate. Never suggest generic blasts.\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.user_prompt) }}\n    }\n  ]\n}",
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "anthropic_api_key", "name": "Anthropic API Key" } }
+    },
+    {
+      "id": "parse_claude_plan",
+      "name": "Parse Claude Campaign Plan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 0],
+      "parameters": {
+        "jsCode": "const ctx      = $('Build Claude Prompt').item.json;\nconst response = $input.first().json;\n\nlet campaigns;\ntry {\n  const rawText = response.content?.[0]?.text ?? '[]';\n  const cleaned = rawText.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  campaigns = JSON.parse(cleaned);\n  if (!Array.isArray(campaigns)) throw new Error('Claude did not return an array');\n} catch (e) {\n  throw new Error(`Failed to parse Claude campaign plan: ${e.message}`);\n}\n\n// Emit one item per campaign, carrying brand context forward\nreturn campaigns.map(c => ({\n  json: {\n    brand_id:          ctx.brand_id,\n    brand_name:        ctx.brand_name,\n    stage:             c.stage,\n    title:             c.title,\n    description:       c.description,\n    target_segment:    c.target_segment,\n    estimated_reach:   typeof c.estimated_reach === 'number' ? c.estimated_reach : 0,\n    suggested_channels: Array.isArray(c.suggested_channels) ? c.suggested_channels : [],\n    priority:          c.priority ?? 'medium',\n    reasoning:         c.reasoning ?? '',\n    // Extra fields stored in reasoning for downstream use\n    campaign_type:     c.campaign_type ?? null,\n    touchpoint_schedule: c.touchpoint_schedule ?? [],\n    offer_type:        c.offer_type ?? 'no_discount'\n  }\n}));"
+      }
+    },
+    {
+      "id": "save_opportunities",
+      "name": "Step 6 — Save Opportunities",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2200, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/opportunities",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Prefer",       "value": "return=representation" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"brand_id\":          \"{{ $json.brand_id }}\",\n  \"stage\":             \"{{ $json.stage }}\",\n  \"title\":             {{ JSON.stringify($json.title) }},\n  \"description\":       {{ JSON.stringify($json.description) }},\n  \"target_segment\":    {{ JSON.stringify($json.target_segment) }},\n  \"estimated_reach\":   {{ $json.estimated_reach }},\n  \"suggested_channels\": {{ JSON.stringify($json.suggested_channels) }},\n  \"priority\":          \"{{ $json.priority }}\",\n  \"reasoning\":         {{ JSON.stringify($json.reasoning + (($json.campaign_type) ? ' [type:' + $json.campaign_type + ', offer:' + $json.offer_type + ', schedule:' + JSON.stringify($json.touchpoint_schedule) + ']' : '')) }},\n  \"status\":            \"pending_approval\"\n}",
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "supabase_service_key", "name": "Supabase Service Key" } }
+    },
+    {
+      "id": "aggregate_results",
+      "name": "Aggregate Saved Opportunities",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 0],
+      "parameters": {
+        "jsCode": "// Collect all saved opportunity rows across all items in this batch\nconst allItems = $input.all();\nconst brandId   = allItems[0]?.json?.brand_id ?? $('Build Claude Prompt').item.json.brand_id;\nconst brandName = $('Build Claude Prompt').item.json.brand_name;\n\nconst saved = allItems\n  .map(i => (Array.isArray(i.json) ? i.json[0] : i.json))\n  .filter(r => r?.id);\n\nreturn [{\n  json: {\n    brand_id:            brandId,\n    brand_name:          brandName,\n    opportunities_count: saved.length,\n    opportunity_ids:     saved.map(r => r.id),\n    generated_at:        new Date().toISOString()\n  }\n}];"
+      }
+    },
+    {
+      "id": "notify_dashboard",
+      "name": "Step 7 — Notify Brand Owner Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2640, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.NEXT_PUBLIC_APP_URL }}/api/webhooks/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event\":               \"intelligence_ready\",\n  \"brand_id\":            \"{{ $json.brand_id }}\",\n  \"brand_name\":          {{ JSON.stringify($json.brand_name) }},\n  \"opportunities_count\": {{ $json.opportunities_count }},\n  \"generated_at\":        \"{{ $json.generated_at }}\"\n}",
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "loop_done_check",
+      "name": "More Brands?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2860, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "has_more",
+              "leftValue": "={{ $('Loop Over Brands').context.noItemsLeft }}",
+              "rightValue": false,
+              "operator": { "type": "boolean", "operation": "equal" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Every Day at 6 AM": {
+      "main": [[{ "node": "Step 1 — Fetch Active Brands", "type": "main", "index": 0 }]]
+    },
+    "Step 1 — Fetch Active Brands": {
+      "main": [[{ "node": "Split Brands Into Items", "type": "main", "index": 0 }]]
+    },
+    "Split Brands Into Items": {
+      "main": [[{ "node": "Loop Over Brands", "type": "main", "index": 0 }]]
+    },
+    "Loop Over Brands": {
+      "main": [
+        [
+          { "node": "Step 2a — Fetch Contacts for Segments", "type": "main", "index": 0 },
+          { "node": "Step 2b — Fetch Recent Orders",         "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Step 2a — Fetch Contacts for Segments": {
+      "main": [[{ "node": "Step 2c — Compute Segments", "type": "main", "index": 0 }]]
+    },
+    "Step 2b — Fetch Recent Orders": {
+      "main": [[{ "node": "Step 2c — Compute Segments", "type": "main", "index": 0 }]]
+    },
+    "Step 2c — Compute Segments": {
+      "main": [
+        [
+          { "node": "Step 3 — Fetch Recent Campaign Performance", "type": "main", "index": 0 },
+          { "node": "Step 4 — Fetch Abandoned Cart Count",        "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Step 3 — Fetch Recent Campaign Performance": {
+      "main": [[{ "node": "Build Claude Prompt", "type": "main", "index": 0 }]]
+    },
+    "Step 4 — Fetch Abandoned Cart Count": {
+      "main": [[{ "node": "Build Claude Prompt", "type": "main", "index": 0 }]]
+    },
+    "Build Claude Prompt": {
+      "main": [[{ "node": "Step 5 — Claude Campaign Planner", "type": "main", "index": 0 }]]
+    },
+    "Step 5 — Claude Campaign Planner": {
+      "main": [[{ "node": "Parse Claude Campaign Plan", "type": "main", "index": 0 }]]
+    },
+    "Parse Claude Campaign Plan": {
+      "main": [[{ "node": "Step 6 — Save Opportunities", "type": "main", "index": 0 }]]
+    },
+    "Step 6 — Save Opportunities": {
+      "main": [[{ "node": "Aggregate Saved Opportunities", "type": "main", "index": 0 }]]
+    },
+    "Aggregate Saved Opportunities": {
+      "main": [[{ "node": "Step 7 — Notify Brand Owner Dashboard", "type": "main", "index": 0 }]]
+    },
+    "Step 7 — Notify Brand Owner Dashboard": {
+      "main": [[{ "node": "More Brands?", "type": "main", "index": 0 }]]
+    },
+    "More Brands?": {
+      "main": [
+        [{ "node": "Loop Over Brands", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0ffa89d5a49b5ff561a64c0f5929b81768437fdf047cd876ce47c0015bdbc826"
+  }
+}

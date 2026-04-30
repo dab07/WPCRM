@@ -1,0 +1,679 @@
+{
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0ffa89d5a49b5ff561a64c0f5929b81768437fdf047cd876ce47c0015bdbc826"
+  },
+  "pinData": {},
+  "nodes": [
+    {
+      "id": "wh_order_create",
+      "name": "Shopify orders/create Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "shopify-order-create-crosssell",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shopify-order-create-crosssell",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "extract_enrich",
+      "name": "Step 1 — Extract & Enrich",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "jsCode": "const body    = $input.first().json.body ?? $input.first().json;\nconst headers = $input.first().json.headers ?? {};\n\nconst shopDomain = headers['x-shopify-shop-domain'] ?? headers['X-Shopify-Shop-Domain'] ?? '';\nif (!shopDomain) throw new Error('Missing X-Shopify-Shop-Domain header');\nif (!body.id)    throw new Error('Missing order id in payload');\n\nconst lineItems = (body.line_items ?? []).map(i => ({\n  product_id: i.product_id,\n  variant_id: i.variant_id,\n  title:      i.title,\n  quantity:   i.quantity,\n  price:      i.price\n}));\n\nconst purchasedTitles = lineItems.map(i => i.title).join(', ');\n\nreturn [{\n  json: {\n    shop_domain:          shopDomain,\n    order_id:             String(body.id),\n    order_external_id:    String(body.id),\n    email:                body.email ?? null,\n    customer_external_id: body.customer?.id ? String(body.customer.id) : null,\n    financial_status:     body.financial_status ?? null,\n    line_items:           lineItems,\n    purchased_titles:     purchasedTitles,\n    purchased_product_ids: lineItems.map(i => i.product_id).filter(Boolean)\n  }\n}];"
+      }
+    },
+    {
+      "id": "lookup_brand",
+      "name": "Lookup Brand by Shop Domain",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [440, 0],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/brands",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "domain", "value": "=eq.{{ $json.shop_domain }}" },
+            { "name": "select", "value": "id,name,brand_category,email_platform" },
+            { "name": "limit",  "value": "1" }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase_service_key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+    {
+      "id": "merge_brand",
+      "name": "Merge Brand into Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "parameters": {
+        "jsCode": "const order  = $('Step 1 — Extract & Enrich').first().json;\nconst brands = $input.first().json;\n\nif (!Array.isArray(brands) || brands.length === 0) {\n  throw new Error(`No brand found for shop domain: ${order.shop_domain}`);\n}\nconst brand = brands[0];\n\nreturn [{\n  json: {\n    ...order,\n    brand_id:       brand.id,\n    brand_name:     brand.name,\n    brand_category: brand.brand_category ?? 'retail',\n    email_platform: brand.email_platform ?? 'klaviyo'\n  }\n}];"
+      }
+    },
+    {
+      "id": "lookup_contact",
+      "name": "Lookup Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [880, 0],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "brand_id", "value": "=eq.{{ $json.brand_id }}" },
+            { "name": "email",    "value": "=eq.{{ $json.email }}" },
+            { "name": "select",   "value": "id,first_name,orders_count,accepts_marketing" },
+            { "name": "limit",    "value": "1" }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase_service_key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+    {
+      "id": "lookup_order_record",
+      "name": "Lookup Order Record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1100, 0],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/orders",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "brand_id",    "value": "=eq.{{ $('Merge Brand into Context').first().json.brand_id }}" },
+            { "name": "external_id", "value": "=eq.{{ $('Merge Brand into Context').first().json.order_external_id }}" },
+            { "name": "select",      "value": "id,financial_status,cross_sell_sent_at" },
+            { "name": "limit",       "value": "1" }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase_service_key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+    {
+      "id": "guard_checks",
+      "name": "Step 2 — Guard Checks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 0],
+      "parameters": {
+        "jsCode": "const ctx      = $('Merge Brand into Context').first().json;\nconst contacts = $('Lookup Contact').first().json;\nconst orders   = $('Lookup Order Record').first().json;\n\nconst contact = Array.isArray(contacts) && contacts.length > 0 ? contacts[0] : null;\nconst order   = Array.isArray(orders)   && orders.length   > 0 ? orders[0]   : null;\n\n// Guard 1: accepts_marketing\nif (!contact || contact.accepts_marketing !== true) {\n  return [{ json: { pass: false, reason: 'accepts_marketing is false or contact not found' } }];\n}\n\n// Guard 2: financial_status must be paid\nconst financialStatus = order?.financial_status ?? ctx.financial_status;\nif (financialStatus !== 'paid') {\n  return [{ json: { pass: false, reason: `financial_status is '${financialStatus}', not 'paid'` } }];\n}\n\n// Guard 3: cross_sell_sent_at must be null\nif (order?.cross_sell_sent_at !== null && order?.cross_sell_sent_at !== undefined) {\n  return [{ json: { pass: false, reason: 'cross_sell already sent for this order' } }];\n}\n\nreturn [{\n  json: {\n    pass:       true,\n    order_db_id: order?.id ?? null,\n    first_name:  contact?.first_name ?? 'there',\n    ...ctx\n  }\n}];"
+      }
+    },
+    {
+      "id": "if_guards_pass",
+      "name": "Guards Pass?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1540, 0],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "guard_pass",
+              "leftValue": "={{ $json.pass }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "respond_early_ok",
+      "name": "Respond 200 (skipped)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1760, -120],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true, \"skipped\": true }",
+        "options": {}
+      }
+    },
+    {
+      "id": "respond_accepted",
+      "name": "Respond 202 Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1760, 120],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true, \"status\": \"processing\" }",
+        "options": {}
+      }
+    },
+    {
+      "id": "wait_24h",
+      "name": "Step 3 — Wait 24 Hours",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1980, 120],
+      "webhookId": "wait-24h-crosssell",
+      "parameters": {
+        "unit": "hours",
+        "amount": 24
+      }
+    },
+    {
+      "id": "fetch_shopify_products",
+      "name": "Step 4 — Fetch Shopify Products",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2200, 120],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://{{ $json.shop_domain }}/admin/api/2024-01/products.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "limit",  "value": "50" },
+            { "name": "fields", "value": "id,title,product_type,tags" },
+            { "name": "status", "value": "active" }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "shopify_access_token",
+          "name": "Shopify Access Token"
+        }
+      }
+    },
+    {
+      "id": "filter_catalog",
+      "name": "Filter & Build Catalog",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 120],
+      "parameters": {
+        "jsCode": "const ctx      = $('Step 2 — Guard Checks').item.json;\nconst response = $input.first().json;\n\nconst purchasedIds = new Set((ctx.purchased_product_ids ?? []).map(String));\n\nconst catalog = (response.products ?? [])\n  .filter(p => !purchasedIds.has(String(p.id)))\n  .map(p => ({\n    title:        p.title,\n    product_type: p.product_type ?? '',\n    tags:         p.tags ?? ''\n  }));\n\nreturn [{\n  json: {\n    ...ctx,\n    catalog_json: JSON.stringify(catalog)\n  }\n}];"
+      }
+    },
+
+    {
+      "id": "generate_recommendations",
+      "name": "Step 5 — Generate Recommendations (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2640, 120],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "Content-Type",      "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 1000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"You are a product recommendation engine for {{ $json.brand_name }}, a {{ $json.brand_category }} brand.\\nA customer just purchased: {{ $json.purchased_titles }}.\\nHere is the brand's product catalog (excluding what was just bought): {{ $json.catalog_json }}.\\nIdentify the 3 most logical complementary products the customer would benefit from.\\nThink in terms of accessory fit and usage workflow — for example: guitar → capo, picks, strings, tuner; mosquito repellent machine → refill pack, travel size, room spray.\\nOutput JSON only — no explanation, no markdown:\\n{\\\"recommendations\\\": [{\\\"product_title\\\": string, \\\"reason\\\": string}], \\\"email_subject\\\": string, \\\"email_body_html\\\": string, \\\"sms_message\\\": string (under 160 characters)}\"\n    }\n  ]\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "anthropic_api_key",
+          "name": "Anthropic API Key"
+        }
+      }
+    },
+    {
+      "id": "parse_claude",
+      "name": "Parse Claude Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 120],
+      "parameters": {
+        "jsCode": "const ctx      = $('Filter & Build Catalog').item.json;\nconst response = $input.first().json;\n\nlet generated;\ntry {\n  const rawText = response.content?.[0]?.text ?? '{}';\n  const cleaned = rawText.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  generated = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error(`Failed to parse Claude response: ${e.message}`);\n}\n\nconst reasoningSummary = (generated.recommendations ?? [])\n  .map(r => `${r.product_title}: ${r.reason}`)\n  .join(' | ');\n\nconst firstPurchasedTitle = (ctx.line_items?.[0]?.title ?? 'your recent purchase');\n\nreturn [{\n  json: {\n    ...ctx,\n    email_subject:    generated.email_subject,\n    email_body_html:  generated.email_body_html,\n    sms_message:      generated.sms_message,\n    reasoning_summary: reasoningSummary,\n    first_purchased_title: firstPurchasedTitle\n  }\n}];"
+      }
+    },
+    {
+      "id": "save_opportunity",
+      "name": "Step 6 — Save Opportunity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [3080, 120],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/opportunities",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Prefer",       "value": "return=representation" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"brand_id\":          \"{{ $json.brand_id }}\",\n  \"stage\":             \"post_purchase\",\n  \"title\":             \"Cross-sell: {{ $json.first_purchased_title }}\",\n  \"description\":       {{ JSON.stringify($json.reasoning_summary) }},\n  \"target_segment\":    {{ JSON.stringify($json.email) }},\n  \"estimated_reach\":   1,\n  \"suggested_channels\": [\"email\", \"sms\"],\n  \"priority\":          \"medium\",\n  \"reasoning\":         {{ JSON.stringify($json.reasoning_summary) }},\n  \"status\":            \"approved\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase_service_key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+    {
+      "id": "merge_opportunity_id",
+      "name": "Merge Opportunity ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3300, 120],
+      "parameters": {
+        "jsCode": "const ctx         = $('Parse Claude Response').item.json;\nconst opportunity = Array.isArray($input.first().json)\n  ? $input.first().json[0]\n  : $input.first().json;\n\nif (!opportunity?.id) throw new Error('Opportunity insert did not return an id');\n\nreturn [{\n  json: {\n    ...ctx,\n    opportunity_id: opportunity.id\n  }\n}];"
+      }
+    },
+    {
+      "id": "save_campaign_asset",
+      "name": "Step 7 — Save Campaign Asset",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [3520, 120],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/campaign_assets",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Prefer",       "value": "return=representation" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"opportunity_id\": \"{{ $json.opportunity_id }}\",\n  \"brand_id\":       \"{{ $json.brand_id }}\",\n  \"channel\":        \"email\",\n  \"subject\":        {{ JSON.stringify($json.email_subject) }},\n  \"html_content\":   {{ JSON.stringify($json.email_body_html) }},\n  \"sms_content\":    {{ JSON.stringify($json.sms_message) }},\n  \"status\":         \"confirmed\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase_service_key",
+          "name": "Supabase Service Key"
+        }
+      }
+    },
+    {
+      "id": "route_by_platform",
+      "name": "Step 8 — Route by Platform",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3740, 120],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is_klaviyo",
+              "leftValue": "={{ $('Parse Claude Response').item.json.email_platform }}",
+              "rightValue": "klaviyo",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "send_klaviyo",
+      "name": "Step 8a — Send via Klaviyo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [3960, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://a.klaviyo.com/api/campaigns/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "revision",     "value": "2024-02-15" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"type\": \"campaign\",\n    \"attributes\": {\n      \"name\": \"Cross-sell — {{ $('Parse Claude Response').item.json.email }} — {{ $now }}\",\n      \"audiences\": { \"included\": [] },\n      \"send_options\": { \"use_smart_sending\": false },\n      \"tracking_options\": { \"is_tracking_opens\": true, \"is_tracking_clicks\": true },\n      \"send_strategy\": { \"method\": \"immediate\" },\n      \"message\": {\n        \"channel\": \"email\",\n        \"label\": \"Post-Purchase Cross-sell\",\n        \"content\": {\n          \"subject\":       {{ JSON.stringify($('Parse Claude Response').item.json.email_subject) }},\n          \"preview_text\":  \"We think you'll love these too\",\n          \"from_email\":    \"noreply@{{ $('Parse Claude Response').item.json.brand_name.toLowerCase().replace(/\\\\s+/g, '') }}.com\",\n          \"from_label\":    {{ JSON.stringify($('Parse Claude Response').item.json.brand_name) }},\n          \"reply_to_email\":\"noreply@{{ $('Parse Claude Response').item.json.brand_name.toLowerCase().replace(/\\\\s+/g, '') }}.com\",\n          \"body\":          {{ JSON.stringify($('Parse Claude Response').item.json.email_body_html) }}\n        }\n      }\n    }\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "klaviyo_api_key",
+          "name": "Klaviyo API Key"
+        }
+      }
+    },
+    {
+      "id": "send_omnisend",
+      "name": "Step 8b — Send via Omnisend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [3960, 240],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.omnisend.com/v3/campaigns",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\":   \"Cross-sell — {{ $('Parse Claude Response').item.json.email }} — {{ $now }}\",\n  \"type\":   \"regular\",\n  \"status\": \"draft\",\n  \"options\": { \"sendToContacts\": [{{ JSON.stringify($('Parse Claude Response').item.json.email) }}] },\n  \"content\": {\n    \"subject\":   {{ JSON.stringify($('Parse Claude Response').item.json.email_subject) }},\n    \"fromName\":  {{ JSON.stringify($('Parse Claude Response').item.json.brand_name) }},\n    \"fromEmail\": \"noreply@{{ $('Parse Claude Response').item.json.brand_name.toLowerCase().replace(/\\\\s+/g, '') }}.com\",\n    \"body\":      {{ JSON.stringify($('Parse Claude Response').item.json.email_body_html) }}\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "omnisend_api_key",
+          "name": "Omnisend API Key"
+        }
+      }
+    },
+    {
+      "id": "mark_cross_sell_sent",
+      "name": "Step 9 — Mark cross_sell_sent_at",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [4180, 120],
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/orders",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "id", "value": "=eq.{{ $('Step 2 — Guard Checks').item.json.order_db_id }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"cross_sell_sent_at\": \"{{ $now }}\" }",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "supabase_service_key",
+          "name": "Supabase Service Key"
+        }
+      }
+    }
+  ],
+
+  "connections": {
+    "Shopify orders/create Webhook": {
+      "main": [
+        [
+          { "node": "Step 1 — Extract & Enrich", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Step 1 — Extract & Enrich": {
+      "main": [
+        [
+          { "node": "Lookup Brand by Shop Domain", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Lookup Brand by Shop Domain": {
+      "main": [
+        [
+          { "node": "Merge Brand into Context", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Merge Brand into Context": {
+      "main": [
+        [
+          { "node": "Lookup Contact", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Lookup Contact": {
+      "main": [
+        [
+          { "node": "Lookup Order Record", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Lookup Order Record": {
+      "main": [
+        [
+          { "node": "Step 2 — Guard Checks", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Step 2 — Guard Checks": {
+      "main": [
+        [
+          { "node": "Guards Pass?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Guards Pass?": {
+      "main": [
+        [
+          { "node": "Respond 202 Accepted", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Respond 200 (skipped)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Respond 202 Accepted": {
+      "main": [
+        [
+          { "node": "Step 3 — Wait 24 Hours", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Step 3 — Wait 24 Hours": {
+      "main": [
+        [
+          { "node": "Step 4 — Fetch Shopify Products", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Step 4 — Fetch Shopify Products": {
+      "main": [
+        [
+          { "node": "Filter & Build Catalog", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Filter & Build Catalog": {
+      "main": [
+        [
+          { "node": "Step 5 — Generate Recommendations (Claude)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Step 5 — Generate Recommendations (Claude)": {
+      "main": [
+        [
+          { "node": "Parse Claude Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Parse Claude Response": {
+      "main": [
+        [
+          { "node": "Step 6 — Save Opportunity", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Step 6 — Save Opportunity": {
+      "main": [
+        [
+          { "node": "Merge Opportunity ID", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Merge Opportunity ID": {
+      "main": [
+        [
+          { "node": "Step 7 — Save Campaign Asset", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Step 7 — Save Campaign Asset": {
+      "main": [
+        [
+          { "node": "Step 8 — Route by Platform", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Step 8 — Route by Platform": {
+      "main": [
+        [
+          { "node": "Step 8a — Send via Klaviyo", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Step 8b — Send via Omnisend", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Step 8a — Send via Klaviyo": {
+      "main": [
+        [
+          { "node": "Step 9 — Mark cross_sell_sent_at", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Step 8b — Send via Omnisend": {
+      "main": [
+        [
+          { "node": "Step 9 — Mark cross_sell_sent_at", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  }
+}

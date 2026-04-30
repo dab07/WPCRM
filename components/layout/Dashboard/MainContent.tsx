@@ -7,6 +7,7 @@ import { FollowUpRulesPanel } from '../../features/workflows/FollowUpRulesPanel'
 import { TriggerManagement } from '../../features/workflows/TriggerManagement';
 import { N8nIntegration } from '../../features/workflows/N8nIntegration';
 import { InstagramIntegration } from '../../features/workflows/InstagramIntegration';
+import { ShopifyPanel } from '../../features/shopify';
 import { ConversationsView } from './ConversationsView';
 import type { Tab } from './types';
 import type { ConversationWithContact } from '../../../lib/hooks/useConversations';
@@ -33,6 +34,7 @@ export function MainContent({
       )}
       {activeTab === 'contacts' && <ContactsPanel />}
       {activeTab === 'campaigns' && <CampaignsPanel />}
+      {activeTab === 'shopify' && <ShopifyPanel />}
       {activeTab === 'triggers' && <TriggerManagement />}
       {activeTab === 'workflows' && <N8nIntegration />}
       {activeTab === 'instagram' && <InstagramIntegration />}

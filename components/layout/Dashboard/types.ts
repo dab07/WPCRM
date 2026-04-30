@@ -1,4 +1,4 @@
-export type Tab = 'agentic' | 'conversations' | 'contacts' | 'campaigns' | 'follow-ups' | 'triggers' | 'workflows' | 'instagram';
+export type Tab = 'agentic' | 'conversations' | 'contacts' | 'campaigns' | 'follow-ups' | 'triggers' | 'workflows' | 'instagram' | 'shopify';
 
 export interface TabConfig {
   id: Tab;
