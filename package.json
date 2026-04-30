@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.33.0",
+    "@shopify/shopify-api": "^13.0.0",
     "@supabase/supabase-js": "^2.57.4",
     "date-fns": "^2.30.0",
     "lucide-react": "^0.344.0",

@@ -43,7 +43,7 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "domain", "value": "=eq.{{ $json.shop_domain }}" },
+            { "name": "domain", "value": "eq.{{ $json.shop_domain }}" },
             { "name": "select", "value": "id,name,brand_category,email_platform" },
             { "name": "limit",  "value": "1" }
           ]
@@ -87,8 +87,8 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "brand_id", "value": "=eq.{{ $json.brand_id }}" },
-            { "name": "email",    "value": "=eq.{{ $json.email }}" },
+            { "name": "brand_id", "value": "eq.{{ $json.brand_id }}" },
+            { "name": "email",    "value": "eq.{{ $json.email }}" },
             { "name": "select",   "value": "id,first_name,orders_count,accepts_marketing" },
             { "name": "limit",    "value": "1" }
           ]
@@ -122,8 +122,8 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "brand_id",    "value": "=eq.{{ $('Merge Brand into Context').first().json.brand_id }}" },
-            { "name": "external_id", "value": "=eq.{{ $('Merge Brand into Context').first().json.order_external_id }}" },
+            { "name": "brand_id",    "value": "eq.{{ $('Merge Brand into Context').first().json.brand_id }}" },
+            { "name": "external_id", "value": "eq.{{ $('Merge Brand into Context').first().json.order_external_id }}" },
             { "name": "select",      "value": "id,financial_status,cross_sell_sent_at" },
             { "name": "limit",       "value": "1" }
           ]

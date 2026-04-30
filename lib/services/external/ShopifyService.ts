@@ -50,6 +50,17 @@ export interface ShopifyAbandonedCart {
   updated_at: string;
 }
 
+export interface ShopifyProduct {
+  id: number;
+  title: string;
+  product_type: string;
+  tags: string;
+  status: string;
+  variants: Array<{ id: number; title: string; price: string; sku: string }>;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ShopifySyncResult {
   customers: ShopifyCustomer[];
   orders: ShopifyOrder[];
@@ -67,103 +78,50 @@ export class ShopifyServiceError extends Error {
   }
 }
 
-// In-memory token cache (per process). Tokens expire in 24h; we refresh 5 min early.
-let cachedToken: string | null = null;
-let tokenExpiresAt = 0;
-const TOKEN_BUFFER_MS = 5 * 60 * 1000;
-
 export class ShopifyService {
   private readonly shopDomain: string;
-  private readonly clientId: string;
-  private readonly clientSecret: string;
+  // Shopify Custom Apps use a static Admin API access token — not OAuth client_credentials.
+  // The token is the value of SHOPIFY_SECRET from the Custom App install page.
+  private readonly accessToken: string;
   private readonly baseUrl: string;
   private readonly timeout: number;
   private readonly retries: number;
 
-  constructor() {
-    this.shopDomain = config.shopify.shopDomain;
-    this.clientId = config.shopify.clientId;
-    this.clientSecret = config.shopify.clientSecret;
-    this.baseUrl = `https://${this.shopDomain}/admin/api/2024-01`;
-    this.timeout = externalServicesConfig.shopify.timeout;
-    this.retries = externalServicesConfig.shopify.retries;
-  }
-
-  private async fetchAccessToken(): Promise<string> {
-    const url = `https://${this.shopDomain}/admin/oauth/access_token`;
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'client_credentials',
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-      }).toString(),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new ShopifyServiceError(
-        `Shopify OAuth token request failed (${res.status}): ${text}`,
-        res.status
-      );
-    }
-
-    const data = (await res.json()) as { access_token: string; expires_in: number };
-
-    cachedToken = data.access_token;
-    tokenExpiresAt = Date.now() + data.expires_in * 1000 - TOKEN_BUFFER_MS;
-
-    return cachedToken;
-  }
-
-  private async getAccessToken(): Promise<string> {
-    if (cachedToken && Date.now() < tokenExpiresAt) {
-      return cachedToken;
-    }
-    return this.fetchAccessToken();
+  constructor(shopDomain?: string, accessToken?: string) {
+    this.shopDomain  = shopDomain  ?? config.shopify.shopDomain;
+    this.accessToken = accessToken ?? config.shopify.clientSecret; // SHOPIFY_SECRET = Admin API access token
+    this.baseUrl     = `https://${this.shopDomain}/admin/api/2025-01`;
+    this.timeout     = externalServicesConfig.shopify.timeout;
+    this.retries     = externalServicesConfig.shopify.retries;
   }
 
   private async fetchWithRetry<T>(path: string): Promise<T> {
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= this.retries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId  = setTimeout(() => controller.abort(), this.timeout);
+
       try {
-        const token = await this.getAccessToken();
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+        const res = await fetch(`${this.baseUrl}${path}`, {
+          headers: {
+            'X-Shopify-Access-Token': this.accessToken,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
 
-        try {
-          const res = await fetch(`${this.baseUrl}${path}`, {
-            headers: {
-              'X-Shopify-Access-Token': token,
-              'Content-Type': 'application/json',
-            },
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-
-          // 401 = token rejected — clear cache so next attempt re-fetches
-          if (res.status === 401 && attempt === 0) {
-            cachedToken = null;
-            tokenExpiresAt = 0;
-            throw new ShopifyServiceError('Token rejected (401) — will refresh', 401);
-          }
-
-          if (!res.ok) {
-            throw new ShopifyServiceError(
-              `Shopify API error: ${res.status} ${res.statusText}`,
-              res.status
-            );
-          }
-
-          return (await res.json()) as T;
-        } catch (err) {
-          clearTimeout(timeoutId);
-          throw err;
+        if (!res.ok) {
+          throw new ShopifyServiceError(
+            `Shopify API error: ${res.status} ${res.statusText}`,
+            res.status
+          );
         }
+
+        return (await res.json()) as T;
       } catch (err) {
+        clearTimeout(timeoutId);
         lastError = err as Error;
         if (attempt < this.retries) {
           await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
@@ -179,27 +137,35 @@ export class ShopifyService {
   }
 
   async getCustomers(updatedSince?: string): Promise<ShopifyCustomer[]> {
-    const since = updatedSince ? `&updated_at_min=${updatedSince}` : '';
-    const data = await this.fetchWithRetry<{ customers: ShopifyCustomer[] }>(
+    const since = updatedSince ? `&updated_at_min=${encodeURIComponent(updatedSince)}` : '';
+    const data  = await this.fetchWithRetry<{ customers: ShopifyCustomer[] }>(
       `/customers.json?limit=250${since}`
     );
     return data.customers;
   }
 
   async getOrders(updatedSince?: string): Promise<ShopifyOrder[]> {
-    const since = updatedSince ? `&updated_at_min=${updatedSince}` : '';
-    const data = await this.fetchWithRetry<{ orders: ShopifyOrder[] }>(
+    const since = updatedSince ? `&updated_at_min=${encodeURIComponent(updatedSince)}` : '';
+    const data  = await this.fetchWithRetry<{ orders: ShopifyOrder[] }>(
       `/orders.json?limit=250&status=any${since}`
     );
     return data.orders;
   }
 
   async getAbandonedCarts(updatedSince?: string): Promise<ShopifyAbandonedCart[]> {
-    const since = updatedSince ? `&updated_at_min=${updatedSince}` : '';
-    const data = await this.fetchWithRetry<{ checkouts: ShopifyAbandonedCart[] }>(
+    const since = updatedSince ? `&updated_at_min=${encodeURIComponent(updatedSince)}` : '';
+    const data  = await this.fetchWithRetry<{ checkouts: ShopifyAbandonedCart[] }>(
       `/checkouts.json?limit=250${since}`
     );
     return data.checkouts;
+  }
+
+  async getProducts(updatedSince?: string): Promise<ShopifyProduct[]> {
+    const since = updatedSince ? `&updated_at_min=${encodeURIComponent(updatedSince)}` : '';
+    const data  = await this.fetchWithRetry<{ products: ShopifyProduct[] }>(
+      `/products.json?limit=250&status=active${since}`
+    );
+    return data.products;
   }
 
   async syncAll(updatedSince?: string): Promise<ShopifySyncResult> {

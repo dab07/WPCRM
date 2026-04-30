@@ -66,9 +66,9 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "brand_id",           "value": "=eq.{{ $json.brand_id }}" },
-            { "name": "email",              "value": "=eq.{{ $json.email }}" },
-            { "name": "external_created_at","value": "=gt.{{ $json.external_created_at }}" },
+            { "name": "brand_id",           "value": "eq.{{ $json.brand_id }}" },
+            { "name": "email",              "value": "eq.{{ $json.email }}" },
+            { "name": "external_created_at","value": "gt.{{ $json.external_created_at }}" },
             { "name": "select",             "value": "id" },
             { "name": "limit",              "value": "1" }
           ]
@@ -133,13 +133,14 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "id", "value": "=eq.{{ $json.id }}" }
+            { "name": "id", "value": "eq.{{ $json.id }}" }
           ]
         },
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" }
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer",       "value": "return=minimal" }
           ]
         },
         "sendBody": true,
@@ -169,8 +170,8 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "brand_id",          "value": "=eq.{{ $json.brand_id }}" },
-            { "name": "email",             "value": "=eq.{{ $json.email }}" },
+            { "name": "brand_id",          "value": "eq.{{ $json.brand_id }}" },
+            { "name": "email",             "value": "eq.{{ $json.email }}" },
             { "name": "select",            "value": "id,first_name,accepts_marketing" },
             { "name": "limit",             "value": "1" }
           ]
@@ -194,7 +195,7 @@
 
     {
       "parameters": {
-        "jsCode": "const cart    = $('if_not_recovered').item.json;\nconst contacts = $input.first().json;\n\n// If contact exists and has opted out, suppress\nconst contact = Array.isArray(contacts) && contacts.length > 0 ? contacts[0] : null;\nconst suppressed = contact ? contact.accepts_marketing === false : false;\nconst firstName  = contact?.first_name ?? 'there';\n\nreturn [{ json: { ...cart, suppressed, first_name: firstName } }];"
+        "jsCode": "const cart    = $('Already Recovered?').item.json;\nconst contacts = $input.first().json;\n\n// If contact exists and has opted out, suppress\nconst contact = Array.isArray(contacts) && contacts.length > 0 ? contacts[0] : null;\nconst suppressed = contact ? contact.accepts_marketing === false : false;\nconst firstName  = contact?.first_name ?? 'there';\n\nreturn [{ json: { ...cart, suppressed, first_name: firstName } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -235,7 +236,7 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "id",     "value": "=eq.{{ $json.brand_id }}" },
+            { "name": "id",     "value": "eq.{{ $json.brand_id }}" },
             { "name": "select", "value": "id,name,brand_category,email_platform" },
             { "name": "limit",  "value": "1" }
           ]
@@ -420,13 +421,14 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "id", "value": "=eq.{{ $json.cart_id }}" }
+            { "name": "id", "value": "eq.{{ $json.cart_id }}" }
           ]
         },
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" }
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer",       "value": "return=minimal" }
           ]
         },
         "sendBody": true,

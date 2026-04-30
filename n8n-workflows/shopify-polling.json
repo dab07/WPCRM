@@ -1,0 +1,110 @@
+{
+  "name": "Shopify Polling — Every 4 Hours",
+  "nodes": [
+    {
+      "id": "schedule_4h",
+      "name": "Every 4 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 0],
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 4 }]
+        }
+      }
+    },
+    {
+      "id": "call_sync_api",
+      "name": "Call Shopify Sync API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [220, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.NEXT_PUBLIC_APP_URL }}/api/sync/shopify",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } },
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "cron_secret_token",
+          "name": "Cron Secret Token"
+        }
+      }
+    },
+    {
+      "id": "check_success",
+      "name": "Sync Succeeded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "success_check",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equal" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "log_success",
+      "name": "Log Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, -80],
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconsole.log('[ShopifyPoll] Sync completed:', {\n  brands_synced: data.brands_synced,\n  synced_at:     data.synced_at,\n  results:       (data.results ?? []).map(r => ({\n    brand:      r.brand_name,\n    customers:  r.customers_upserted,\n    orders:     r.orders_upserted,\n    carts:      r.abandoned_carts_upserted,\n    products:   r.products_updated,\n    errors:     r.errors\n  }))\n});\nreturn [{ json: { status: 'ok', brands_synced: data.brands_synced } }];"
+      }
+    },
+    {
+      "id": "log_error",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 80],
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconsole.error('[ShopifyPoll] Sync failed:', data);\nthrow new Error(`Shopify sync failed: ${data.error ?? JSON.stringify(data)}`);"
+      }
+    }
+  ],
+  "connections": {
+    "Every 4 Hours": {
+      "main": [[{ "node": "Call Shopify Sync API", "type": "main", "index": 0 }]]
+    },
+    "Call Shopify Sync API": {
+      "main": [[{ "node": "Sync Succeeded?", "type": "main", "index": 0 }]]
+    },
+    "Sync Succeeded?": {
+      "main": [
+        [{ "node": "Log Success", "type": "main", "index": 0 }],
+        [{ "node": "Log Error",   "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0ffa89d5a49b5ff561a64c0f5929b81768437fdf047cd876ce47c0015bdbc826"
+  }
+}
