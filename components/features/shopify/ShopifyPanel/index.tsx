@@ -52,8 +52,6 @@ export function ShopifyPanel() {
     filter === 'recent'   ? recentCarts   :
     carts;
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
-
   return (
     <div className="p-6 w-full space-y-6 overflow-y-auto">
       {/* ── Header ── */}
@@ -108,7 +106,7 @@ export function ShopifyPanel() {
       </div>
 
       {/* ── Webhook setup guide ── */}
-      <WebhookSetupGuide appUrl={appUrl} />
+      <WebhookSetupGuide />
 
       {/* ── Filter bar ── */}
       <div className="flex items-center gap-2">

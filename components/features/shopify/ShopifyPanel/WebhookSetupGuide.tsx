@@ -2,12 +2,8 @@
 
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Copy, CheckCheck, ExternalLink } from 'lucide-react';
-
-interface WebhookSetupGuideProps {
-  appUrl: string;
-}
-
-export function WebhookSetupGuide({ appUrl }: WebhookSetupGuideProps) {
+import { config } from '../../../../lib/config/environment';
+export function WebhookSetupGuide() {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -17,9 +13,8 @@ export function WebhookSetupGuide({ appUrl }: WebhookSetupGuideProps) {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const cartWebhook  = `${appUrl}/api/integrations/webhooks/whatsapp`; // reuse existing or n8n
-  const n8nCartHook  = `YOUR_N8N_URL/webhook/shopify-cart-update`;
-  const n8nOrderHook = `YOUR_N8N_URL/webhook/shopify-order-create-crosssell`;
+  const n8nCartHook  = `${config.n8n.baseUrl}/webhook/shopify-cart-update`;
+  const n8nOrderHook = `${config.n8n.baseUrl}/webhook/shopify-order-create-crosssell`;
 
   const CodeLine = ({ value, id }: { value: string; id: string }) => (
     <div className="flex items-center justify-between bg-slate-900 text-green-400 rounded px-3 py-2 text-xs font-mono mt-1">

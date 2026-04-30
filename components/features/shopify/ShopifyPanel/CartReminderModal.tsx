@@ -3,12 +3,12 @@
 import { useState } from 'react';
 import { MessageSquare, ShoppingCart, ExternalLink } from 'lucide-react';
 import { Modal, Button } from '../../../ui';
-import type { AbandonedCart } from '../../../../lib/hooks/useAbandonedCarts';
+import type { AbandonedCart, CartReminderApproval } from '../../../../lib/hooks/useAbandonedCarts';
 
 interface CartReminderModalProps {
   cart: AbandonedCart;
   onClose: () => void;
-  onApprove: (cartId: string, email: string, message: string) => Promise<void>;
+  onApprove: (approval: CartReminderApproval) => Promise<void>;
   sending: boolean;
 }
 
@@ -29,7 +29,7 @@ export function CartReminderModal({ cart, onClose, onApprove, sending }: CartRem
 
   const handleApprove = async () => {
     if (!cart.email) return;
-    await onApprove(cart.id, cart.email, message);
+    await onApprove({ cartId: cart.id, email: cart.email, message });
     onClose();
   };
 
@@ -92,8 +92,8 @@ export function CartReminderModal({ cart, onClose, onApprove, sending }: CartRem
       <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-5 text-sm text-amber-800">
         <MessageSquare className="w-4 h-4 mt-0.5 shrink-0" />
         <span>
-          This will send a WhatsApp message to the customer's registered number.
-          The cart will be stamped as <strong>reminded</strong> so the automated scheduler won't double-send.
+          This will send a WhatsApp message to the registered number of customer.
+          The cart will be stamped as <strong>reminded</strong> so the automated scheduler would not double-send.
         </span>
       </div>
 
