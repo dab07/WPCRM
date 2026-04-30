@@ -47,23 +47,23 @@ export class IntelligenceOrchestrator {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
-    // Pre-purchase: customers with no orders
+    // Pre-purchase: contacts with no orders (brand-synced)
     const { count: prePurchase } = await this.supabase
-      .from('customers')
+      .from('contacts')
       .select('*', { count: 'exact', head: true })
       .eq('brand_id', brandId)
       .eq('orders_count', 0);
 
     // First purchase: exactly 1 order
     const { count: firstPurchase } = await this.supabase
-      .from('customers')
+      .from('contacts')
       .select('*', { count: 'exact', head: true })
       .eq('brand_id', brandId)
       .eq('orders_count', 1);
 
     // Post-purchase (repeat): 2+ orders, active in last 90 days
     const { count: postPurchase } = await this.supabase
-      .from('customers')
+      .from('contacts')
       .select('*', { count: 'exact', head: true })
       .eq('brand_id', brandId)
       .gte('orders_count', 2)
@@ -71,7 +71,7 @@ export class IntelligenceOrchestrator {
 
     // At-risk: 1+ orders, no activity in 30-90 days
     const { count: atRisk } = await this.supabase
-      .from('customers')
+      .from('contacts')
       .select('*', { count: 'exact', head: true })
       .eq('brand_id', brandId)
       .gte('orders_count', 1)
@@ -80,7 +80,7 @@ export class IntelligenceOrchestrator {
 
     // Churned: 1+ orders, no activity in 90+ days
     const { count: churned } = await this.supabase
-      .from('customers')
+      .from('contacts')
       .select('*', { count: 'exact', head: true })
       .eq('brand_id', brandId)
       .gte('orders_count', 1)

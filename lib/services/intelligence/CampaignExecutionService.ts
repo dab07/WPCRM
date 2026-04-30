@@ -201,15 +201,15 @@ export class CampaignExecutionService {
     opportunity: Opportunity,
     result: ExecuteCampaignResult
   ): Promise<void> {
-    // Fetch customer emails for this brand to build the audience
-    const { data: customers } = await this.supabase
-      .from('customers')
-      .select('email, phone')
+    // Fetch contact emails for this brand to build the audience
+    const { data: contacts } = await this.supabase
+      .from('contacts')
+      .select('email, phone_number')
       .eq('brand_id', opportunity.brand_id)
       .not('email', 'is', null);
 
-    const emails = (customers ?? []).map(c => c.email).filter(Boolean) as string[];
-    const phones = (customers ?? []).map(c => c.phone).filter(Boolean) as string[];
+    const emails = (contacts ?? []).map(c => c.email).filter(Boolean) as string[];
+    const phones = (contacts ?? []).map(c => c.phone_number).filter(Boolean) as string[];
 
     // Create or reuse a custom audience
     const audienceName = `${opportunity.title} — ${new Date().toISOString().slice(0, 10)}`;

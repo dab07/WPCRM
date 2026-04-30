@@ -1,7 +1,3 @@
-// [NEW: multi-tenant-isolation] — added 2026-04-18
-// Enforces brand-scoped access boundaries and provides test scenarios
-// for the isolation test report (output contract: isolation_test_report).
-
 import { supabaseAdmin } from '../../../supabase/supabase';
 
 // ============================================================
@@ -17,7 +13,7 @@ export interface IsolationTestCase {
   status: TestStatus;
   expected: string;
   actual: string;
-  details?: string;
+  details?: string | undefined;
 }
 
 export interface IsolationTestReport {
@@ -40,7 +36,7 @@ const BRAND_SCOPED_TABLES = [
   'follow_up_rules', 'triggers', 'ai_intents', 'business_cards',
   'workflow_executions', 'social_media_accounts', 'instagram_posts',
   'instagram_broadcast_rules', 'instagram_broadcast_logs',
-  'scheduling_requests', 'customers', 'orders', 'abandoned_carts',
+  'scheduling_requests', 'orders', 'abandoned_carts',
   'brand_sync_metadata', 'opportunities', 'campaign_assets',
 ] as const;
 
@@ -110,7 +106,7 @@ export class TenantIsolationService {
 
   // ---- TC-01: Cross-tenant read ----
   private async testCrossTenantRead(
-    brandAId: string,
+    _brandAId: string,
     brandBId: string
   ): Promise<IsolationTestCase> {
     try {
@@ -148,7 +144,7 @@ export class TenantIsolationService {
 
   // ---- TC-02: Cross-tenant write ----
   private async testCrossTenantWrite(
-    brandAId: string,
+    _brandAId: string,
     brandBId: string
   ): Promise<IsolationTestCase> {
     try {

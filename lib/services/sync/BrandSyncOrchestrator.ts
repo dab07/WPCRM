@@ -77,8 +77,10 @@ export class BrandSyncOrchestrator {
           email: c.email,
           first_name: c.first_name,
           last_name: c.last_name,
-          phone: c.phone,
-          tags: c.tags ? c.tags.split(',').map(t => t.trim()) : [],
+          // contacts.name = full name, fallback to email, fallback to external_id
+          name: [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || String(c.id),
+          phone_number: c.phone ?? `unknown-shopify-${c.id}`,
+          tags: c.tags ? c.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
           orders_count: c.orders_count,
           total_spent: parseFloat(c.total_spent),
           accepts_marketing: c.accepts_marketing,
@@ -88,7 +90,7 @@ export class BrandSyncOrchestrator {
         }));
 
         const { error } = await this.supabase
-          .from('customers')
+          .from('contacts')
           .upsert(rows, { onConflict: 'brand_id,external_id,source' });
 
         if (error) {

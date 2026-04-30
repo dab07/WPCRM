@@ -49,7 +49,7 @@ export interface KlaviyoCampaignResult {
   id: string;
   name: string;
   status: string;
-  scheduledAt?: string;
+  scheduledAt?: string | undefined;
 }
 
 export interface KlaviyoSyncResult {
