@@ -38,7 +38,7 @@ export function WebhookSetupGuide() {
 
           {/* Why this approach */}
           <div className="bg-white border border-blue-100 rounded-lg p-3 text-blue-800 text-xs">
-            <strong>How it works:</strong> Shopify pushes events directly to your app's stable Vercel URL.
+            <strong>How it works:</strong> Shopify pushes events directly to your app stable Vercel URL.
             No n8n URL needed for inbound data — n8n is only used for the outbound reminder scheduler.
           </div>
 

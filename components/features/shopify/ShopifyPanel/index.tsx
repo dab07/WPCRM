@@ -9,22 +9,26 @@ import {
   Clock,
   AlertTriangle,
   Filter,
+  Package,
 } from 'lucide-react';
 import { useAbandonedCarts } from '../../../../lib/hooks/useAbandonedCarts';
 import { AbandonedCartRow } from './AbandonedCartRow';
 import { CartReminderModal } from './CartReminderModal';
 import { WebhookSetupGuide } from './WebhookSetupGuide';
+import { ProductsTab } from './ProductsTab';
 import type { AbandonedCart } from '../../../../lib/hooks/useAbandonedCarts';
 
 type FilterType = 'all' | 'eligible' | 'reminded' | 'recent';
+type PanelTab   = 'carts' | 'products';
 
 export function ShopifyPanel() {
   const { carts, loading, error, sendingReminder, approveReminder, markRecovered, reload } =
     useAbandonedCarts();
 
   const [selectedCart, setSelectedCart] = useState<AbandonedCart | null>(null);
-  const [filter, setFilter] = useState<FilterType>('all');
-  const [reloading, setReloading] = useState(false);
+  const [filter, setFilter]             = useState<FilterType>('all');
+  const [panelTab, setPanelTab]         = useState<PanelTab>('carts');
+  const [reloading, setReloading]       = useState(false);
 
   const handleReload = async () => {
     setReloading(true);
@@ -59,99 +63,125 @@ export function ShopifyPanel() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
             <ShoppingBag className="w-7 h-7 text-green-600" />
-            Shopify — Abandoned Carts
+            Shopify
           </h1>
           <p className="text-slate-500 mt-1 text-sm">
-            Review and approve WhatsApp reminders for customers who left items in their cart.
-            Reminders are eligible after <strong>6 hours</strong>.
+            Manage your store`&apos`s products and abandoned cart reminders.
           </p>
         </div>
-        <button
-          onClick={handleReload}
-          disabled={reloading}
-          className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors text-sm"
-        >
-          <RefreshCw className={`w-4 h-4 ${reloading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
-      </div>
-
-      {/* ── Stat cards ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          icon={<ShoppingCart className="w-5 h-5 text-slate-600" />}
-          bg="bg-slate-100"
-          label="Total Active"
-          value={carts.length}
-        />
-        <StatCard
-          icon={<AlertTriangle className="w-5 h-5 text-orange-600" />}
-          bg="bg-orange-100"
-          label="Eligible (6h+)"
-          value={eligibleCarts.length}
-          highlight={eligibleCarts.length > 0}
-        />
-        <StatCard
-          icon={<CheckCircle className="w-5 h-5 text-green-600" />}
-          bg="bg-green-100"
-          label="Reminded"
-          value={remindedCarts.length}
-        />
-        <StatCard
-          icon={<Clock className="w-5 h-5 text-blue-600" />}
-          bg="bg-blue-100"
-          label="Last 24h"
-          value={recentCarts.length}
-        />
-      </div>
-
-      {/* ── Webhook setup guide ── */}
-      <WebhookSetupGuide />
-
-      {/* ── Filter bar ── */}
-      <div className="flex items-center gap-2">
-        <Filter className="w-4 h-4 text-slate-400" />
-        {(['all', 'eligible', 'reminded', 'recent'] as FilterType[]).map(f => (
+        {panelTab === 'carts' && (
           <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              filter === f
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+            onClick={handleReload}
+            disabled={reloading}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors text-sm"
           >
-            {f === 'all'      ? `All (${carts.length})` :
-             f === 'eligible' ? `Eligible (${eligibleCarts.length})` :
-             f === 'reminded' ? `Reminded (${remindedCarts.length})` :
-                                `Last 24h (${recentCarts.length})`}
+            <RefreshCw className={`w-4 h-4 ${reloading ? 'animate-spin' : ''}`} />
+            Refresh
           </button>
-        ))}
+        )}
       </div>
 
-      {/* ── Cart list ── */}
-      {loading ? (
-        <div className="flex items-center justify-center h-48">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-        </div>
-      ) : error ? (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
-          Failed to load carts: {error.message}
-        </div>
-      ) : filteredCarts.length === 0 ? (
-        <EmptyState filter={filter} />
-      ) : (
-        <div className="space-y-3">
-          {filteredCarts.map(cart => (
-            <AbandonedCartRow
-              key={cart.id}
-              cart={cart}
-              onApprove={setSelectedCart}
-              onMarkRecovered={markRecovered}
-              isSending={sendingReminder === cart.id}
+      {/* ── Panel tabs ── */}
+      <div className="flex gap-1 border-b border-slate-200">
+        <TabButton
+          active={panelTab === 'carts'}
+          onClick={() => setPanelTab('carts')}
+          icon={<ShoppingCart className="w-4 h-4" />}
+          label="Abandoned Carts"
+          badge={eligibleCarts.length > 0 ? eligibleCarts.length : undefined}
+        />
+        <TabButton
+          active={panelTab === 'products'}
+          onClick={() => setPanelTab('products')}
+          icon={<Package className="w-4 h-4" />}
+          label="Products"
+        />
+      </div>
+
+      {/* ── Products tab ── */}
+      {panelTab === 'products' && <ProductsTab />}
+
+      {/* ── Carts tab ── */}
+      {panelTab === 'carts' && (
+        <>
+          {/* Stat cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard
+              icon={<ShoppingCart className="w-5 h-5 text-slate-600" />}
+              bg="bg-slate-100"
+              label="Total Active"
+              value={carts.length}
             />
-          ))}
-        </div>
+            <StatCard
+              icon={<AlertTriangle className="w-5 h-5 text-orange-600" />}
+              bg="bg-orange-100"
+              label="Eligible (6h+)"
+              value={eligibleCarts.length}
+              highlight={eligibleCarts.length > 0}
+            />
+            <StatCard
+              icon={<CheckCircle className="w-5 h-5 text-green-600" />}
+              bg="bg-green-100"
+              label="Reminded"
+              value={remindedCarts.length}
+            />
+            <StatCard
+              icon={<Clock className="w-5 h-5 text-blue-600" />}
+              bg="bg-blue-100"
+              label="Last 24h"
+              value={recentCarts.length}
+            />
+          </div>
+
+          {/* Webhook setup guide */}
+          <WebhookSetupGuide />
+
+          {/* Filter bar */}
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-slate-400" />
+            {(['all', 'eligible', 'reminded', 'recent'] as FilterType[]).map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  filter === f
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {f === 'all'      ? `All (${carts.length})` :
+                 f === 'eligible' ? `Eligible (${eligibleCarts.length})` :
+                 f === 'reminded' ? `Reminded (${remindedCarts.length})` :
+                                    `Last 24h (${recentCarts.length})`}
+              </button>
+            ))}
+          </div>
+
+          {/* Cart list */}
+          {loading ? (
+            <div className="flex items-center justify-center h-48">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+            </div>
+          ) : error ? (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
+              Failed to load carts: {error.message}
+            </div>
+          ) : filteredCarts.length === 0 ? (
+            <EmptyState filter={filter} />
+          ) : (
+            <div className="space-y-3">
+              {filteredCarts.map(cart => (
+                <AbandonedCartRow
+                  key={cart.id}
+                  cart={cart}
+                  onApprove={setSelectedCart}
+                  onMarkRecovered={markRecovered}
+                  isSending={sendingReminder === cart.id}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* ── Reminder approval modal ── */}
@@ -168,6 +198,35 @@ export function ShopifyPanel() {
 }
 
 // ── Sub-components ──────────────────────────────────────────────────────────
+
+function TabButton({
+  active, onClick, icon, label, badge,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  badge?: number | undefined;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+        active
+          ? 'border-green-600 text-green-700'
+          : 'border-transparent text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      {icon}
+      {label}
+      {badge !== undefined && (
+        <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-orange-100 text-orange-700 font-semibold">
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
 
 function StatCard({
   icon, bg, label, value, highlight = false,

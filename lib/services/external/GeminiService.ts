@@ -409,21 +409,22 @@ Hashtags: ${hashtags.join(', ')}`;
       const client = this.getClient();
       
       // Create a detailed prompt for image generation
-      const prompt = `Professional WhatsApp campaign greeting image for "${config.campaignName}".
+      const prompt = `Professional festive social media post for Zavops — ${config.campaignName}.
 
-Style: Modern, celebratory, professional business aesthetic
-Layout: Square format (1:1 aspect ratio)
-Elements:
-- Large bold text displaying "${config.campaignName}" as the main focal point
-- Vibrant gradient background (purple to blue tones)
-- Decorative celebratory elements (confetti, sparkles, or geometric shapes)
-- Small "Zavops" branding in top-right corner
-- Professional quality suitable for business messaging
-- Warm, inviting, and festive atmosphere
+BRAND GUIDELINES (strictly follow):
+- Background: solid bright golden yellow (#F5C400), full bleed, no gradients
+- Zavops logo centered at top (blue and yellow wordmark "ZAVOPS")
+- Below logo: small text "wishes you" in dark color (#1C3080 or dark brown)
+- Large decorative script headline: "HAPPY ${config.campaignName.toUpperCase()}" in deep maroon-red (#7B1A1A) cursive/calligraphy font
+- Center illustration: Image which symbolises the ${config.campaignName} — vibrant, detailed, festive
+- Bottom tagline in dark brown serif font: Tageline for ${config.campaignName}
+- Color palette restricted to: #F5C400 (background), #1C3080 (logo/accents), deep maroon #7B1A1A (headline), warm reds/oranges/pinks (illustration), dark brown (body text)
+- NO white backgrounds, NO gradients, NO purple tones, NO generic corporate look
+- Square 1:1 format, WhatsApp-ready
+- Warm, devotional, community-oriented Indian festive aesthetic
+- High quality illustration style consistent with traditional Indian festival art
 
-Theme: ${config.theme || 'Professional celebration and engagement'}
-
-Make it eye-catching but professional, suitable for WhatsApp business communication.`;
+Festival context: ${config.theme}`;
 
       const model = 'gemini-2.5-flash-image';
       const contents = [

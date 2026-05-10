@@ -56,7 +56,9 @@ export interface ShopifyProduct {
   product_type: string;
   tags: string;
   status: string;
-  variants: Array<{ id: number; title: string; price: string; sku: string }>;
+  vendor: string;
+  variants: Array<{ id: number; title: string; price: string; sku: string; inventory_quantity: number }>;
+  images: Array<{ id: number; src: string; alt: string | null }>;
   created_at: string;
   updated_at: string;
 }
@@ -163,7 +165,7 @@ export class ShopifyService {
   async getProducts(updatedSince?: string): Promise<ShopifyProduct[]> {
     const since = updatedSince ? `&updated_at_min=${encodeURIComponent(updatedSince)}` : '';
     const data  = await this.fetchWithRetry<{ products: ShopifyProduct[] }>(
-      `/products.json?limit=250&status=active${since}`
+      `/products.json?limit=250&status=active&fields=id,title,product_type,tags,status,vendor,variants,images,created_at,updated_at${since}`
     );
     return data.products;
   }
