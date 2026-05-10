@@ -3,7 +3,6 @@
 import { AgenticDashboard } from '../../features/agentic/AgenticDashboard';
 import { ContactsPanel } from '../../features/contacts/ContactsPanel';
 import { CampaignsPanel } from '../../features/campaigns';
-import { FestivalCampaignDashboard } from '../../features/campaigns/FestivalCampaigns';
 import { FollowUpRulesPanel } from '../../features/workflows/FollowUpRulesPanel';
 import { TriggerManagement } from '../../features/workflows/TriggerManagement';
 import { N8nIntegration } from '../../features/workflows/N8nIntegration';
@@ -35,7 +34,6 @@ export function MainContent({
       )}
       {activeTab === 'contacts' && <ContactsPanel />}
       {activeTab === 'campaigns' && <CampaignsPanel />}
-      {activeTab === 'festival-campaigns' && <FestivalCampaignDashboard />}
       {activeTab === 'shopify' && <ShopifyPanel />}
       {activeTab === 'triggers' && <TriggerManagement />}
       {activeTab === 'workflows' && <N8nIntegration />}

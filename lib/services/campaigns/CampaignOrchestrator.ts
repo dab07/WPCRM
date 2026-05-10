@@ -9,11 +9,14 @@ export interface Campaign {
   name: string;
   message_template: string;
   target_tags: string[];
-  status: 'draft' | 'scheduled' | 'running' | 'completed' | 'paused';
+  status: 'draft' | 'pending' | 'to_be_approved' | 'approved' | 'executed';
   scheduled_at: string | null;
   sent_count: number;
   delivered_count: number;
   read_count: number;
+  festival?: string | null;
+  image_url?: string | null;
+  executed_at?: string | null;
 }
 
 export interface Contact {
@@ -110,7 +113,7 @@ export class CampaignOrchestrator {
       const { data: campaigns, error } = await this.supabase
         .from('campaigns')
         .select('*')
-        .eq('status', 'scheduled');
+        .eq('status', 'approved');
 
       if (error) {
         throw new CampaignOrchestratorError(
@@ -162,15 +165,15 @@ export class CampaignOrchestrator {
       
       if (contacts.length === 0) {
         console.log(`No eligible contacts for campaign: ${campaign.name}`);
-        await this.updateCampaignStatus(campaign.id, 'completed');
+        await this.updateCampaignStatus(campaign.id, 'executed');
         return { sent: 0, failed: 0, delivered: 0 };
       }
 
-      // Single update: set status to running and total recipients
+      // Single update: set status to pending (in-progress marker) and total recipients
       await this.supabase
         .from('campaigns')
         .update({ 
-          status: 'running'
+          status: 'approved' // keep approved while sending; flip to executed at end
         })
         .eq('id', campaign.id);
 
@@ -309,10 +312,11 @@ export class CampaignOrchestrator {
       const { error: finalUpdateError } = await this.supabase
         .from('campaigns')
         .update({
-          status: 'completed',
+          status: 'executed',
           sent_count: sentCount,
           delivered_count: deliveredCount,
-          read_count: 0
+          read_count: 0,
+          executed_at: new Date().toISOString(),
         })
         .eq('id', campaign.id);
 
@@ -331,12 +335,11 @@ export class CampaignOrchestrator {
     } catch (error) {
       console.error(`Error executing campaign ${campaign.name}:`, error);
       
-      // Update campaign status to paused with error info
+      // Update campaign status to pending on error so it can be retried
       await this.supabase
         .from('campaigns')
         .update({ 
-          status: 'paused',
-          // Store error info in metadata if needed
+          status: 'pending',
         })
         .eq('id', campaign.id);
         
@@ -487,8 +490,7 @@ Return only the enhanced message, no explanations.`;
   /**
    * Update campaign status
    */
-  private async updateCampaignStatus(campaignId: string, status: Campaign['status']) {
-    try {
+  private async updateCampaignStatus(campaignId: string, status: Campaign['status']) {    try {
       const { error } = await this.supabase
         .from('campaigns')
         .update({ status })
@@ -527,7 +529,7 @@ Return only the enhanced message, no explanations.`;
         .from('campaigns')
         .insert({
           ...campaignData,
-          status: campaignData.scheduled_at ? 'scheduled' : 'draft',
+          status: 'draft', // always starts as draft; cron promotes to pending
           sent_count: 0,
           delivered_count: 0,
           read_count: 0
@@ -585,9 +587,9 @@ Return only the enhanced message, no explanations.`;
         );
       }
 
-      if (campaign.status === 'completed') {
+      if (campaign.status === 'executed') {
         throw new CampaignOrchestratorError(
-          'Campaign is already completed',
+          'Campaign is already executed',
           campaignId
         );
       }

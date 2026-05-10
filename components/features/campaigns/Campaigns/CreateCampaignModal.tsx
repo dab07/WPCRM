@@ -33,7 +33,7 @@ export function CreateCampaignModal({ isOpen, onClose, onSuccess }: CreateCampai
         message_template: formData.message_template,
         target_tags: tags,
         ...(formData.scheduled_at && { scheduled_at: formData.scheduled_at }),
-        status: 'scheduled',
+        status: 'draft',
       });
 
       onSuccess();

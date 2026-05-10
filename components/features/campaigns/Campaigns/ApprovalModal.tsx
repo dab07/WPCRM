@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import {
@@ -82,7 +82,7 @@ export function ApprovalModal({ campaign, onApprove, onReject, onClose }: Approv
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={campaign.image_url}
-                alt={`${campaign.festival} campaign banner`}
+                alt={`${campaign.festival ?? campaign.name} campaign banner`}
                 className="w-full object-contain max-h-80"
               />
             ) : (
@@ -99,7 +99,7 @@ export function ApprovalModal({ campaign, onApprove, onReject, onClose }: Approv
               <p className="text-xs text-slate-500 mb-1 font-medium uppercase tracking-wide">Festival</p>
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-amber-500" />
-                <p className="font-semibold text-slate-900">{campaign.festival || campaign.name}</p>
+                <p className="font-semibold text-slate-900">{campaign.festival ?? campaign.name}</p>
               </div>
             </div>
 
@@ -121,7 +121,7 @@ export function ApprovalModal({ campaign, onApprove, onReject, onClose }: Approv
                         month: 'long',
                         year: 'numeric',
                       })
-                    : 'â€”'}
+                    : '—'}
                 </p>
               </div>
             </div>
@@ -141,7 +141,7 @@ export function ApprovalModal({ campaign, onApprove, onReject, onClose }: Approv
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-slate-400" />
                 <p className="font-semibold text-slate-900">
-                  {campaign.target_count ?? campaign.sent_count ?? 'â€”'}
+                  {campaign.target_count ?? campaign.sent_count ?? '—'}
                 </p>
               </div>
             </div>
@@ -214,4 +214,3 @@ export function ApprovalModal({ campaign, onApprove, onReject, onClose }: Approv
     </div>
   );
 }
-

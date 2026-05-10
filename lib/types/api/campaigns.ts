@@ -5,12 +5,7 @@ export type CampaignStatus =
   | 'pending'
   | 'to_be_approved'
   | 'approved'
-  | 'executed'
-  | 'overdue'
-  | 'scheduled'
-  | 'running'
-  | 'completed'
-  | 'paused';
+  | 'executed';
 
 export type ImageStatus = 'not_generated' | 'generating' | 'generated';
 

@@ -1,4 +1,4 @@
-// Runtime type validation utilities for API responses
+﻿// Runtime type validation utilities for API responses
 import type { 
   Contact, 
   Conversation, 
@@ -75,7 +75,7 @@ export const isValidDeliveryStatus = (value: unknown): value is 'pending' | 'sen
   return isString(value) && ['pending', 'sent', 'delivered', 'read', 'failed', 'received'].includes(value);
 };
 
-export const isValidCampaignStatus = (value: unknown): value is 'draft' | 'scheduled' | 'running' | 'completed' | 'paused' => {
+export const isValidCampaignStatus = (value: unknown): value is 'draft' | 'pending' | 'to_be_approved' | 'approved' | 'executed' => {
   return isString(value) && ['draft', 'scheduled', 'running', 'completed', 'paused'].includes(value);
 };
 
@@ -350,7 +350,7 @@ export const validateCampaign = (data: unknown): Campaign => {
     name: campaign.name as string,
     message_template: campaign.message_template as string,
     target_tags: campaign.target_tags as string[],
-    status: campaign.status as 'draft' | 'scheduled' | 'running' | 'completed' | 'paused',
+    status: campaign.status as 'draft' | 'pending' | 'to_be_approved' | 'approved' | 'executed',
     created_at: campaign.created_at as string,
     updated_at: campaign.updated_at as string
   };
@@ -604,7 +604,7 @@ export const validateCreateCampaignRequest = (data: unknown): CreateCampaignRequ
   }
 
   if (request.status !== undefined && request.status !== null) {
-    result.status = request.status as 'draft' | 'scheduled' | 'running' | 'completed' | 'paused';
+    result.status = request.status as 'draft' | 'pending' | 'to_be_approved' | 'approved' | 'executed';
   }
 
   return result;

@@ -123,10 +123,10 @@ export class CampaignsService extends AbstractBaseService<Campaign> {
 
   async delete(id: string): Promise<void> {
     try {
-      // Check if campaign is running before deletion
+      // Cannot delete an approved or executed campaign
       const campaign = await this.get(id);
-      if (campaign.status === 'running') {
-        throw this.createError('VALIDATION_ERROR', 'Cannot delete a running campaign');
+      if (campaign.status === 'approved' || campaign.status === 'executed') {
+        throw this.createError('VALIDATION_ERROR', 'Cannot delete an approved or executed campaign');
       }
 
       const { error } = await this.supabase
@@ -171,9 +171,9 @@ export class CampaignsService extends AbstractBaseService<Campaign> {
         throw this.createError('VALIDATION_ERROR', 'Scheduled time must be in the future');
       }
 
-      return await this.update(id, { 
+      return await this.update(id, {
         scheduled_at: scheduledAt,
-        status: 'scheduled'
+        status: 'draft', // stays draft until cron promotes it
       });
     } catch (error) {
       this.handleError(error);
@@ -184,8 +184,8 @@ export class CampaignsService extends AbstractBaseService<Campaign> {
     try {
       const campaign = await this.get(id);
 
-      if (campaign.status !== 'draft' && campaign.status !== 'scheduled') {
-        throw this.createError('VALIDATION_ERROR', 'Campaign must be in draft or scheduled status to start');
+      if (campaign.status !== 'draft' && campaign.status !== 'pending') {
+        throw this.createError('VALIDATION_ERROR', 'Campaign must be draft or pending to start');
       }
 
       const targetContacts = await this.getTargetContacts(id);
@@ -193,49 +193,24 @@ export class CampaignsService extends AbstractBaseService<Campaign> {
         throw this.createError('VALIDATION_ERROR', 'Campaign has no target recipients');
       }
 
-      return await this.update(id, { 
-        status: 'running',
-        scheduled_at: null // Clear scheduled time when starting manually
-      });
+      return await this.update(id, { status: 'pending' });
     } catch (error) {
       this.handleError(error);
     }
   }
 
+  /** @deprecated use update() directly */
   async pauseCampaign(id: string): Promise<Campaign> {
-    try {
-      const campaign = await this.get(id);
-
-      if (campaign.status !== 'running') {
-        throw this.createError('VALIDATION_ERROR', 'Only running campaigns can be paused');
-      }
-
-      return await this.update(id, { status: 'paused' });
-    } catch (error) {
-      this.handleError(error);
-    }
+    return this.update(id, { status: 'pending' });
   }
 
+  /** @deprecated use update() directly */
   async resumeCampaign(id: string): Promise<Campaign> {
-    try {
-      const campaign = await this.get(id);
-
-      if (campaign.status !== 'paused') {
-        throw this.createError('VALIDATION_ERROR', 'Only paused campaigns can be resumed');
-      }
-
-      return await this.update(id, { status: 'running' });
-    } catch (error) {
-      this.handleError(error);
-    }
+    return this.update(id, { status: 'pending' });
   }
 
   async completeCampaign(id: string): Promise<Campaign> {
-    try {
-      return await this.update(id, { status: 'completed' });
-    } catch (error) {
-      this.handleError(error);
-    }
+    return this.update(id, { status: 'executed' });
   }
 
   async updateCampaignStats(
@@ -259,8 +234,8 @@ export class CampaignsService extends AbstractBaseService<Campaign> {
       let status = campaign.status;
       const totalProcessed = updatedStats.delivered_count;
       
-      if (campaign.status === 'running' && totalProcessed >= updatedStats.sent_count) {
-        status = 'completed';
+      if (campaign.status === 'approved' && totalProcessed >= updatedStats.sent_count) {
+        status = 'executed';
       }
 
       return await this.update(id, {
@@ -305,20 +280,16 @@ export class CampaignsService extends AbstractBaseService<Campaign> {
     }
   }
 
-  // Helper methods
   async getScheduledCampaigns(): Promise<Campaign[]> {
     try {
-      const now = new Date().toISOString();
-      
       const { data, error } = await this.supabase
         .from(this.tableName)
         .select('*')
-        .eq('status', 'scheduled')
-        .lte('scheduled_at', now)
+        .eq('status', 'approved')
         .order('scheduled_at', { ascending: true });
 
       if (error) {
-        throw this.createError('FETCH_ERROR', `Failed to fetch scheduled campaigns: ${error.message}`, error);
+        throw this.createError('FETCH_ERROR', `Failed to fetch approved campaigns: ${error.message}`, error);
       }
 
       return data || [];
@@ -332,7 +303,7 @@ export class CampaignsService extends AbstractBaseService<Campaign> {
       const { data, error } = await this.supabase
         .from(this.tableName)
         .select('*')
-        .eq('status', 'running')
+        .in('status', ['pending', 'to_be_approved', 'approved'])
         .order('created_at', { ascending: false });
 
       if (error) {

@@ -134,7 +134,6 @@ export function N8nWorkflowsModal({ onClose }: N8nWorkflowsModalProps) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl">
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-orange-100 rounded-xl">
@@ -145,49 +144,21 @@ export function N8nWorkflowsModal({ onClose }: N8nWorkflowsModalProps) {
               <p className="text-sm text-slate-500">Copy and import these into your n8n instance</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"
-          >
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          <WorkflowCard
-            icon={<Zap className="w-4 h-4" />}
-            title="Workflow 1 — Daily Campaign Sender"
-            description="Fetches approved campaigns scheduled for today, sends WhatsApp image to all contacts, marks as executed."
-            schedule="Daily at 9:00 AM"
-            json={WORKFLOW_1}
-          />
-          <WorkflowCard
-            icon={<Bell className="w-4 h-4" />}
-            title="Workflow 2 — 3-Day Reminder"
-            description="Auto-promotes draft→pending campaigns entering 3-month window. Sends owner WhatsApp summary grouped by quarter."
-            schedule="Every 3 days"
-            json={WORKFLOW_2}
-          />
-          <WorkflowCard
-            icon={<AlertTriangle className="w-4 h-4" />}
-            title="Workflow 3 — Overdue Checker"
-            description="Finds campaigns past their scheduled date without approval, marks them overdue, alerts owner via WhatsApp."
-            schedule="Daily at 8:00 AM"
-            json={WORKFLOW_3}
-          />
+          <WorkflowCard icon={<Zap className="w-4 h-4" />} title="Workflow 1 — Daily Campaign Sender" description="Fetches approved campaigns scheduled for today, sends WhatsApp image to all contacts, marks as executed." schedule="Daily at 9:00 AM" json={WORKFLOW_1} />
+          <WorkflowCard icon={<Bell className="w-4 h-4" />} title="Workflow 2 — 3-Day Reminder" description="Auto-promotes draft→pending campaigns entering 3-month window. Sends owner WhatsApp summary grouped by quarter." schedule="Every 3 days" json={WORKFLOW_2} />
+          <WorkflowCard icon={<AlertTriangle className="w-4 h-4" />} title="Workflow 3 — Overdue Checker" description="Finds campaigns past their scheduled date without approval, marks them overdue, alerts owner via WhatsApp." schedule="Daily at 8:00 AM" json={WORKFLOW_3} />
 
-          {/* Setup note */}
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
             <h4 className="font-semibold text-amber-800 text-sm mb-2">Setup Instructions</h4>
             <ol className="text-xs text-amber-700 space-y-1 list-decimal list-inside">
               <li>Copy the JSON above and import it in n8n (Workflows → Import from JSON)</li>
-              <li>
-                Set environment variables:{' '}
-                <code className="bg-amber-100 px-1 rounded">APP_URL</code>,{' '}
-                <code className="bg-amber-100 px-1 rounded">OWNER_PHONE_NUMBER</code>,{' '}
-                <code className="bg-amber-100 px-1 rounded">WHATSAPP_PHONE_NUMBER_ID</code>
-              </li>
+              <li>Set environment variables: <code className="bg-amber-100 px-1 rounded">APP_URL</code>, <code className="bg-amber-100 px-1 rounded">OWNER_PHONE_NUMBER</code>, <code className="bg-amber-100 px-1 rounded">WHATSAPP_PHONE_NUMBER_ID</code></li>
               <li>Add WhatsApp credentials in n8n (Header Auth with Bearer token)</li>
               <li>Activate each workflow and test with a single campaign</li>
             </ol>
