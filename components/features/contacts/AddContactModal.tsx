@@ -3,6 +3,7 @@
 import { useState, FormEvent } from 'react';
 import { Modal, Button } from '../../ui';
 import { formatPhoneNumber, isValidPhoneNumber } from '../../../lib/utils/validation';
+import { getSupabaseClient } from '../../../supabase/supabase';
 
 interface AddContactModalProps {
   isOpen: boolean;
@@ -40,10 +41,15 @@ export function AddContactModal({ isOpen, onClose, onSuccess }: AddContactModalP
       const tags = formData.tags.split(',').map((t) => t.trim()).filter(Boolean);
 
       console.log('[ContactModal] Creating contact via API');
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? 'anon';
+
       const response = await fetch('/api/contacts/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           name: formData.name,

@@ -393,11 +393,6 @@ Hashtags: ${hashtags.join(', ')}`;
     }
   }
 
-  /**
-   * Generate campaign image using Gemini 2.5 Flash Image (free tier: 500/day)
-   * Returns PNG image as base64
-   * Note: No retry logic to avoid rate limiting
-   */
   async generateCampaignImage(config: {
     campaignName: string;
     theme?: string | null;

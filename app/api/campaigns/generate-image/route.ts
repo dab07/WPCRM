@@ -2,11 +2,7 @@
 import { getSupabaseClient } from '../../../../supabase/supabase';
 import { GeminiService } from '../../../../lib/services/external/GeminiService';
 
-/**
- * POST /api/campaigns/generate-image
- * Generates a festival marketing image via Gemini, uploads to Supabase Storage,
- * and updates the campaign record.
- */
+
 export async function POST(request: NextRequest) {
   const supabase = getSupabaseClient(true);
 
@@ -38,7 +34,6 @@ export async function POST(request: NextRequest) {
     });
 
     if (!result.success || !result.data) {
-      // Reset status on failure
       await supabase
         .from('campaigns')
         .update({ image_status: 'not_generated' })
@@ -52,7 +47,6 @@ export async function POST(request: NextRequest) {
 
     const { imageBase64, mimeType } = result.data;
 
-    // Upload to Supabase Storage
     const ext = mimeType === 'image/jpeg' ? 'jpg' : 'png';
     const fileName = `festival-campaigns/${campaignId}-${Date.now()}.${ext}`;
     const imageBuffer = Buffer.from(imageBase64, 'base64');

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Routes that are intentionally public (webhooks, cron triggers, health)
 const PUBLIC_ROUTES = [
   '/api/integrations/webhooks/',
+  '/api/integrations/n8n',
   '/api/webhooks/',
   '/api/cron/',
   '/api/testing/',

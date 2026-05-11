@@ -511,9 +511,16 @@ export function CampaignsPanel() {
     setCampaigns((prev) => prev.map((c) => c.id === campaignId ? { ...c, image_status: 'generating' } : c));
 
     try {
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? 'anon';
+
       const res = await fetch('/api/campaigns/generate-image', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({ campaignId, festival: campaign.festival ?? campaign.name, theme: campaign.festival ?? campaign.name }),
       });
       const data = await res.json();
@@ -529,9 +536,16 @@ export function CampaignsPanel() {
   }, [campaigns, showToast]);
 
   const handleApprove = useCallback(async (campaignId: string) => {
+    const supabase = getSupabaseClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token ?? 'anon';
+
     const res = await fetch('/api/campaigns/update-status', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
       body: JSON.stringify({ campaignId, status: 'approved' }),
     });
     const data = await res.json();
@@ -541,9 +555,16 @@ export function CampaignsPanel() {
   }, [showToast]);
 
   const handleReject = useCallback(async (campaignId: string) => {
+    const supabase = getSupabaseClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token ?? 'anon';
+
     const res = await fetch('/api/campaigns/update-status', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
       body: JSON.stringify({ campaignId, status: 'pending' }),
     });
     const data = await res.json();
