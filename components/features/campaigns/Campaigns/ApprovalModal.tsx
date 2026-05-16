@@ -7,9 +7,11 @@ import {
   Users,
   Clock,
   CheckCircle,
+  XCircle,
   RefreshCw,
   ImageIcon,
   Sparkles,
+  MessageSquare,
 } from 'lucide-react';
 import type { Campaign, Quarter } from '../../../../lib/types/api/campaigns';
 import { getQuarter, getDaysAway } from '../../../../lib/types/api/campaigns';
@@ -63,8 +65,13 @@ export function ApprovalModal({ campaign, onApprove, onReject, onClose }: Approv
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Campaign Approval</h2>
-            <p className="text-sm text-slate-500 mt-0.5">Review and approve this festival campaign</p>
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-amber-500" />
+              Campaign Approval
+            </h2>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Review the image and caption before approving
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -75,112 +82,92 @@ export function ApprovalModal({ campaign, onApprove, onReject, onClose }: Approv
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Image Preview */}
-          <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
-            {campaign.image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={campaign.image_url}
-                alt={`${campaign.festival ?? campaign.name} campaign banner`}
-                className="w-full object-contain max-h-80"
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-48 text-slate-400">
-                <ImageIcon className="w-12 h-12 mb-2" />
-                <p className="text-sm">No image generated yet</p>
-              </div>
-            )}
-          </div>
-
-          {/* Campaign Details Grid */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-slate-50 rounded-xl p-4">
-              <p className="text-xs text-slate-500 mb-1 font-medium uppercase tracking-wide">Festival</p>
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                <p className="font-semibold text-slate-900">{campaign.festival ?? campaign.name}</p>
-              </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {/* Image + Caption side by side on larger screens */}
+          <div className="flex flex-col lg:flex-row gap-5">
+            {/* Image */}
+            <div className="flex-1 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 min-h-[200px] flex items-center justify-center">
+              {campaign.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={campaign.image_url}
+                  alt={`${campaign.festival ?? campaign.name} campaign banner`}
+                  className="w-full object-contain max-h-80"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-48 text-slate-400 gap-2">
+                  <ImageIcon className="w-10 h-10" />
+                  <p className="text-sm">No image generated</p>
+                </div>
+              )}
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-4">
-              <p className="text-xs text-slate-500 mb-1 font-medium uppercase tracking-wide">Quarter</p>
-              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold ${QUARTER_BADGE[quarter]}`}>
-                {quarter}
-              </span>
-            </div>
-
-            <div className="bg-slate-50 rounded-xl p-4">
-              <p className="text-xs text-slate-500 mb-1 font-medium uppercase tracking-wide">Scheduled Date</p>
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-slate-400" />
-                <p className="font-semibold text-slate-900">
-                  {campaign.scheduled_at
-                    ? new Date(campaign.scheduled_at).toLocaleDateString('en-IN', {
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                      })
-                    : '—'}
+            {/* Caption */}
+            <div className="flex-1 flex flex-col gap-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  WhatsApp Caption
                 </p>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 min-h-[100px]">
+                  {campaign.message_template ? (
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                      {campaign.message_template}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-slate-400 italic">No caption set</p>
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="bg-slate-50 rounded-xl p-4">
-              <p className="text-xs text-slate-500 mb-1 font-medium uppercase tracking-wide">Days Away</p>
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-slate-400" />
-                <p className={`font-bold text-lg ${daysColor}`}>
-                  {daysAway < 0 ? `${Math.abs(daysAway)} days ago` : `${daysAway} days`}
-                </p>
+              {/* Meta */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <p className="text-xs text-slate-500 mb-1 font-medium uppercase tracking-wide">Festival</p>
+                  <p className="font-semibold text-slate-900 text-sm">{campaign.festival ?? campaign.name}</p>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <p className="text-xs text-slate-500 mb-1 font-medium uppercase tracking-wide">Quarter</p>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${QUARTER_BADGE[quarter]}`}>
+                    {quarter}
+                  </span>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <p className="text-xs text-slate-500 mb-1 font-medium uppercase tracking-wide">Scheduled</p>
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    <p className="font-semibold text-slate-900 text-sm">
+                      {campaign.scheduled_at
+                        ? new Date(campaign.scheduled_at).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })
+                        : '—'}
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <p className="text-xs text-slate-500 mb-1 font-medium uppercase tracking-wide">Days Away</p>
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    <p className={`font-bold text-sm ${daysColor}`}>
+                      {daysAway < 0 ? `${Math.abs(daysAway)}d ago` : `${daysAway}d`}
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-3 col-span-2">
+                  <p className="text-xs text-slate-500 mb-1 font-medium uppercase tracking-wide">Target Recipients</p>
+                  <div className="flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-slate-400" />
+                    <p className="font-semibold text-slate-900 text-sm">
+                      {campaign.target_count ?? campaign.sent_count ?? '—'}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div className="bg-slate-50 rounded-xl p-4">
-              <p className="text-xs text-slate-500 mb-1 font-medium uppercase tracking-wide">Target Recipients</p>
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-slate-400" />
-                <p className="font-semibold text-slate-900">
-                  {campaign.target_count ?? campaign.sent_count ?? '—'}
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-slate-50 rounded-xl p-4">
-              <p className="text-xs text-slate-500 mb-1 font-medium uppercase tracking-wide">Image Status</p>
-              <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                  campaign.image_status === 'generated'
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : 'bg-amber-100 text-amber-700'
-                }`}
-              >
-                {campaign.image_status === 'generated' ? (
-                  <>
-                    <CheckCircle className="w-3.5 h-3.5" />
-                    Image Ready
-                  </>
-                ) : (
-                  <>
-                    <Clock className="w-3.5 h-3.5" />
-                    Not Generated
-                  </>
-                )}
-              </span>
             </div>
           </div>
-
-          {/* Message Preview */}
-          {campaign.message_template && (
-            <div>
-              <p className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wide">Message Preview</p>
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-                <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
-                  {campaign.message_template}
-                </p>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer Actions */}
@@ -188,14 +175,14 @@ export function ApprovalModal({ campaign, onApprove, onReject, onClose }: Approv
           <button
             onClick={handleReject}
             disabled={loading !== null}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors font-medium disabled:opacity-50"
           >
             {loading === 'reject' ? (
               <RefreshCw className="w-4 h-4 animate-spin" />
             ) : (
-              <RefreshCw className="w-4 h-4" />
+              <XCircle className="w-4 h-4" />
             )}
-            Reject / Regenerate
+            Reject
           </button>
           <button
             onClick={handleApprove}

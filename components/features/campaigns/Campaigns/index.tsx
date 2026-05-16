@@ -4,7 +4,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Search,
-  Settings,
   RefreshCw,
   ImageIcon,
   CheckCircle,
@@ -21,6 +20,9 @@ import {
   Clock,
   Plus,
   X,
+  XCircle,
+  Wand2,
+  MessageSquare,
 } from 'lucide-react';
 import { getSupabaseClient } from '../../../../supabase/supabase';
 import { useCampaigns } from '../../../../lib/hooks';
@@ -36,7 +38,6 @@ import {
   type QuarterGroup,
 } from './types';
 import { ApprovalModal } from './ApprovalModal';
-import { N8nWorkflowsModal } from './N8nWorkflowsModal';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 interface Toast {
@@ -239,10 +240,11 @@ interface CampaignRowProps {
   onGenerate: (id: string) => void;
   onView: (campaign: Campaign) => void;
   onApprove: (campaign: Campaign) => void;
+  onReject: (campaign: Campaign) => void;
   generatingIds: Set<string>;
 }
 
-function CampaignRow({ campaign, onGenerate, onView, onApprove, generatingIds }: CampaignRowProps) {
+function CampaignRow({ campaign, onGenerate, onView, onApprove, onReject, generatingIds }: CampaignRowProps) {
   const quarter: Quarter = campaign.scheduled_at ? getQuarter(campaign.scheduled_at) : 'Q1';
 
   return (
@@ -293,6 +295,10 @@ function CampaignRow({ campaign, onGenerate, onView, onApprove, generatingIds }:
                 <CheckCircle className="w-3.5 h-3.5" />
                 Approve
               </button>
+              <button onClick={() => onReject(campaign)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors">
+                <XCircle className="w-3.5 h-3.5" />
+                Reject
+              </button>
             </>
           )}
           {campaign.status === 'executed' && (
@@ -313,10 +319,11 @@ interface QuarterGroupSectionProps {
   onGenerate: (id: string) => void;
   onView: (campaign: Campaign) => void;
   onApprove: (campaign: Campaign) => void;
+  onReject: (campaign: Campaign) => void;
   generatingIds: Set<string>;
 }
 
-function QuarterGroupSection({ group, onGenerate, onView, onApprove, generatingIds }: QuarterGroupSectionProps) {
+function QuarterGroupSection({ group, onGenerate, onView, onApprove, onReject, generatingIds }: QuarterGroupSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { quarter, campaigns } = group;
 
@@ -343,7 +350,7 @@ function QuarterGroupSection({ group, onGenerate, onView, onApprove, generatingI
             </thead>
             <tbody>
               {campaigns.map((c) => (
-                <CampaignRow key={c.id} campaign={c} onGenerate={onGenerate} onView={onView} onApprove={onApprove} generatingIds={generatingIds} />
+                <CampaignRow key={c.id} campaign={c} onGenerate={onGenerate} onView={onView} onApprove={onApprove} onReject={onReject} generatingIds={generatingIds} />
               ))}
             </tbody>
           </table>
@@ -375,12 +382,238 @@ function ImagePreviewModal({ campaign, onClose }: { campaign: Campaign; onClose:
   );
 }
 
+// ─── Rejection Modal ──────────────────────────────────────────────────────────
+interface RejectionModalProps {
+  campaign: Campaign;
+  onClose: () => void;
+  onRegenerated: (updated: Campaign) => void;
+}
+
+function RejectionModal({ campaign, onClose, onRegenerated }: RejectionModalProps) {
+  const [captionPrompt, setCaptionPrompt] = useState(campaign.message_template ?? '');
+  const [imagePrompt, setImagePrompt] = useState(
+    `Professional festive social media post for ${campaign.festival ?? campaign.name}`
+  );
+  const [step, setStep] = useState<'edit' | 'preview' | 'generating'>('edit');
+  const [previewCaption, setPreviewCaption] = useState('');
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
+  const handleGenerate = async () => {
+    setStep('generating');
+    setError('');
+    try {
+      const sb = getSupabaseClient();
+      const { data: { session } } = await sb.auth.getSession();
+      const token = session?.access_token ?? 'anon';
+
+      // 1. Regenerate caption via Gemini
+      const captionRes = await fetch('/api/campaigns/generate-caption', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          prompt: captionPrompt,
+          festival: campaign.festival ?? campaign.name,
+        }),
+      });
+      const captionData = await captionRes.json();
+      if (!captionRes.ok) throw new Error(captionData.error ?? 'Caption generation failed');
+      const newCaption: string = captionData.content ?? captionPrompt;
+
+      // 2. Regenerate image
+      const imgRes = await fetch('/api/campaigns/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          campaignId: campaign.id,
+          festival: campaign.festival ?? campaign.name,
+          theme: imagePrompt,
+        }),
+      });
+      const imgData = await imgRes.json();
+      if (!imgRes.ok) throw new Error(imgData.error ?? 'Image generation failed');
+
+      // 3. Also update the message_template with the new caption
+      const updateRes = await fetch('/api/campaigns/update-status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          campaignId: campaign.id,
+          status: 'to_be_approved',
+          message_template: newCaption,
+        }),
+      });
+      const updateData = await updateRes.json();
+      if (!updateRes.ok) throw new Error(updateData.error ?? 'Update failed');
+
+      setPreviewCaption(newCaption);
+      setPreviewImageUrl(imgData.imageUrl ?? null);
+      setStep('preview');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+      setStep('edit');
+    }
+  };
+
+  const handleConfirm = async () => {
+    // Re-fetch the updated campaign from Supabase and pass it up
+    const sb = getSupabaseClient();
+    const { data } = await sb.from('campaigns').select('*').eq('id', campaign.id).single();
+    if (data) onRegenerated(data as Campaign);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-slate-200">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Wand2 className="w-5 h-5 text-violet-500" />
+              Reject &amp; Regenerate
+            </h2>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Edit the prompts, then regenerate caption + image via Gemini
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {step === 'preview' ? (
+            /* ── Preview step ── */
+            <>
+              <div className="rounded-xl overflow-hidden border border-slate-200">
+                {previewImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={previewImageUrl} alt="Regenerated banner" className="w-full object-contain max-h-72" />
+                ) : (
+                  <div className="flex items-center justify-center h-40 text-slate-400 bg-slate-50">
+                    <ImageIcon className="w-8 h-8" />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  New Caption
+                </p>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                  <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{previewCaption}</p>
+                </div>
+              </div>
+
+              <p className="text-sm text-slate-500 text-center">
+                Happy with the result? Confirm to send back for approval.
+              </p>
+            </>
+          ) : (
+            /* ── Edit step ── */
+            <>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <MessageSquare className="w-4 h-4 text-blue-500" />
+                  Caption Prompt
+                </label>
+                <textarea
+                  value={captionPrompt}
+                  onChange={(e) => setCaptionPrompt(e.target.value)}
+                  rows={4}
+                  placeholder="Describe the message you want Gemini to write…"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  This will be sent to Gemini to generate a new WhatsApp caption.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <ImageIcon className="w-4 h-4 text-violet-500" />
+                  Image Theme / Prompt
+                </label>
+                <textarea
+                  value={imagePrompt}
+                  onChange={(e) => setImagePrompt(e.target.value)}
+                  rows={3}
+                  placeholder="Describe the image style or theme…"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  Used as the theme for Gemini image generation.
+                </p>
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  {error}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-slate-200 flex gap-3">
+          {step === 'preview' ? (
+            <>
+              <button
+                onClick={() => setStep('edit')}
+                className="flex-1 px-4 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium text-sm"
+              >
+                Back &amp; Edit Again
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-colors font-semibold text-sm shadow-sm"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Confirm &amp; Send for Approval
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={onClose}
+                className="flex-1 px-4 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerate}
+                disabled={step === 'generating' || !captionPrompt.trim()}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl transition-colors font-semibold text-sm shadow-sm disabled:opacity-50"
+              >
+                {step === 'generating' ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating…
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="w-4 h-4" />
+                    Regenerate with Gemini
+                  </>
+                )}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Status Legend ────────────────────────────────────────────────────────────
 function StatusLegend() {
   const items = [
-    { status: 'draft', desc: 'Outside 3-month window' },
+    { status: 'draft', desc: 'Previous months / outside window' },
     { status: 'pending', desc: 'Ready for image generation' },
-    { status: 'to_be_approved', desc: 'Waiting approval' },
+    { status: 'to_be_approved', desc: 'Awaiting approval' },
     { status: 'approved', desc: 'Queued — sends on scheduled date' },
     { status: 'executed', desc: 'Sent successfully' },
   ];
@@ -429,8 +662,8 @@ export function CampaignsPanel() {
   const [quarterFilter, setQuarterFilter] = useState<Quarter | ''>('');
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [approvalCampaign, setApprovalCampaign] = useState<Campaign | null>(null);
+  const [rejectionCampaign, setRejectionCampaign] = useState<Campaign | null>(null);
   const [previewCampaign, setPreviewCampaign] = useState<Campaign | null>(null);
-  const [showN8n, setShowN8n] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
 
   const { toasts, show: showToast } = useToast();
@@ -575,9 +808,9 @@ export function CampaignsPanel() {
 
   const TABS: { id: StatusTab; label: string }[] = [
     { id: 'all', label: 'All' },
-    { id: 'draft', label: 'Draft' },
-    { id: 'pending', label: 'Pending' },
-    { id: 'to_be_approved', label: 'To Be Approved' },
+    { id: 'draft', label: 'Backlogs' },
+    { id: 'pending', label: 'To Do' },
+    { id: 'to_be_approved', label: 'Pending' },
     { id: 'approved', label: 'Approved' },
     { id: 'executed', label: 'Executed' },
   ];
@@ -598,10 +831,6 @@ export function CampaignsPanel() {
             <div className="flex items-center gap-2">
               <button onClick={loadCampaigns} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors" title="Refresh">
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </button>
-              <button onClick={() => setShowN8n(true)} className="flex items-center gap-2 px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors shadow-sm">
-                <Settings className="w-4 h-4" />
-                n8n Workflows
               </button>
               <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
                 <Plus className="w-4 h-4" />
@@ -689,7 +918,7 @@ export function CampaignsPanel() {
           </div>
         ) : (
           quarterGroups.map((group) => (
-            <QuarterGroupSection key={group.quarter} group={group} onGenerate={handleGenerate} onView={setPreviewCampaign} onApprove={setApprovalCampaign} generatingIds={generatingIds} />
+            <QuarterGroupSection key={group.quarter} group={group} onGenerate={handleGenerate} onView={setPreviewCampaign} onApprove={setApprovalCampaign} onReject={setRejectionCampaign} generatingIds={generatingIds} />
           ))
         )}
       </div>
@@ -702,12 +931,27 @@ export function CampaignsPanel() {
         />
       )}
       {approvalCampaign && (
-        <ApprovalModal campaign={approvalCampaign} onApprove={handleApprove} onReject={handleReject} onClose={() => setApprovalCampaign(null)} />
+        <ApprovalModal
+          campaign={approvalCampaign}
+          onApprove={handleApprove}
+          onReject={handleReject}
+          onClose={() => setApprovalCampaign(null)}
+        />
+      )}
+      {rejectionCampaign && (
+        <RejectionModal
+          campaign={rejectionCampaign}
+          onClose={() => setRejectionCampaign(null)}
+          onRegenerated={(updated) => {
+            setCampaigns((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+            setRejectionCampaign(null);
+            showToast('Campaign regenerated — ready for approval', 'success');
+          }}
+        />
       )}
       {previewCampaign && (
         <ImagePreviewModal campaign={previewCampaign} onClose={() => setPreviewCampaign(null)} />
       )}
-      {showN8n && <N8nWorkflowsModal onClose={() => setShowN8n(false)} />}
 
       <ToastContainer toasts={toasts} />
     </div>

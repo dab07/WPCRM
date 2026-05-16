@@ -181,6 +181,48 @@ export class CampaignOrchestrator {
       let deliveredCount = 0;
       const messageRecords: any[] = [];
 
+      // ── Resolve campaign image ONCE before the batch loop ──────────────────
+      // Use the pre-approved image_url from Supabase Storage if available.
+      // Only fall back to generating a new image if none was approved.
+      let campaignImageBase64: string | null = null;
+      let campaignImageMimeType = 'image/png';
+
+      if (campaign.image_url && !campaign.image_url.startsWith('data:')) {
+        // Fetch the image from Supabase Storage URL and convert to base64
+        try {
+          const imgResponse = await fetch(campaign.image_url);
+          if (imgResponse.ok) {
+            const arrayBuffer = await imgResponse.arrayBuffer();
+            campaignImageBase64 = Buffer.from(arrayBuffer).toString('base64');
+            campaignImageMimeType = imgResponse.headers.get('content-type') || 'image/png';
+            console.log(`[Campaign ${campaign.name}] Using pre-approved image from storage`);
+          }
+        } catch (err) {
+          console.warn(`[Campaign ${campaign.name}] Failed to fetch approved image, will regenerate:`, err);
+        }
+      } else if (campaign.image_url?.startsWith('data:')) {
+        // Already a base64 data URL stored as fallback
+        const match = campaign.image_url.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          campaignImageMimeType = match[1]!;
+          campaignImageBase64 = match[2]!;
+          console.log(`[Campaign ${campaign.name}] Using pre-approved base64 image`);
+        }
+      }
+
+      // If no approved image, generate once and reuse for all contacts
+      if (!campaignImageBase64) {
+        console.log(`[Campaign ${campaign.name}] No approved image found, generating once via Gemini`);
+        const onceImageResult = await this.campaignImageService.generateCampaignImage({
+          campaignName: campaign.name,
+          theme: campaign.festival ?? campaign.name,
+        });
+        if (onceImageResult?.success && onceImageResult.imageBase64) {
+          campaignImageBase64 = onceImageResult.imageBase64;
+          campaignImageMimeType = onceImageResult.mimeType ?? 'image/png';
+        }
+      }
+
       // Process contacts in batches to reduce memory usage
       const BATCH_SIZE = 10;
       for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
@@ -201,28 +243,22 @@ export class CampaignOrchestrator {
               campaign.name
             );
 
-            // Generate campaign image using Gemini AI
-            const imageResult = await this.campaignImageService.generateCampaignImage({
-              campaignName: campaign.name,
-              theme: campaign.name.includes('Festival') ? 'Celebrate with us!' : null
-            });
-
-            // Send WhatsApp message with image and caption
+            // Use the campaign image resolved once before the batch loop
             const sendParams: any = {
               to: contact.phone_number,
-              message: personalizedMessage
+              message: personalizedMessage,
             };
 
-            if (imageResult?.success && imageResult.imageBase64) {
+            if (campaignImageBase64) {
               sendParams.type = 'image';
-              sendParams.imageBase64 = imageResult.imageBase64;
+              sendParams.imageBase64 = campaignImageBase64;
               sendParams.imageCaption = personalizedMessage;
-              sendParams.imageMimeType = imageResult.mimeType || 'image/png'; // Use actual MIME type from Imagen
+              sendParams.imageMimeType = campaignImageMimeType;
             } else {
-              // Fallback to text if image generation fails
-              console.warn(`[Campaign] Image generation failed for ${contact.phone_number}, sending text only`);
+              // No image available — send text only
+              console.warn(`[Campaign] No image for ${contact.phone_number}, sending text only`);
               sendParams.type = 'text';
-              sendParams.message = `🎉 ${campaign.name}\n\n${personalizedMessage}\n\n📱 Powered by Zavops`;
+              sendParams.message = `🎉 ${campaign.name}\n\n${personalizedMessage}`;
             }
 
             const result = await this.getWhatsAppService().sendMessage(sendParams);
@@ -236,7 +272,7 @@ export class CampaignOrchestrator {
                   whatsapp_message_id: result.messageId,
                   sender_type: 'ai',
                   content: personalizedMessage,
-                  message_type: imageResult?.success ? 'image' : 'text',
+                  message_type: campaignImageBase64 ? 'image' : 'text',
                   delivery_status: 'sent'
                 });
               }

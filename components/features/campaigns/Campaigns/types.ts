@@ -19,9 +19,9 @@ export interface QuarterGroup {
 }
 
 export const STATUS_LABELS: Record<string, string> = {
-  draft: 'Draft',
-  pending: 'Pending',
-  to_be_approved: 'To Be Approved',
+  draft: 'Backlog',
+  pending: 'To Do',
+  to_be_approved: 'Pending',
   approved: 'Approved',
   executed: 'Executed',
 };

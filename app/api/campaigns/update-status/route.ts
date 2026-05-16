@@ -11,11 +11,12 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { campaignId, status, image_status, image_url } = body as {
+    const { campaignId, status, image_status, image_url, message_template } = body as {
       campaignId: string;
       status?: CampaignStatus;
       image_status?: string;
       image_url?: string;
+      message_template?: string;
     };
 
     if (!campaignId) {
@@ -29,14 +30,18 @@ export async function PATCH(request: NextRequest) {
     if (status) updatePayload.status = status;
     if (image_status) updatePayload.image_status = image_status;
     if (image_url !== undefined) updatePayload.image_url = image_url;
+    if (message_template !== undefined) updatePayload.message_template = message_template;
 
     // If approving, record nothing extra; if executing, record executed_at
     if (status === 'executed') {
       updatePayload.executed_at = new Date().toISOString();
     }
 
-    // If rejecting (back to pending), reset image
-    if (status === 'pending') {
+    // If rejecting back to pending WITHOUT a new message_template,
+    // reset image so it gets regenerated from scratch.
+    // If message_template is provided it means RejectionModal is doing a
+    // targeted regeneration — don't wipe the image (generate-image handles it).
+    if (status === 'pending' && message_template === undefined) {
       updatePayload.image_status = 'not_generated';
       updatePayload.image_url = null;
     }
