@@ -23,9 +23,10 @@ import {
   XCircle,
   Wand2,
   MessageSquare,
+  Pencil,
+  Upload,
 } from 'lucide-react';
 import { getSupabaseClient } from '../../../../supabase/supabase';
-import { useCampaigns } from '../../../../lib/hooks';
 import type { Campaign, Quarter } from '../../../../lib/types/api/campaigns';
 import { getQuarter, getDaysAway } from '../../../../lib/types/api/campaigns';
 import {
@@ -38,6 +39,7 @@ import {
   type QuarterGroup,
 } from './types';
 import { ApprovalModal } from './ApprovalModal';
+import { CreateCampaignModal } from './CreateCampaignModal';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 interface Toast {
@@ -71,102 +73,6 @@ function ToastContainer({ toasts }: { toasts: Toast[] }) {
   );
 }
 
-// ─── Create Campaign Modal ────────────────────────────────────────────────────
-function CreateCampaignModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const { createCampaign } = useCampaigns();
-  const [formData, setFormData] = useState({
-    name: '',
-    festival: '',
-    message_template: '',
-    target_tags: [] as string[],
-    scheduled_at: '',
-    schedule_type: 'later' as 'now' | 'later',
-  });
-  const [saving, setSaving] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await createCampaign({
-        name: formData.name,
-        festival: formData.festival || formData.name,
-        message_template: formData.message_template,
-        target_tags: formData.target_tags,
-        status: 'draft',
-        ...(formData.schedule_type === 'later' && formData.scheduled_at
-          ? { scheduled_at: formData.scheduled_at }
-          : {}),
-      });
-      onSuccess();
-    } catch (error) {
-      console.error('Error creating campaign:', error);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const commonTags = ['vip', 'premium', 'active', 'new', 'loyal', 'business'];
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[92vh] flex flex-col shadow-2xl">
-        <div className="flex items-center justify-between p-6 border-b border-slate-200">
-          <h2 className="text-lg font-bold text-slate-900">Create Campaign</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Campaign Name *</label>
-              <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="e.g., Diwali 2025" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Festival Name</label>
-              <input type="text" value={formData.festival} onChange={(e) => setFormData({ ...formData, festival: e.target.value })} placeholder="e.g., Diwali (used for AI image generation)" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" />
-              <p className="text-xs text-slate-400 mt-1">Used to generate the festive banner image via Gemini AI</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Message Template *</label>
-              <textarea required value={formData.message_template} onChange={(e) => setFormData({ ...formData, message_template: e.target.value })} rows={3} placeholder="Hello {{name}}! Wishing you a Happy Diwali from our team! 🪔" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" />
-              <p className="text-xs text-slate-400 mt-1">Use {`{{name}}`} for personalization</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Target Tags</label>
-              <div className="flex flex-wrap gap-2 mb-1">
-                {commonTags.map((tag) => (
-                  <button key={tag} type="button" onClick={() => { const t = formData.target_tags.includes(tag) ? formData.target_tags.filter((x) => x !== tag) : [...formData.target_tags, tag]; setFormData({ ...formData, target_tags: t }); }} className={`px-3 py-1 text-xs rounded-full border transition-colors ${formData.target_tags.includes(tag) ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'}`}>
-                    {tag}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-slate-400">Leave empty to target all contacts</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Scheduled Date *</label>
-              <input type="datetime-local" required value={formData.scheduled_at} onChange={(e) => setFormData({ ...formData, scheduled_at: e.target.value })} min={new Date().toISOString().slice(0, 16)} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm" />
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors text-sm font-medium">Cancel</button>
-              <button type="submit" disabled={saving} className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors text-sm font-semibold disabled:opacity-50">
-                {saving ? 'Creating…' : 'Create Campaign'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Days Away Badge ──────────────────────────────────────────────────────────
 function DaysAwayBadge({ dateStr }: { dateStr: string }) {
   const days = getDaysAway(dateStr);
@@ -188,15 +94,15 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ─── Image Action Cell ────────────────────────────────────────────────────────
-interface ImageActionProps {
+// ─── View Campaign Cell ───────────────────────────────────────────────────────
+interface ViewCampaignCellProps {
   campaign: Campaign;
   onGenerate: (id: string) => void;
   onView: (campaign: Campaign) => void;
   generatingIds: Set<string>;
 }
 
-function ImageActionCell({ campaign, onGenerate, onView, generatingIds }: ImageActionProps) {
+function ViewCampaignCell({ campaign, onGenerate, onView, generatingIds }: ViewCampaignCellProps) {
   const isGenerating = generatingIds.has(campaign.id) || campaign.image_status === 'generating';
 
   if (campaign.status === 'draft') {
@@ -219,7 +125,7 @@ function ImageActionCell({ campaign, onGenerate, onView, generatingIds }: ImageA
     return (
       <button onClick={() => onView(campaign)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-lg transition-colors">
         <Eye className="w-3.5 h-3.5" />
-        View Image
+        View Campaign
       </button>
     );
   }
@@ -241,10 +147,11 @@ interface CampaignRowProps {
   onView: (campaign: Campaign) => void;
   onApprove: (campaign: Campaign) => void;
   onReject: (campaign: Campaign) => void;
+  onEdit: (campaign: Campaign) => void;
   generatingIds: Set<string>;
 }
 
-function CampaignRow({ campaign, onGenerate, onView, onApprove, onReject, generatingIds }: CampaignRowProps) {
+function CampaignRow({ campaign, onGenerate, onView, onApprove, onReject, onEdit, generatingIds }: CampaignRowProps) {
   const quarter: Quarter = campaign.scheduled_at ? getQuarter(campaign.scheduled_at) : 'Q1';
 
   return (
@@ -278,19 +185,22 @@ function CampaignRow({ campaign, onGenerate, onView, onApprove, onReject, genera
         ) : (campaign.target_count ?? '—')}
       </td>
       <td className="px-4 py-3">
-        <ImageActionCell campaign={campaign} onGenerate={onGenerate} onView={onView} generatingIds={generatingIds} />
+        <ViewCampaignCell campaign={campaign} onGenerate={onGenerate} onView={onView} generatingIds={generatingIds} />
       </td>
       <td className="px-4 py-3">
         <StatusBadge status={campaign.status} />
       </td>
       <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Edit button — available on all non-executed campaigns */}
+          {campaign.status !== 'executed' && (
+            <button onClick={() => onEdit(campaign)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
+              <Pencil className="w-3.5 h-3.5" />
+              Edit
+            </button>
+          )}
           {campaign.status === 'to_be_approved' && (
             <>
-              <button onClick={() => onView(campaign)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
-                <Eye className="w-3.5 h-3.5" />
-                View
-              </button>
               <button onClick={() => onApprove(campaign)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors">
                 <CheckCircle className="w-3.5 h-3.5" />
                 Approve
@@ -320,10 +230,11 @@ interface QuarterGroupSectionProps {
   onView: (campaign: Campaign) => void;
   onApprove: (campaign: Campaign) => void;
   onReject: (campaign: Campaign) => void;
+  onEdit: (campaign: Campaign) => void;
   generatingIds: Set<string>;
 }
 
-function QuarterGroupSection({ group, onGenerate, onView, onApprove, onReject, generatingIds }: QuarterGroupSectionProps) {
+function QuarterGroupSection({ group, onGenerate, onView, onApprove, onReject, onEdit, generatingIds }: QuarterGroupSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { quarter, campaigns } = group;
 
@@ -343,14 +254,14 @@ function QuarterGroupSection({ group, onGenerate, onView, onApprove, onReject, g
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                {['Festival', 'Quarter', 'Scheduled', 'Days Away', 'Recipients', 'Image', 'Status', 'Actions'].map((h) => (
+                {['Festival', 'Quarter', 'Scheduled', 'Days Away', 'Recipients', 'View Campaign', 'Status', 'Actions'].map((h) => (
                   <th key={h} className="px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {campaigns.map((c) => (
-                <CampaignRow key={c.id} campaign={c} onGenerate={onGenerate} onView={onView} onApprove={onApprove} onReject={onReject} generatingIds={generatingIds} />
+                <CampaignRow key={c.id} campaign={c} onGenerate={onGenerate} onView={onView} onApprove={onApprove} onReject={onReject} onEdit={onEdit} generatingIds={generatingIds} />
               ))}
             </tbody>
           </table>
@@ -360,29 +271,206 @@ function QuarterGroupSection({ group, onGenerate, onView, onApprove, onReject, g
   );
 }
 
-// ─── Image Preview Modal ──────────────────────────────────────────────────────
-function ImagePreviewModal({ campaign, onClose }: { campaign: Campaign; onClose: () => void }) {
+// ─── Campaign Preview Modal (image + caption) ─────────────────────────────────
+function CampaignPreviewModal({ campaign, onClose }: { campaign: Campaign; onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between p-4 border-b border-slate-200">
-          <h3 className="font-semibold text-slate-900">{campaign.festival ?? campaign.name}</h3>
+      <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200 shrink-0">
+          <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+            {getFestivalEmoji(campaign.festival ?? campaign.name)}
+            {campaign.festival ?? campaign.name}
+          </h3>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
-        {campaign.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={campaign.image_url} alt="Campaign banner" className="w-full object-contain max-h-[70vh]" />
-        ) : (
-          <div className="flex items-center justify-center h-48 text-slate-400">No image available</div>
-        )}
+        <div className="overflow-y-auto">
+          {campaign.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={campaign.image_url} alt="Campaign banner" className="w-full object-contain" />
+          ) : (
+            <div className="flex items-center justify-center h-40 text-slate-400 bg-slate-50">
+              <ImageIcon className="w-8 h-8" />
+            </div>
+          )}
+          {campaign.message_template && (
+            <div className="p-4 bg-emerald-50 border-t border-emerald-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <MessageSquare className="w-3.5 h-3.5" />
+                Caption
+              </p>
+              <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{campaign.message_template}</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── Rejection Modal ──────────────────────────────────────────────────────────
+// ─── Edit Campaign Modal ──────────────────────────────────────────────────────
+interface EditCampaignModalProps {
+  campaign: Campaign;
+  onClose: () => void;
+  onSaved: (updated: Campaign) => void;
+}
+
+function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignModalProps) {
+  const [caption, setCaption] = useState(campaign.message_template ?? '');
+  const [scheduledAt, setScheduledAt] = useState(
+    campaign.scheduled_at ? campaign.scheduled_at.slice(0, 16) : ''
+  );
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(campaign.image_url ?? null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      const sb = getSupabaseClient();
+      const { data: { session } } = await sb.auth.getSession();
+      const token = session?.access_token ?? 'anon';
+
+      let imageUrl: string | null = campaign.image_url ?? null;
+
+      // Upload new image to Supabase Storage if provided
+      if (imageFile) {
+        const ext = imageFile.name.split('.').pop() ?? 'jpg';
+        const fileName = `festival-campaigns/${campaign.id}-${Date.now()}.${ext}`;
+        const arrayBuffer = await imageFile.arrayBuffer();
+        const { error: uploadErr } = await sb.storage
+          .from('campaign-images')
+          .upload(fileName, arrayBuffer, { contentType: imageFile.type, upsert: true });
+
+        if (uploadErr) {
+          // Fallback: store as base64 data URL
+          imageUrl = imagePreview;
+        } else {
+          const { data: urlData } = sb.storage.from('campaign-images').getPublicUrl(fileName);
+          imageUrl = urlData.publicUrl;
+        }
+      }
+
+      const res = await fetch('/api/campaigns/update', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          campaignId: campaign.id,
+          message_template: caption,
+          scheduled_at: scheduledAt || null,
+          ...(imageFile ? { image_url: imageUrl, image_status: 'generated' } : {}),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Save failed');
+      onSaved(data.campaign as Campaign);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[92vh] flex flex-col shadow-2xl">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-blue-500" />
+              Edit Campaign
+            </h2>
+            <p className="text-sm text-slate-500 mt-0.5">{campaign.festival ?? campaign.name}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {/* Image upload */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              <ImageIcon className="w-3.5 h-3.5" />
+              Campaign Image
+            </label>
+            {imagePreview && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imagePreview} alt="Preview" className="w-full rounded-xl object-contain max-h-48 mb-3 border border-slate-200" />
+            )}
+            <label className="flex items-center justify-center gap-2 w-full px-4 py-3 border-2 border-dashed border-slate-300 hover:border-blue-400 rounded-xl cursor-pointer text-sm text-slate-500 hover:text-blue-600 transition-colors">
+              <Upload className="w-4 h-4" />
+              {imageFile ? imageFile.name : 'Upload new image (replaces AI-generated)'}
+              <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+            </label>
+          </div>
+
+          {/* Caption */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              <MessageSquare className="w-3.5 h-3.5" />
+              Caption
+            </label>
+            <textarea
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              rows={5}
+              className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none"
+            />
+          </div>
+
+          {/* Scheduled date */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5" />
+              Scheduled Date &amp; Time
+            </label>
+            <input
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            />
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 border-t border-slate-200 flex gap-3">
+          <button onClick={onClose} className="flex-1 px-4 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium text-sm">
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors font-semibold text-sm shadow-sm disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 interface RejectionModalProps {
   campaign: Campaign;
   onClose: () => void;
@@ -664,6 +752,7 @@ export function CampaignsPanel() {
   const [approvalCampaign, setApprovalCampaign] = useState<Campaign | null>(null);
   const [rejectionCampaign, setRejectionCampaign] = useState<Campaign | null>(null);
   const [previewCampaign, setPreviewCampaign] = useState<Campaign | null>(null);
+  const [editCampaign, setEditCampaign] = useState<Campaign | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
   const { toasts, show: showToast } = useToast();
@@ -706,12 +795,10 @@ export function CampaignsPanel() {
   }), [campaigns, activeTab, search, festivalFilter, quarterFilter]);
 
   const tabCounts: TabCount = useMemo(() => {
-    const base = { all: campaigns.length, draft: 0, pending: 0, to_be_approved: 0, approved: 0, executed: 0 };
+    const base: TabCount = { all: campaigns.length, draft: 0, pending: 0, to_be_approved: 0, approved: 0, executed: 0, rejected: 0 };
     campaigns.forEach((c) => {
-      if (c.status in base) {
-        const cur = (base as Record<string, number>)[c.status] ?? 0;
-        (base as Record<string, number>)[c.status] = cur + 1;
-      }
+      const key = c.status as keyof TabCount;
+      if (key in base && key !== 'all') base[key]++;
     });
     return base;
   }, [campaigns]);
@@ -798,12 +885,12 @@ export function CampaignsPanel() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({ campaignId, status: 'pending' }),
+      body: JSON.stringify({ campaignId, status: 'rejected' }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? 'Rejection failed');
     setCampaigns((prev) => prev.map((c) => c.id === campaignId ? (data.campaign as Campaign) : c));
-    showToast('Campaign sent back for regeneration', 'info');
+    showToast('Campaign rejected', 'info');
   }, [showToast]);
 
   const TABS: { id: StatusTab; label: string }[] = [
@@ -813,6 +900,7 @@ export function CampaignsPanel() {
     { id: 'to_be_approved', label: 'Pending' },
     { id: 'approved', label: 'Approved' },
     { id: 'executed', label: 'Executed' },
+    { id: 'rejected', label: 'Rejected' },
   ];
 
   return (
@@ -918,7 +1006,7 @@ export function CampaignsPanel() {
           </div>
         ) : (
           quarterGroups.map((group) => (
-            <QuarterGroupSection key={group.quarter} group={group} onGenerate={handleGenerate} onView={setPreviewCampaign} onApprove={setApprovalCampaign} onReject={setRejectionCampaign} generatingIds={generatingIds} />
+            <QuarterGroupSection key={group.quarter} group={group} onGenerate={handleGenerate} onView={setPreviewCampaign} onApprove={setApprovalCampaign} onReject={setRejectionCampaign} onEdit={setEditCampaign} generatingIds={generatingIds} />
           ))
         )}
       </div>
@@ -950,7 +1038,18 @@ export function CampaignsPanel() {
         />
       )}
       {previewCampaign && (
-        <ImagePreviewModal campaign={previewCampaign} onClose={() => setPreviewCampaign(null)} />
+        <CampaignPreviewModal campaign={previewCampaign} onClose={() => setPreviewCampaign(null)} />
+      )}
+      {editCampaign && (
+        <EditCampaignModal
+          campaign={editCampaign}
+          onClose={() => setEditCampaign(null)}
+          onSaved={(updated) => {
+            setCampaigns((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+            setEditCampaign(null);
+            showToast('Campaign updated', 'success');
+          }}
+        />
       )}
 
       <ToastContainer toasts={toasts} />

@@ -5,7 +5,8 @@ export type CampaignStatus =
   | 'pending'
   | 'to_be_approved'
   | 'approved'
-  | 'executed';
+  | 'executed'
+  | 'rejected';
 
 export type ImageStatus = 'not_generated' | 'generating' | 'generated';
 
