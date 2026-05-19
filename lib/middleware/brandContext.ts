@@ -1,7 +1,3 @@
-// [NEW: multi-tenant-isolation] — added 2026-04-18
-// Extracts and validates brand context from an incoming API request.
-// Used by all protected API routes to enforce brand-scoped access.
-
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../supabase/supabase';
 import type { BrandContext } from '../types/api/auth';

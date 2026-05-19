@@ -402,88 +402,89 @@ Hashtags: ${hashtags.join(', ')}`;
   }>> {
     try {
       const client = this.getClient();
-      
-      // Create a detailed prompt for image generation
-      const prompt = `Professional festive social media post for Zavops — ${config.campaignName}.
 
-BRAND GUIDELINES (strictly follow):
+      // Load the Zavops logo as base64 to pass to Gemini
+      let logoBase64: string | null = null;
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const logoPath = path.join(process.cwd(), 'logos', 'Zavops logo full (1).png');
+        const logoBuffer = fs.readFileSync(logoPath);
+        logoBase64 = logoBuffer.toString('base64');
+      } catch (logoErr) {
+        console.warn('[Gemini Service] Could not load Zavops logo, proceeding without it:', logoErr);
+      }
+
+      // Create a detailed prompt for image generation
+      const prompt = `Create a professional festive WhatsApp campaign image for Zavops — ${config.campaignName}.
+
+STRICT BRAND GUIDELINES:
 - Background: solid bright golden yellow (#F5C400), full bleed, no gradients
-- Zavops logo centered at top (blue and yellow wordmark "ZAVOPS")
-- Below logo: small text "wishes you" in dark color (#1C3080 or dark brown)
+- Place the provided Zavops logo image exactly as-is, centered at the top of the image — do NOT redraw or recreate it
+- Below the logo: small elegant text "wishes you" in dark navy (#1C3080)
 - Large decorative script headline: "HAPPY ${config.campaignName.toUpperCase()}" in deep maroon-red (#7B1A1A) cursive/calligraphy font
-- Center illustration: Image which symbolises the ${config.campaignName} — vibrant, detailed, festive
-- Bottom tagline in dark brown serif font: Tageline for ${config.campaignName}
-- Color palette restricted to: #F5C400 (background), #1C3080 (logo/accents), deep maroon #7B1A1A (headline), warm reds/oranges/pinks (illustration), dark brown (body text)
-- NO white backgrounds, NO gradients, NO purple tones, NO generic corporate look
+- Center illustration: vibrant, detailed festive artwork symbolising ${config.campaignName}
+- Bottom tagline in dark brown serif font appropriate for ${config.campaignName}
+- Color palette: #F5C400 (background), #1C3080 (accents), #7B1A1A (headline), warm reds/oranges (illustration), dark brown (body text)
+- NO white backgrounds, NO gradients, NO purple tones
 - Square 1:1 format, WhatsApp-ready
 - Warm, devotional, community-oriented Indian festive aesthetic
-- High quality illustration style consistent with traditional Indian festival art
 
-Festival context: ${config.theme}`;
+Festival context: ${config.theme ?? config.campaignName}`;
 
-      const model = 'gemini-2.5-flash-image';
-      const contents = [
-        {
-          role: 'user',
-          parts: [
-            {
-              text: prompt
-            }
-          ]
-        }
-      ];
-      
-      const generationConfig = {
-        responseModalities: ['IMAGE', 'TEXT']
-      };
+      const model = 'gemini-2.5-flash-preview-05-20';
 
-      // Use generateContentStream as per official API - single request only
+      // Build parts — include logo image if available
+      const userParts: any[] = [];
+
+      if (logoBase64) {
+        userParts.push({
+          inlineData: {
+            data: logoBase64,
+            mimeType: 'image/png',
+          },
+        });
+        userParts.push({
+          text: `Above is the official Zavops logo. Use it exactly as provided — place it at the top center of the image without modification.\n\n${prompt}`,
+        });
+      } else {
+        userParts.push({ text: prompt });
+      }
+
+      const contents = [{ role: 'user', parts: userParts }];
+      const generationConfig = { responseModalities: ['IMAGE', 'TEXT'] };
+
       const response = await client.models.generateContentStream({
         model,
         contents,
-        config: generationConfig
+        config: generationConfig,
       });
 
       let imageBase64: string | null = null;
       let mimeType = 'image/png';
 
-      // Process the stream to extract image data
       for await (const chunk of response) {
-        if (!chunk.candidates || !chunk.candidates[0]?.content || !chunk.candidates[0].content.parts) {
-          continue;
-        }
-
-        // Look for inlineData in parts
-        const parts = chunk.candidates[0].content.parts;
-        for (const part of parts) {
-          if (part.inlineData && part.inlineData.data) {
+        if (!chunk.candidates?.[0]?.content?.parts) continue;
+        for (const part of chunk.candidates[0].content.parts) {
+          if (part.inlineData?.data) {
             imageBase64 = part.inlineData.data;
             mimeType = part.inlineData.mimeType || 'image/png';
             break;
           }
         }
-
-        if (imageBase64) {
-          break;
-        }
+        if (imageBase64) break;
       }
 
       if (!imageBase64) {
         throw new GeminiServiceError('No image data received from Gemini');
       }
 
-      return {
-        success: true,
-        data: {
-          imageBase64,
-          mimeType
-        }
-      };
+      return { success: true, data: { imageBase64, mimeType } };
     } catch (error) {
       console.error('[Gemini Service] Error generating campaign image:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
