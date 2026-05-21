@@ -296,14 +296,14 @@ function CampaignPreviewModal({ campaign, onClose }: { campaign: Campaign; onClo
           </button>
         </div>
         <div className="overflow-y-auto">
-          {campaign.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={campaign.image_url} alt="Campaign banner" className="w-full object-contain" />
-          ) : (
-            <div className="flex items-center justify-center h-40 text-slate-400 bg-slate-50">
-              <ImageIcon className="w-8 h-8" />
-            </div>
-          )}
+          <div className="w-full aspect-square bg-[#F5C400] flex items-center justify-center overflow-hidden">
+            {campaign.image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={campaign.image_url} alt="Campaign banner" className="w-full h-full object-cover" />
+            ) : (
+              <ImageIcon className="w-8 h-8 text-amber-700 opacity-40" />
+            )}
+          </div>
           {campaign.message_template && (
             <div className="p-4 bg-emerald-50 border-t border-emerald-100">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
@@ -423,8 +423,10 @@ function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignModalProp
               Campaign Image
             </label>
             {imagePreview && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={imagePreview} alt="Preview" className="w-full rounded-xl object-contain max-h-48 mb-3 border border-slate-200" />
+              <div className="w-full aspect-square rounded-xl overflow-hidden border border-slate-200 bg-[#F5C400] mb-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+              </div>
             )}
             <label className="flex items-center justify-center gap-2 w-full px-4 py-3 border-2 border-dashed border-slate-300 hover:border-blue-400 rounded-xl cursor-pointer text-sm text-slate-500 hover:text-blue-600 transition-colors">
               <Upload className="w-4 h-4" />
@@ -588,15 +590,15 @@ function RejectionModal({ campaign, onClose, onRegenerated }: RejectionModalProp
           {step === 'preview' ? (
             /* ── Preview step ── */
             <>
-              <div className="rounded-xl overflow-hidden border border-slate-200">
-                {previewImageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={previewImageUrl} alt="Regenerated banner" className="w-full object-contain max-h-72" />
-                ) : (
-                  <div className="flex items-center justify-center h-40 text-slate-400 bg-slate-50">
-                    <ImageIcon className="w-8 h-8" />
-                  </div>
-                )}
+              <div className="rounded-xl overflow-hidden border border-slate-200 bg-[#F5C400]">
+                <div className="w-full aspect-square flex items-center justify-center overflow-hidden">
+                  {previewImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={previewImageUrl} alt="Regenerated banner" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageIcon className="w-8 h-8 text-amber-700 opacity-40" />
+                  )}
+                </div>
               </div>
 
               <div>

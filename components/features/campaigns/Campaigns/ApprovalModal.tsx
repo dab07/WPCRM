@@ -86,20 +86,22 @@ export function ApprovalModal({ campaign, onApprove, onReject, onClose }: Approv
           {/* Image + Caption side by side on larger screens */}
           <div className="flex flex-col lg:flex-row gap-5">
             {/* Image */}
-            <div className="flex-1 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 min-h-[200px] flex items-center justify-center">
-              {campaign.image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={campaign.image_url}
-                  alt={`${campaign.festival ?? campaign.name} campaign banner`}
-                  className="w-full object-contain max-h-80"
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-48 text-slate-400 gap-2">
-                  <ImageIcon className="w-10 h-10" />
-                  <p className="text-sm">No image generated</p>
-                </div>
-              )}
+            <div className="flex-1 rounded-xl overflow-hidden border border-slate-200 bg-[#F5C400]">
+              <div className="w-full aspect-square flex items-center justify-center overflow-hidden">
+                {campaign.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={campaign.image_url}
+                    alt={`${campaign.festival ?? campaign.name} campaign banner`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-amber-700 opacity-40 gap-2">
+                    <ImageIcon className="w-10 h-10" />
+                    <p className="text-sm">No image generated</p>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Caption */}
