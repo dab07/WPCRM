@@ -495,7 +495,7 @@ interface RejectionModalProps {
 function RejectionModal({ campaign, onClose, onRegenerated }: RejectionModalProps) {
   const [captionPrompt, setCaptionPrompt] = useState(campaign.message_template ?? '');
   const [imagePrompt, setImagePrompt] = useState(
-    `Professional festive social media post for ${campaign.festival ?? campaign.name}`
+    campaign.festival ?? campaign.name
   );
   const [step, setStep] = useState<'edit' | 'preview' | 'generating'>('edit');
   const [previewCaption, setPreviewCaption] = useState('');
@@ -636,17 +636,17 @@ function RejectionModal({ campaign, onClose, onRegenerated }: RejectionModalProp
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
                   <ImageIcon className="w-4 h-4 text-violet-500" />
-                  Image Theme / Prompt
+                  Additional Image Context
                 </label>
                 <textarea
                   value={imagePrompt}
                   onChange={(e) => setImagePrompt(e.target.value)}
                   rows={3}
-                  placeholder="Describe the image style or theme…"
+                  placeholder="e.g. Diwali, warm golden tones, diyas and rangoli"
                   className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none"
                 />
                 <p className="text-xs text-slate-400 mt-1">
-                  Used as the theme for Gemini image generation.
+                  Extra context passed to the image generator. Brand guidelines (logo, colors, layout) are always applied automatically.
                 </p>
               </div>
 
