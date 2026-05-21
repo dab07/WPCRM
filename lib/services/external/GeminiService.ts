@@ -421,7 +421,7 @@ STRICT BRAND GUIDELINES:
 
 Festival context: ${config.theme ?? config.campaignName}`;
 
-      const model = 'gemini-2.5-flash-preview-05-20';
+      const model = 'gemini-2.5-flash-image';
 
       // Build parts — include logo image if provided
       const userParts: any[] = [];
