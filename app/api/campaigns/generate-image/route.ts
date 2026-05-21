@@ -3,6 +3,7 @@ import { getSupabaseClient } from '../../../../supabase/supabase';
 import { GeminiService } from '../../../../lib/services/external/GeminiService';
 import fs from 'fs';
 import path from 'path';
+import sharp from 'sharp';
 
 // Read the Zavops logo once at module load (server-side only)
 function loadLogoBase64(): string | null {
@@ -16,7 +17,31 @@ function loadLogoBase64(): string | null {
 }
 
 const ZAVOPS_LOGO_BASE64 = loadLogoBase64();
+const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 
+/**
+ * Compress an image buffer to JPEG, targeting ≤ maxBytes.
+ * Starts at quality 90 and steps down until the size fits.
+ */
+async function compressToJpeg(input: Buffer, maxBytes: number): Promise<Buffer> {
+  let quality = 90;
+  let output: Buffer;
+
+  do {
+    output = await sharp(input)
+      .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality, mozjpeg: true })
+      .toBuffer();
+
+    if (output.length <= maxBytes || quality <= 40) break;
+    quality -= 10;
+  } while (true);
+
+  console.log(
+    `[generate-image] Compressed to ${(output.length / 1024).toFixed(0)} KB at quality ${quality}`
+  );
+  return output;
+}
 
 export async function POST(request: NextRequest) {
   const supabase = getSupabaseClient(true);
@@ -61,25 +86,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { imageBase64, mimeType } = result.data;
+    const { imageBase64 } = result.data;
+    const rawBuffer = Buffer.from(imageBase64, 'base64');
 
-    const ext = mimeType === 'image/jpeg' ? 'jpg' : 'png';
-    const fileName = `festival-campaigns/${campaignId}-${Date.now()}.${ext}`;
-    const imageBuffer = Buffer.from(imageBase64, 'base64');
+    // Compress to JPEG ≤ 2 MB
+    const compressedBuffer = await compressToJpeg(rawBuffer, MAX_BYTES);
+    const finalMimeType = 'image/jpeg';
+    const fileName = `festival-campaigns/${campaignId}-${Date.now()}.jpg`;
 
     const { error: uploadErr } = await supabase.storage
       .from('campaign-images')
-      .upload(fileName, imageBuffer, {
-        contentType: mimeType,
+      .upload(fileName, compressedBuffer, {
+        contentType: finalMimeType,
         upsert: true,
       });
 
     let imageUrl: string | null = null;
 
     if (uploadErr) {
-      // Storage upload failed â€” store base64 data URL as fallback
-      console.warn('[generate-image] Storage upload failed, using data URL:', uploadErr.message);
-      imageUrl = `data:${mimeType};base64,${imageBase64}`;
+      console.warn('[generate-image] Storage upload failed:', uploadErr.message);
+      // Fallback: store compressed image as base64 data URL
+      imageUrl = `data:${finalMimeType};base64,${compressedBuffer.toString('base64')}`;
     } else {
       const { data: urlData } = supabase.storage
         .from('campaign-images')
@@ -136,4 +163,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

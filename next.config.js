@@ -4,6 +4,7 @@ const nextConfig = {
   images: {
     domains: ['qwwmpsgcgyqjqfcqfzob.supabase.co'],
   },
+  serverExternalPackages: ['sharp'],
 };
 
 module.exports = nextConfig;

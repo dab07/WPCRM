@@ -415,7 +415,8 @@ STRICT BRAND GUIDELINES:
 - Bottom tagline in dark brown serif font appropriate for ${config.campaignName}
 - Color palette: #F5C400 (background), #1C3080 (accents), #7B1A1A (headline), warm reds/oranges (illustration), dark brown (body text)
 - NO white backgrounds, NO gradients, NO purple tones
-- Square 1:1 format, WhatsApp-ready
+- Square 1:1 format, WhatsApp-ready Dimension 1024 x 1024
+- File size below 2Mb
 - Warm, devotional, community-oriented Indian festive aesthetic
 
 Festival context: ${config.theme ?? config.campaignName}`;

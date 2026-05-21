@@ -25,6 +25,7 @@ import {
   MessageSquare,
   Pencil,
   Upload,
+  RotateCcw,
 } from 'lucide-react';
 import { getSupabaseClient } from '../../../../supabase/supabase';
 import type { Campaign, Quarter } from '../../../../lib/types/api/campaigns';
@@ -148,10 +149,11 @@ interface CampaignRowProps {
   onApprove: (campaign: Campaign) => void;
   onReject: (campaign: Campaign) => void;
   onEdit: (campaign: Campaign) => void;
+  onMoveToPending: (campaignId: string) => void;
   generatingIds: Set<string>;
 }
 
-function CampaignRow({ campaign, onGenerate, onView, onApprove, onReject, onEdit, generatingIds }: CampaignRowProps) {
+function CampaignRow({ campaign, onGenerate, onView, onApprove, onReject, onEdit, onMoveToPending, generatingIds }: CampaignRowProps) {
   const quarter: Quarter = campaign.scheduled_at ? getQuarter(campaign.scheduled_at) : 'Q1';
 
   return (
@@ -199,6 +201,13 @@ function CampaignRow({ campaign, onGenerate, onView, onApprove, onReject, onEdit
               Edit
             </button>
           )}
+          {/* Rejected — allow moving back to To Do */}
+          {campaign.status === 'rejected' && (
+            <button onClick={() => onMoveToPending(campaign.id)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors">
+              <RotateCcw className="w-3.5 h-3.5" />
+              Move to To Do
+            </button>
+          )}
           {campaign.status === 'to_be_approved' && (
             <>
               <button onClick={() => onApprove(campaign)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors">
@@ -231,10 +240,11 @@ interface QuarterGroupSectionProps {
   onApprove: (campaign: Campaign) => void;
   onReject: (campaign: Campaign) => void;
   onEdit: (campaign: Campaign) => void;
+  onMoveToPending: (campaignId: string) => void;
   generatingIds: Set<string>;
 }
 
-function QuarterGroupSection({ group, onGenerate, onView, onApprove, onReject, onEdit, generatingIds }: QuarterGroupSectionProps) {
+function QuarterGroupSection({ group, onGenerate, onView, onApprove, onReject, onEdit, onMoveToPending, generatingIds }: QuarterGroupSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { quarter, campaigns } = group;
 
@@ -261,7 +271,7 @@ function QuarterGroupSection({ group, onGenerate, onView, onApprove, onReject, o
             </thead>
             <tbody>
               {campaigns.map((c) => (
-                <CampaignRow key={c.id} campaign={c} onGenerate={onGenerate} onView={onView} onApprove={onApprove} onReject={onReject} onEdit={onEdit} generatingIds={generatingIds} />
+                <CampaignRow key={c.id} campaign={c} onGenerate={onGenerate} onView={onView} onApprove={onApprove} onReject={onReject} onEdit={onEdit} onMoveToPending={onMoveToPending} generatingIds={generatingIds} />
               ))}
             </tbody>
           </table>
@@ -345,24 +355,29 @@ function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignModalProp
 
       let imageUrl: string | null = campaign.image_url ?? null;
 
-      // Upload new image to Supabase Storage if provided
+      // Upload new image directly to Supabase Storage from the browser
       if (imageFile) {
-        const ext = imageFile.name.split('.').pop() ?? 'jpg';
+        const ext = imageFile.name.split('.').pop()?.toLowerCase() ?? 'jpg';
         const fileName = `festival-campaigns/${campaign.id}-${Date.now()}.${ext}`;
-        const arrayBuffer = await imageFile.arrayBuffer();
+
         const { error: uploadErr } = await sb.storage
           .from('campaign-images')
-          .upload(fileName, arrayBuffer, { contentType: imageFile.type, upsert: true });
+          .upload(fileName, imageFile, {
+            contentType: imageFile.type,
+            upsert: true,
+          });
 
         if (uploadErr) {
-          // Fallback: store as base64 data URL
-          imageUrl = imagePreview;
-        } else {
-          const { data: urlData } = sb.storage.from('campaign-images').getPublicUrl(fileName);
-          imageUrl = urlData.publicUrl;
+          throw new Error(`Image upload failed: ${uploadErr.message}. Make sure the "campaign-images" bucket exists in Supabase Storage and is set to public.`);
         }
+
+        const { data: urlData } = sb.storage
+          .from('campaign-images')
+          .getPublicUrl(fileName);
+        imageUrl = urlData.publicUrl;
       }
 
+      // Send only the URL (never base64) — keeps the request small
       const res = await fetch('/api/campaigns/update', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -881,16 +896,29 @@ export function CampaignsPanel() {
 
     const res = await fetch('/api/campaigns/update-status', {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ campaignId, status: 'rejected' }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? 'Rejection failed');
     setCampaigns((prev) => prev.map((c) => c.id === campaignId ? (data.campaign as Campaign) : c));
     showToast('Campaign rejected', 'info');
+  }, [showToast]);
+
+  const handleMoveToPending = useCallback(async (campaignId: string) => {
+    const supabase = getSupabaseClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token ?? 'anon';
+
+    const res = await fetch('/api/campaigns/update-status', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ campaignId, status: 'pending' }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? 'Failed to move campaign');
+    setCampaigns((prev) => prev.map((c) => c.id === campaignId ? (data.campaign as Campaign) : c));
+    showToast('Campaign moved to To Do', 'success');
   }, [showToast]);
 
   const TABS: { id: StatusTab; label: string }[] = [
@@ -1006,7 +1034,7 @@ export function CampaignsPanel() {
           </div>
         ) : (
           quarterGroups.map((group) => (
-            <QuarterGroupSection key={group.quarter} group={group} onGenerate={handleGenerate} onView={setPreviewCampaign} onApprove={setApprovalCampaign} onReject={setRejectionCampaign} onEdit={setEditCampaign} generatingIds={generatingIds} />
+            <QuarterGroupSection key={group.quarter} group={group} onGenerate={handleGenerate} onView={setPreviewCampaign} onApprove={setApprovalCampaign} onReject={setRejectionCampaign} onEdit={setEditCampaign} onMoveToPending={handleMoveToPending} generatingIds={generatingIds} />
           ))
         )}
       </div>
