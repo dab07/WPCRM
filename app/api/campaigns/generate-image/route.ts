@@ -20,26 +20,43 @@ const ZAVOPS_LOGO_BASE64 = loadLogoBase64();
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 
 /**
- * Compress an image buffer to JPEG, targeting ≤ maxBytes.
- * Starts at quality 90 and steps down until the size fits.
+ * Force the image to exactly 1024×1024 square, then compress to JPEG ≤ maxBytes.
+ * Uses 'contain' with the brand background color (#F5C400) so no content is cropped —
+ * any non-square output from Gemini gets padded to square with the brand color.
  */
-async function compressToJpeg(input: Buffer, maxBytes: number): Promise<Buffer> {
-  let quality = 90;
-  let output: Buffer;
+async function processToSquareJpeg(input: Buffer, maxBytes: number): Promise<Buffer> {
+  // First pass: force to 1024×1024 square with brand-color padding
+  const squared = await sharp(input)
+    .resize(1024, 1024, {
+      fit: 'contain',
+      background: { r: 245, g: 196, b: 0, alpha: 1 }, // #F5C400
+    })
+    .jpeg({ quality: 90, mozjpeg: true })
+    .toBuffer();
 
-  do {
+  if (squared.length <= maxBytes) {
+    console.log(`[generate-image] 1024×1024 at quality 90 → ${(squared.length / 1024).toFixed(0)} KB`);
+    return squared;
+  }
+
+  // Step down quality until it fits
+  let quality = 80;
+  let output: Buffer = squared;
+
+  while (quality >= 40) {
     output = await sharp(input)
-      .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+      .resize(1024, 1024, {
+        fit: 'contain',
+        background: { r: 245, g: 196, b: 0, alpha: 1 },
+      })
       .jpeg({ quality, mozjpeg: true })
       .toBuffer();
 
-    if (output.length <= maxBytes || quality <= 40) break;
+    if (output.length <= maxBytes) break;
     quality -= 10;
-  } while (true);
+  }
 
-  console.log(
-    `[generate-image] Compressed to ${(output.length / 1024).toFixed(0)} KB at quality ${quality}`
-  );
+  console.log(`[generate-image] 1024×1024 at quality ${quality} → ${(output.length / 1024).toFixed(0)} KB`);
   return output;
 }
 
@@ -89,8 +106,8 @@ export async function POST(request: NextRequest) {
     const { imageBase64 } = result.data;
     const rawBuffer = Buffer.from(imageBase64, 'base64');
 
-    // Compress to JPEG ≤ 2 MB
-    const compressedBuffer = await compressToJpeg(rawBuffer, MAX_BYTES);
+    // Force to 1024×1024 square and compress to ≤ 2 MB
+    const compressedBuffer = await processToSquareJpeg(rawBuffer, MAX_BYTES);
     const finalMimeType = 'image/jpeg';
     const fileName = `festival-campaigns/${campaignId}-${Date.now()}.jpg`;
 
