@@ -396,6 +396,7 @@ Hashtags: ${hashtags.join(', ')}`;
   async generateCampaignImage(config: {
     campaignName: string;
     theme?: string | null;
+    logoBase64?: string | null;
   }): Promise<GeminiResponse<{
     imageBase64: string;
     mimeType: string;
@@ -403,19 +404,6 @@ Hashtags: ${hashtags.join(', ')}`;
     try {
       const client = this.getClient();
 
-      // Load the Zavops logo as base64 to pass to Gemini
-      let logoBase64: string | null = null;
-      try {
-        const fs = await import('fs');
-        const path = await import('path');
-        const logoPath = path.join(process.cwd(), 'logos', 'Zavops logo full (1).png');
-        const logoBuffer = fs.readFileSync(logoPath);
-        logoBase64 = logoBuffer.toString('base64');
-      } catch (logoErr) {
-        console.warn('[Gemini Service] Could not load Zavops logo, proceeding without it:', logoErr);
-      }
-
-      // Create a detailed prompt for image generation
       const prompt = `Create a professional festive WhatsApp campaign image for Zavops — ${config.campaignName}.
 
 STRICT BRAND GUIDELINES:
@@ -434,13 +422,13 @@ Festival context: ${config.theme ?? config.campaignName}`;
 
       const model = 'gemini-2.5-flash-preview-05-20';
 
-      // Build parts — include logo image if available
+      // Build parts — include logo image if provided
       const userParts: any[] = [];
 
-      if (logoBase64) {
+      if (config.logoBase64) {
         userParts.push({
           inlineData: {
-            data: logoBase64,
+            data: config.logoBase64,
             mimeType: 'image/png',
           },
         });
@@ -576,6 +564,7 @@ export async function detectIntent(message: string): Promise<{
 export async function generateCampaignImage(config: {
   campaignName: string;
   theme?: string | null;
+  logoBase64?: string | null;
 }): Promise<GeminiResponse<{
   imageBase64: string;
   mimeType: string;

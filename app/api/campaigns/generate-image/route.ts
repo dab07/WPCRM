@@ -1,6 +1,21 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClient } from '../../../../supabase/supabase';
 import { GeminiService } from '../../../../lib/services/external/GeminiService';
+import fs from 'fs';
+import path from 'path';
+
+// Read the Zavops logo once at module load (server-side only)
+function loadLogoBase64(): string | null {
+  try {
+    const logoPath = path.join(process.cwd(), 'logos', 'Zavops logo full (1).png');
+    return fs.readFileSync(logoPath).toString('base64');
+  } catch (err) {
+    console.warn('[generate-image] Could not load Zavops logo:', err);
+    return null;
+  }
+}
+
+const ZAVOPS_LOGO_BASE64 = loadLogoBase64();
 
 
 export async function POST(request: NextRequest) {
@@ -31,6 +46,7 @@ export async function POST(request: NextRequest) {
     const result = await gemini.generateCampaignImage({
       campaignName: festival,
       theme: theme || festival,
+      logoBase64: ZAVOPS_LOGO_BASE64,
     });
 
     if (!result.success || !result.data) {
