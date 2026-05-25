@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -364,7 +364,7 @@ function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignModalProp
           .from('campaign-images')
           .upload(fileName, imageFile, {
             contentType: imageFile.type,
-            upsert: true,
+            upsert: false,
           });
 
         if (uploadErr) {

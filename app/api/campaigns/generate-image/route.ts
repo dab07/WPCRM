@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClient } from '../../../../supabase/supabase';
 import { GeminiService } from '../../../../lib/services/external/GeminiService';
 import fs from 'fs';
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
       .from('campaign-images')
       .upload(fileName, compressedBuffer, {
         contentType: finalMimeType,
-        upsert: true,
+        upsert: false,
       });
 
     let imageUrl: string | null = null;
