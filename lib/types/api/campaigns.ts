@@ -28,6 +28,10 @@ export interface Campaign {
   image_status?: ImageStatus;
   executed_at?: string | null;
   target_count?: number;
+  email_subject?: string | null;
+  email_body?: string | null;
+  email_attachments?: any | null;
+  send_email?: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -42,6 +46,10 @@ export interface CreateCampaignRequest {
   image_url?: string;
   image_status?: ImageStatus;
   target_count?: number;
+  email_subject?: string;
+  email_body?: string;
+  email_attachments?: any[];
+  send_email?: boolean;
 }
 
 export interface UpdateCampaignRequest {

@@ -10,7 +10,11 @@ export async function POST(request: NextRequest) {
       name,
       message_template,
       target_tags,
-      scheduled_at
+      scheduled_at,
+      send_email,
+      email_subject,
+      email_body,
+      email_attachments
     } = body;
 
     // Validate required fields
@@ -51,7 +55,11 @@ export async function POST(request: NextRequest) {
       name,
       message_template,
       target_tags: target_tags || [],
-      scheduled_at
+      scheduled_at,
+      send_email,
+      email_subject,
+      email_body,
+      email_attachments
     });
 
     return NextResponse.json({

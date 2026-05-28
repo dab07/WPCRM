@@ -23,14 +23,23 @@ export async function POST(request: NextRequest) {
 Festival / Campaign: ${festival ?? 'General'}
 User instructions: ${prompt}
 
-Requirements:
+Requirements for WhatsApp:
 - Keep it under 80 or 100 words
 - Warm, personal, and conversational tone
 - Include 1–2 relevant emojis
 - End with a friendly call-to-action
-- Do NOT add any explanation, preamble, or meta-commentary — output only the message text
 
-Write the WhatsApp message now:`;
+Requirements for Email:
+- Professional yet festive subject line
+- Warm and engaging email body (can be longer than WhatsApp)
+- End with a friendly call-to-action
+
+You MUST return your response as a valid JSON object matching exactly this schema, with no markdown formatting or extra text:
+{
+  "whatsapp_caption": "your whatsapp message here",
+  "email_subject": "your email subject here",
+  "email_body": "your email body here"
+}`;
 
     const result = await gemini.generateAIResponse(fullPrompt);
 
@@ -41,7 +50,25 @@ Write the WhatsApp message now:`;
       );
     }
 
-    return NextResponse.json({ success: true, content: result.data.response });
+    let parsedResponse;
+    try {
+      const text = result.data.response.replace(/```json\s*|\s*```/g, '').trim();
+      parsedResponse = JSON.parse(text);
+    } catch (e) {
+      // Fallback if the AI didn't return valid JSON
+      parsedResponse = {
+        whatsapp_caption: result.data.response,
+        email_subject: `${festival ?? 'Campaign'} Update`,
+        email_body: result.data.response
+      };
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      content: parsedResponse.whatsapp_caption,
+      email_subject: parsedResponse.email_subject,
+      email_body: parsedResponse.email_body
+    });
   } catch (error) {
     console.error('[generate-caption] Error:', error);
     return NextResponse.json(

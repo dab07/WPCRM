@@ -53,6 +53,10 @@ export type Database = {
           updated_at: string;
           brand_guidelines_label?: string;
           brand_guidelines?: string;
+          email_subject?: string | null;
+          email_body?: string | null;
+          email_attachments?: any | null;
+          send_email?: boolean | null;
         };
         Insert: Omit<Database['public']['Tables']['campaigns']['Row'], 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Database['public']['Tables']['campaigns']['Insert']>;
