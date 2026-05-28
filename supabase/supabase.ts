@@ -25,6 +25,8 @@ export type Database = {
         Row: {
           id: string;
           name: string;
+          brand_guidelines_label?: string;
+          brand_guidelines?: string;
           phone_number: string;
           email?: string;
           company?: string;
@@ -49,6 +51,8 @@ export type Database = {
           read_count: number;
           created_at: string;
           updated_at: string;
+          brand_guidelines_label?: string;
+          brand_guidelines?: string;
         };
         Insert: Omit<Database['public']['Tables']['campaigns']['Row'], 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Database['public']['Tables']['campaigns']['Insert']>;

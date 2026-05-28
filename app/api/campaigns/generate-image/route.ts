@@ -83,12 +83,20 @@ export async function POST(request: NextRequest) {
       console.error('[generate-image] Failed to mark generating:', markErr);
     }
 
-    // Generate image via Gemini
+    // Fetch brand guidelines for this campaign (if any)
+    const { data: campaignRow } = await supabase
+      .from('campaigns')
+      .select('brand_guidelines')
+      .eq('id', campaignId)
+      .single();
+
+    // Generate image via Gemini, passing any stored guidelines
     const gemini = new GeminiService();
     const result = await gemini.generateCampaignImage({
       campaignName: festival,
       theme: theme || festival,
       logoBase64: ZAVOPS_LOGO_BASE64,
+      brandGuidelines: campaignRow?.brand_guidelines,
     });
 
     if (!result.success || !result.data) {
@@ -115,7 +123,7 @@ export async function POST(request: NextRequest) {
       .from('campaign-images')
       .upload(fileName, compressedBuffer, {
         contentType: finalMimeType,
-        upsert: false,
+        upsert: true,
       });
 
     let imageUrl: string | null = null;

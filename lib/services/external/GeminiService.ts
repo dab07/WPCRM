@@ -397,6 +397,7 @@ Hashtags: ${hashtags.join(', ')}`;
     campaignName: string;
     theme?: string | null;
     logoBase64?: string | null;
+    brandGuidelines?: string;
   }): Promise<GeminiResponse<{
     imageBase64: string;
     mimeType: string;
@@ -406,7 +407,7 @@ Hashtags: ${hashtags.join(', ')}`;
 
       const prompt = `Create a professional festive WhatsApp campaign image for Zavops — ${config.campaignName}.
 
-STRICT BRAND GUIDELINES:
+${config.brandGuidelines ?? `STRICT BRAND GUIDELINES:
 - Background: solid bright golden yellow (#F5C400), full bleed, no gradients
 - Place the provided Zavops logo image exactly as-is, centered at the top of the image — do NOT redraw or recreate it
 - Below the logo: small elegant text "wishes you" in dark navy (#1C3080)
@@ -416,7 +417,7 @@ STRICT BRAND GUIDELINES:
 - Color palette: #F5C400 (background), #1C3080 (accents), #7B1A1A (headline), warm reds/oranges (illustration), dark brown (body text)
 - NO white backgrounds, NO gradients, NO purple tones
 - Square 1:1 format, WhatsApp-ready
-- Warm, devotional, community-oriented Indian festive aesthetic
+- Warm, devotional, community-oriented Indian festive aesthetic`}
 
 Festival context: ${config.theme ?? config.campaignName}`;
 

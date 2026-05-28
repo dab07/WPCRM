@@ -364,7 +364,7 @@ function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignModalProp
           .from('campaign-images')
           .upload(fileName, imageFile, {
             contentType: imageFile.type,
-            upsert: false,
+            upsert: true,
           });
 
         if (uploadErr) {

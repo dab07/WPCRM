@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Wand2, Loader2, AlertTriangle, Sparkles, CheckCircle } from 'lucide-react';
 import { getSupabaseClient } from '../../../../supabase/supabase';
 
@@ -28,6 +28,22 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [guidelines, setGuidelines] = useState<Array<{ id: string; label: string; content: string }>>([]);
+  const [selectedLabel, setSelectedLabel] = useState<string>('');
+  const [brandGuidelines, setBrandGuidelines] = useState<string>('');
+  const [newLabel, setNewLabel] = useState<string>('');
+  const [saveForFuture, setSaveForFuture] = useState(false);
+
+  // Load existing guidelines on mount
+  useEffect(() => {
+    fetch('/api/campaigns/guidelines')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.guidelines) setGuidelines(data.guidelines);
+      })
+      .catch((e) => console.error('Failed to load guidelines', e));
+  }, []);
+
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -218,6 +234,53 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                   className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm resize-none"
                   onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleGenerate(); }}
                 />
+                {/* Brand Guidelines UI */}
+                <div className="mt-4 space-y-2">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Brand Guidelines</label>
+                  <select
+                    value={selectedLabel}
+                    onChange={(e) => {
+                      const label = e.target.value;
+                      setSelectedLabel(label);
+                      const found = guidelines.find((g) => g.label === label);
+                      setBrandGuidelines(found?.content || '');
+                      setNewLabel('');
+                    }}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Select a preset...</option>
+                    {guidelines.map((g) => (
+                      <option key={g.id} value={g.label}>{g.label}</option>
+                    ))}
+                  </select>
+                  <textarea
+                    placeholder="Or write custom brand guidelines here"
+                    value={brandGuidelines}
+                    onChange={(e) => {
+                      setBrandGuidelines(e.target.value);
+                      setSelectedLabel('');
+                    }}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  />
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      placeholder="New label (optional)"
+                      value={newLabel}
+                      onChange={(e) => setNewLabel(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <label className="flex items-center space-x-1 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={saveForFuture}
+                        onChange={(e) => setSaveForFuture(e.target.checked)}
+                      />
+                      <span>Save for future</span>
+                    </label>
+                  </div>
+                </div>
                 <p className="text-xs text-slate-400 mt-1">Press Ctrl+Enter to generate</p>
               </div>
 
