@@ -441,7 +441,10 @@ Festival context: ${config.theme ?? config.campaignName}`;
       }
 
       const contents = [{ role: 'user', parts: userParts }];
-      const generationConfig = { responseModalities: ['IMAGE', 'TEXT'] };
+      const generationConfig = { 
+        responseModalities: ['IMAGE', 'TEXT'],
+        imageConfig: { aspectRatio: '1:1' }
+      };
 
       const response = await client.models.generateContentStream({
         model,

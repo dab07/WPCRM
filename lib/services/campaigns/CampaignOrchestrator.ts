@@ -3,6 +3,7 @@ import { WhatsAppService, getWhatsAppService } from '../external/WhatsAppService
 import { CampaignImageService } from '../external/CampaignImageService';
 import { supabaseAdmin } from '../../../supabase/supabase';
 import { config } from '@/lib/config';
+import { getQuarter } from '@/lib/types/api/campaigns';
 
 export interface Campaign {
   id: string;
@@ -561,11 +562,22 @@ Return only the enhanced message, no explanations.`;
     scheduled_at?: string | undefined;
   }) {
     try {
+      let initialStatus = 'draft';
+      
+      if (campaignData.scheduled_at) {
+        const campaignQuarter = getQuarter(campaignData.scheduled_at);
+        const currentQuarter = getQuarter(new Date().toISOString());
+        
+        if (campaignQuarter === currentQuarter) {
+          initialStatus = 'pending';
+        }
+      }
+
       const { data, error } = await this.supabase
         .from('campaigns')
         .insert({
           ...campaignData,
-          status: 'draft', // always starts as draft; cron promotes to pending
+          status: initialStatus, // pending if in current quarter, otherwise draft
           sent_count: 0,
           delivered_count: 0,
           read_count: 0

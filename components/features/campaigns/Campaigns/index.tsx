@@ -201,8 +201,8 @@ function CampaignRow({ campaign, onGenerate, onView, onApprove, onReject, onEdit
               Edit
             </button>
           )}
-          {/* Rejected — allow moving back to To Do */}
-          {campaign.status === 'rejected' && (
+          {/* Draft or Rejected — allow moving to To Do */}
+          {(campaign.status === 'rejected' || campaign.status === 'draft') && (
             <button onClick={() => onMoveToPending(campaign.id)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors">
               <RotateCcw className="w-3.5 h-3.5" />
               Move to To Do
@@ -713,27 +713,6 @@ function RejectionModal({ campaign, onClose, onRegenerated }: RejectionModalProp
   );
 }
 
-// ─── Status Legend ────────────────────────────────────────────────────────────
-function StatusLegend() {
-  const items = [
-    { status: 'draft', desc: 'Previous months / outside window' },
-    { status: 'pending', desc: 'Ready for image generation' },
-    { status: 'to_be_approved', desc: 'Awaiting approval' },
-    { status: 'approved', desc: 'Queued — sends on scheduled date' },
-    { status: 'executed', desc: 'Sent successfully' },
-  ];
-  return (
-    <div className="flex flex-wrap gap-3">
-      {items.map(({ status, desc }) => (
-        <div key={status} className="flex items-center gap-1.5">
-          <StatusBadge status={status} />
-          <span className="text-xs text-slate-500 hidden lg:inline">{desc}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ─── Emoji helper ─────────────────────────────────────────────────────────────
 function getFestivalEmoji(name: string): string {
   const n = name.toLowerCase();
@@ -974,12 +953,8 @@ export function CampaignsPanel() {
               <option value="Q4">Q4 (Oct–Dec)</option>
             </select>
           </div>
-
-          <StatusLegend />
         </div>
       </div>
-
-      {/* Stats */}
       <div className="px-6 pt-4 shrink-0">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
@@ -987,7 +962,7 @@ export function CampaignsPanel() {
             { label: 'Pending', value: stats.pending, icon: <Clock className="w-4 h-4" />, color: 'text-amber-600 bg-amber-100' },
             { label: 'To Approve', value: stats.toApprove, icon: <CheckCircle className="w-4 h-4" />, color: 'text-blue-600 bg-blue-100' },
             { label: 'Executed', value: stats.executed, icon: <Send className="w-4 h-4" />, color: 'text-purple-600 bg-purple-100' },
-            { label: 'Msgs Sent', value: stats.totalSent, icon: <Users className="w-4 h-4" />, color: 'text-emerald-600 bg-emerald-100' },
+            { label: 'Campaigns Sent', value: stats.totalSent, icon: <Users className="w-4 h-4" />, color: 'text-emerald-600 bg-emerald-100' },
           ].map(({ label, value, icon, color }) => (
             <div key={label} className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3 shadow-sm">
               <div className={`p-2 rounded-lg ${color}`}>{icon}</div>

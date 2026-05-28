@@ -24,7 +24,7 @@ Festival / Campaign: ${festival ?? 'General'}
 User instructions: ${prompt}
 
 Requirements:
-- Keep it under 60 words
+- Keep it under 80 or 100 words
 - Warm, personal, and conversational tone
 - Include 1–2 relevant emojis
 - End with a friendly call-to-action

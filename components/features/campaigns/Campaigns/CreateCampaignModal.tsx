@@ -9,12 +9,6 @@ interface CreateCampaignModalProps {
   onSuccess: () => void;
 }
 
-const EXAMPLE_PROMPTS = [
-  'Diwali campaign on 20 Oct 2026 for all VIP customers',
-  'Christmas sale campaign on 25 Dec 2026 targeting premium and loyal tags',
-  'Holi greetings on 14 Mar 2027 for all contacts',
-  'Eid Mubarak campaign on 30 Mar 2027 for active customers',
-];
 
 export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalProps) {
   const [prompt, setPrompt] = useState('');
@@ -222,7 +216,6 @@ Return ONLY valid JSON, no markdown, no explanation.`,
               )}
             </div>
           ) : (
-            /* ── Prompt ── */
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Describe your campaign</label>
@@ -282,22 +275,6 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                   </div>
                 </div>
                 <p className="text-xs text-slate-400 mt-1">Press Ctrl+Enter to generate</p>
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Examples</p>
-                <div className="flex flex-col gap-2">
-                  {EXAMPLE_PROMPTS.map((ex) => (
-                    <button
-                      key={ex}
-                      type="button"
-                      onClick={() => setPrompt(ex)}
-                      className="text-left text-xs px-3 py-2 bg-slate-50 hover:bg-violet-50 border border-slate-200 hover:border-violet-300 rounded-lg text-slate-600 hover:text-violet-700 transition-colors"
-                    >
-                      {ex}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {error && (
