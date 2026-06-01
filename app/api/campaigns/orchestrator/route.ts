@@ -23,9 +23,12 @@ export async function POST(request: NextRequest) {
           processed: result.processed || 0,
           sent: result.sent || 0,
           failed: result.failed || 0,
+          whatsapp_sent: result.whatsapp_sent || 0,
+          email_sent: result.email_sent || 0,
+          campaigns: result.campaigns || [],
           timestamp: new Date().toISOString(),
           source,
-          message: `Successfully processed ${result.processed} campaigns and sent ${result.sent} messages`
+          message: `Processed ${result.processed} campaigns — WA: ${result.whatsapp_sent}, Email: ${result.email_sent}, Failed: ${result.failed}`
         });
       } catch (error) {
         console.error('[Campaign Orchestrator API] Error processing campaigns:', error);

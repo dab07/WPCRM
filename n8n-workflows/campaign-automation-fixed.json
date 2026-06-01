@@ -1,4 +1,5 @@
 {
+  "name": "Campaign Automation — WhatsApp + Email (Omnisend)",
   "nodes": [
     {
       "parameters": {
@@ -24,13 +25,15 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "{\n  \"action\": \"process_scheduled\",\n  \"source\": \"n8n_schedule_trigger\",\n  \"timestamp\": \"{{ $now }}\",\n  \"timezone\": \"{{ $now.format('z') }}\"\n}",
-        "options": {}
+        "options": {
+          "timeout": 120000
+        }
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
-      "position": [208, 0],
+      "position": [220, 0],
       "id": "de00e935-c445-4532-b0af-6a4aa301f6b7",
-      "name": "HTTP Request",
+      "name": "Run Campaign Orchestrator",
       "credentials": {
         "httpBearerAuth": {
           "id": "2y2kpXsXTGEnT0Hv",
@@ -63,27 +66,76 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [416, 0],
+      "position": [440, 0],
       "id": "success_checker",
       "name": "Check Success"
     },
     {
       "parameters": {
-        "jsCode": "// Success path - log the results\nconst data = $input.first().json;\n\nconsole.log('✅ Campaign automation completed successfully:', {\n  processed: data.processed || 0,\n  sent: data.sent || 0,\n  failed: data.failed || 0,\n  timestamp: data.timestamp\n});\n\nreturn [{\n  json: {\n    status: 'success',\n    campaigns_processed: data.processed || 0,\n    messages_sent: data.sent || 0,\n    messages_failed: data.failed || 0,\n    timestamp: new Date().toISOString(),\n    message: 'Campaign automation completed successfully'\n  }\n}];"
+        "jsCode": "// ── Success path ──────────────────────────────────────────────────────────\n// The orchestrator now returns per-channel breakdown:\n//   processed      — total campaigns executed\n//   sent           — total messages sent across all channels\n//   whatsapp_sent  — messages sent via WhatsApp\n//   email_sent     — messages sent via Omnisend email\n//   failed         — campaigns that errored\n//   campaigns[]    — per-campaign detail { id, name, channel, sent, status }\n\nconst data = $input.first().json;\n\nconst summary = {\n  status: 'success',\n  timestamp: new Date().toISOString(),\n  campaigns_processed: data.processed || 0,\n  total_messages_sent: data.sent || 0,\n  whatsapp_sent: data.whatsapp_sent || 0,\n  email_sent: data.email_sent || 0,\n  campaigns_failed: data.failed || 0,\n  campaign_details: (data.campaigns || []).map(c => ({\n    name: c.name,\n    channel: c.channel,\n    sent: c.sent,\n    status: c.status\n  }))\n};\n\nconsole.log('✅ Campaign automation completed:', JSON.stringify(summary, null, 2));\n\n// Surface a human-readable summary line\nsummary.message = [\n  `Processed ${summary.campaigns_processed} campaign(s).`,\n  summary.whatsapp_sent > 0 ? `WhatsApp: ${summary.whatsapp_sent} sent.` : '',\n  summary.email_sent > 0   ? `Email (Omnisend): ${summary.email_sent} sent.` : '',\n  summary.campaigns_failed > 0 ? `⚠️ ${summary.campaigns_failed} failed.` : ''\n].filter(Boolean).join(' ');\n\nreturn [{ json: summary }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [624, -100],
+      "position": [660, -120],
       "id": "success_handler",
       "name": "Success Handler"
     },
     {
       "parameters": {
-        "jsCode": "// Error path - log the error and throw\nconst data = $input.first().json;\n\nconsole.error('❌ Campaign automation failed:', {\n  error: data.error,\n  details: data.details,\n  timestamp: new Date().toISOString()\n});\n\n// Throw error to trigger N8N error handling\nthrow new Error(`Campaign automation failed: ${data.error || 'Unknown error'}`);"
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has_failures",
+              "leftValue": "={{ $json.campaigns_failed }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, -120],
+      "id": "partial_failure_check",
+      "name": "Any Failures?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Partial failure — some campaigns failed, some succeeded\nconst data = $input.first().json;\nconsole.warn('⚠️ Partial failure in campaign run:', data.message);\n// You can add a Slack / email alert node after this\nreturn [{ json: { ...data, alert: true } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [624, 100],
+      "position": [1100, -200],
+      "id": "partial_failure_handler",
+      "name": "Partial Failure Alert"
+    },
+    {
+      "parameters": {
+        "jsCode": "// All campaigns succeeded — nothing extra needed\nconst data = $input.first().json;\nconsole.log('🎉 All campaigns executed cleanly:', data.message);\nreturn [{ json: data }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, -60],
+      "id": "all_success_handler",
+      "name": "All Good"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Error path ────────────────────────────────────────────────────────────\n// The orchestrator returned success=false (HTTP 500 or explicit error body)\nconst data = $input.first().json;\n\nconst errorInfo = {\n  status: 'error',\n  timestamp: new Date().toISOString(),\n  error: data.error || 'Unknown error',\n  details: data.details || data.message || '',\n  source: data.source || 'n8n_schedule_trigger'\n};\n\nconsole.error('❌ Campaign automation failed:', JSON.stringify(errorInfo, null, 2));\n\n// Throw so N8N marks this execution as failed and triggers error workflow\nthrow new Error(`Campaign automation failed: ${errorInfo.error}`);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 120],
       "id": "error_handler",
       "name": "Error Handler"
     }
@@ -93,14 +145,14 @@
       "main": [
         [
           {
-            "node": "HTTP Request",
+            "node": "Run Campaign Orchestrator",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "HTTP Request": {
+    "Run Campaign Orchestrator": {
       "main": [
         [
           {
@@ -128,9 +180,44 @@
           }
         ]
       ]
+    },
+    "Success Handler": {
+      "main": [
+        [
+          {
+            "node": "Any Failures?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any Failures?": {
+      "main": [
+        [
+          {
+            "node": "Partial Failure Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "All Good",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "0ffa89d5a49b5ff561a64c0f5929b81768437fdf047cd876ce47c0015bdbc826"

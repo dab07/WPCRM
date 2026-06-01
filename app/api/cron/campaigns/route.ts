@@ -5,12 +5,16 @@ import { CampaignOrchestrator } from '../../../../lib/services/campaigns/Campaig
 /**
  * GET/POST /api/cron/campaigns
  *
- * Campaign lifecycle engine — run this daily (e.g. Vercel Cron at 09:00).
+ * Campaign lifecycle engine — run this daily (e.g. Vercel Cron / N8N at 09:00).
  *
  * What it does in order:
- *  1. PROMOTE  — draft → pending for campaigns entering the 3-month rolling window
- *  2. SEND     — approved campaigns whose scheduled_at date is today get executed
- *               (sends WhatsApp messages via CampaignOrchestrator, marks executed)
+ *  1. PROMOTE  — draft → pending for campaigns entering the 90-day rolling window
+ *  2. SEND     — approved campaigns whose scheduled_at is today get executed
+ *               Respects the `channel` column:
+ *               - 'whatsapp' → WhatsApp only  (via CampaignOrchestrator / WhatsAppService)
+ *               - 'email'    → Email only     (via CampaignOrchestrator / OmnisendService)
+ *               - 'both'     → WhatsApp + Email
+ *               Falls back to legacy `send_email` boolean when `channel` is null.
  *
  * Secure with CRON_SECRET env var. Pass as ?secret=<value> or
  * Authorization: Bearer <value> header.
@@ -44,8 +48,6 @@ export async function GET(request: NextRequest) {
   };
 
   // ── 1. PROMOTE: draft → pending ──────────────────────────────────────────
-  // A campaign enters the 3-month window when its scheduled_at is within
-  // the next 90 days from today.
   try {
     const windowEnd = new Date(now);
     windowEnd.setDate(windowEnd.getDate() + 90);
@@ -56,7 +58,7 @@ export async function GET(request: NextRequest) {
       .eq('status', 'draft')
       .not('scheduled_at', 'is', null)
       .lte('scheduled_at', windowEnd.toISOString())
-      .gte('scheduled_at', now.toISOString()) // not already past
+      .gte('scheduled_at', now.toISOString())
       .select('id, name, scheduled_at');
 
     if (promoteErr) {
@@ -65,7 +67,7 @@ export async function GET(request: NextRequest) {
       results.promoted = promoted?.length ?? 0;
       if (results.promoted > 0) {
         console.log(
-          `[Cron Campaigns] Promoted ${results.promoted} draft → pending:`,
+          `[Cron] Promoted ${results.promoted} draft → pending:`,
           promoted?.map((c) => c.name).join(', ')
         );
       }
@@ -75,8 +77,6 @@ export async function GET(request: NextRequest) {
   }
 
   // ── 2. SEND: approved campaigns scheduled for today ──────────────────────
-  // Match on calendar date (not exact timestamp) so campaigns fire on the
-  // correct day regardless of what time the cron runs.
   try {
     const todayStart = new Date(now);
     todayStart.setHours(0, 0, 0, 0);
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
 
     const { data: toSend, error: fetchErr } = await supabase
       .from('campaigns')
-      .select('id, name')
+      .select('id, name, channel, send_email')
       .eq('status', 'approved')
       .gte('scheduled_at', todayStart.toISOString())
       .lte('scheduled_at', todayEnd.toISOString());
@@ -94,23 +94,26 @@ export async function GET(request: NextRequest) {
       results.errors.push(`Fetch approved error: ${fetchErr.message}`);
     } else if (toSend && toSend.length > 0) {
       console.log(
-        `[Cron Campaigns] Sending ${toSend.length} approved campaign(s):`,
-        toSend.map((c) => c.name).join(', ')
+        `[Cron] Sending ${toSend.length} approved campaign(s):`,
+        toSend.map((c) => `${c.name} [${c.channel ?? (c.send_email ? 'both' : 'whatsapp')}]`).join(', ')
       );
 
       const orchestrator = new CampaignOrchestrator();
 
       for (const campaign of toSend) {
         try {
+          // CampaignOrchestrator.executeSingleCampaign already reads the full
+          // campaign row (including channel) and routes to WhatsApp / Omnisend
+          // accordingly — no extra logic needed here.
           const result = await orchestrator.executeSingleCampaign(campaign.id);
           results.sent += result.sent;
           console.log(
-            `[Cron Campaigns] ✅ "${campaign.name}" executed — ${result.sent} messages sent`
+            `[Cron] ✅ "${campaign.name}" executed — ${result.sent} messages sent`
           );
         } catch (execErr) {
           const msg = execErr instanceof Error ? execErr.message : String(execErr);
           results.errors.push(`Execute "${campaign.name}": ${msg}`);
-          console.error(`[Cron Campaigns] ❌ Failed to execute "${campaign.name}":`, execErr);
+          console.error(`[Cron] ❌ Failed to execute "${campaign.name}":`, execErr);
 
           // Mark as pending so it can be retried / re-approved
           await supabase
@@ -120,7 +123,7 @@ export async function GET(request: NextRequest) {
         }
       }
     } else {
-      console.log('[Cron Campaigns] No approved campaigns scheduled for today.');
+      console.log('[Cron] No approved campaigns scheduled for today.');
     }
   } catch (err) {
     results.errors.push(`Send exception: ${err instanceof Error ? err.message : String(err)}`);
@@ -130,7 +133,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ success: results.errors.length === 0, ...results }, { status });
 }
 
-// Support manual POST trigger (e.g. from n8n or admin UI)
+// Support manual POST trigger (e.g. from N8N or admin UI)
 export async function POST(request: NextRequest) {
   return GET(request);
 }

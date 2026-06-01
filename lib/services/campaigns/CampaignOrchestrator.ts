@@ -2,8 +2,8 @@ import { GeminiService } from '../external/GeminiService';
 import { WhatsAppService, getWhatsAppService } from '../external/WhatsAppService';
 import { CampaignImageService } from '../external/CampaignImageService';
 import { supabaseAdmin } from '../../../supabase/supabase';
-import { config } from '@/lib/config';
 import { getQuarter } from '@/lib/types/api/campaigns';
+import { OmnisendService } from '../external/OmnisendService';
 
 export interface Campaign {
   id: string;
@@ -18,6 +18,13 @@ export interface Campaign {
   festival?: string | null;
   image_url?: string | null;
   executed_at?: string | null;
+  /** 'whatsapp' | 'email' | 'both' — source of truth for delivery channel */
+  channel?: 'whatsapp' | 'email' | 'both' | null;
+  email_subject?: string | null;
+  email_body?: string | null;
+  email_attachments?: any | null;
+  /** @deprecated use channel */
+  send_email?: boolean | null;
 }
 
 export interface Contact {
@@ -45,11 +52,13 @@ export class CampaignOrchestrator {
   private supabase = supabaseAdmin;
   private geminiService: GeminiService;
   private campaignImageService: CampaignImageService;
+  private omnisendService: OmnisendService;
   private whatsappService: WhatsAppService | null = null;
 
   constructor() {
     this.geminiService = new GeminiService();
     this.campaignImageService = new CampaignImageService();
+    this.omnisendService = new OmnisendService();
     // Don't initialize WhatsApp service here - do it lazily
   }
 
@@ -67,32 +76,53 @@ export class CampaignOrchestrator {
   async processCampaigns(source: string = 'n8n_schedule_trigger') {
     try {
       console.log(`[${source}] Starting campaign processing...`);
-      console.log(`gemini api kay: ${config.gemini}`)
-      // Get campaigns scheduled for today
       const scheduledCampaigns = await this.getTodaysScheduledCampaigns();
-      
+
       if (scheduledCampaigns.length === 0) {
         console.log('No campaigns scheduled for today');
-        return { processed: 0, sent: 0, failed: 0 };
+        return { processed: 0, sent: 0, failed: 0, whatsapp_sent: 0, email_sent: 0, campaigns: [] };
       }
 
       let totalSent = 0;
+      let whatsappSent = 0;
+      let emailSent = 0;
+      let failed = 0;
+      const campaignResults: { id: string; name: string; channel: string; sent: number; status: string }[] = [];
 
-      // Process each campaign
       for (const campaign of scheduledCampaigns) {
+        const effectiveChannel: string =
+          campaign.channel === 'email' ? 'email'
+          : campaign.channel === 'both' ? 'both'
+          : campaign.channel === 'whatsapp' ? 'whatsapp'
+          : campaign.send_email ? 'both'
+          : 'whatsapp';
+
         try {
           const result = await this.executeCampaign(campaign);
           totalSent += result.sent;
+
+          // Attribute sent count to channel(s)
+          if (effectiveChannel === 'whatsapp') whatsappSent += result.sent;
+          else if (effectiveChannel === 'email') emailSent += result.sent;
+          else { whatsappSent += result.sent; emailSent += result.sent; } // both
+
+          campaignResults.push({ id: campaign.id, name: campaign.name, channel: effectiveChannel, sent: result.sent, status: 'executed' });
         } catch (error) {
+          failed++;
           console.error(`Failed to execute campaign ${campaign.id}:`, error);
+          campaignResults.push({ id: campaign.id, name: campaign.name, channel: effectiveChannel, sent: 0, status: 'failed' });
         }
       }
 
-      console.log(`Campaign processing completed: ${scheduledCampaigns.length} campaigns, ${totalSent} sent`);
-      
+      console.log(`Campaign processing completed: ${scheduledCampaigns.length} campaigns, ${totalSent} sent (WA: ${whatsappSent}, Email: ${emailSent})`);
+
       return {
         processed: scheduledCampaigns.length,
-        sent: totalSent
+        sent: totalSent,
+        failed,
+        whatsapp_sent: whatsappSent,
+        email_sent: emailSent,
+        campaigns: campaignResults,
       };
 
     } catch (error) {
@@ -182,9 +212,20 @@ export class CampaignOrchestrator {
       let deliveredCount = 0;
       const messageRecords: any[] = [];
 
+      // ── Resolve effective channel ───────────────────────────────────────────
+      // channel column is source of truth; fall back to legacy send_email bool
+      const effectiveChannel: 'whatsapp' | 'email' | 'both' =
+        campaign.channel === 'email' ? 'email'
+        : campaign.channel === 'both' ? 'both'
+        : campaign.channel === 'whatsapp' ? 'whatsapp'
+        : campaign.send_email ? 'both'
+        : 'whatsapp';
+
+      const sendWhatsApp = effectiveChannel === 'whatsapp' || effectiveChannel === 'both';
+      const sendEmail    = effectiveChannel === 'email'    || effectiveChannel === 'both';
+
       // ── Resolve campaign image ONCE before the batch loop ──────────────────
-      // Use the pre-approved image_url from Supabase Storage if available.
-      // Only fall back to generating a new image if none was approved.
+      // Only needed when WhatsApp is in the channel mix.
       let campaignImageBase64: string | null = null;
       let campaignImageMimeType = 'image/png';
 
@@ -244,48 +285,86 @@ export class CampaignOrchestrator {
               campaign.name
             );
 
-            // Use the campaign image resolved once before the batch loop
-            const sendParams: any = {
-              to: contact.phone_number,
-              message: personalizedMessage,
-            };
+            let whatsappSuccess = false;
 
-            if (campaignImageBase64) {
-              sendParams.type = 'image';
-              sendParams.imageBase64 = campaignImageBase64;
-              sendParams.imageCaption = personalizedMessage;
-              sendParams.imageMimeType = campaignImageMimeType;
-            } else {
-              // No image available — send text only
-              console.warn(`[Campaign] No image for ${contact.phone_number}, sending text only`);
-              sendParams.type = 'text';
-              sendParams.message = `🎉 ${campaign.name}\n\n${personalizedMessage}`;
+            // ── WhatsApp send ──────────────────────────────────────────────
+            if (sendWhatsApp) {
+              const sendParams: any = {
+                to: contact.phone_number,
+                message: personalizedMessage,
+              };
+
+              if (campaignImageBase64) {
+                sendParams.type = 'image';
+                sendParams.imageBase64 = campaignImageBase64;
+                sendParams.imageCaption = personalizedMessage;
+                sendParams.imageMimeType = campaignImageMimeType;
+              } else {
+                console.warn(`[Campaign] No image for ${contact.phone_number}, sending text only`);
+                sendParams.type = 'text';
+                sendParams.message = `🎉 ${campaign.name}\n\n${personalizedMessage}`;
+              }
+
+              const result = await this.getWhatsAppService().sendMessage(sendParams);
+              whatsappSuccess = result.success;
+
+              if (result.success) {
+                const conversationId = await this.getOrCreateConversationId(contact.id);
+                if (conversationId) {
+                  messageRecords.push({
+                    conversation_id: conversationId,
+                    whatsapp_message_id: result.messageId,
+                    sender_type: 'ai',
+                    content: personalizedMessage,
+                    message_type: campaignImageBase64 ? 'image' : 'text',
+                    delivery_status: 'sent',
+                  });
+                }
+              } else {
+                console.error(`[Campaign] WhatsApp failed for ${contact.phone_number}: ${result.error}`);
+              }
             }
 
-            const result = await this.getWhatsAppService().sendMessage(sendParams);
-            
-            if (result.success) {
-              // Prepare message record for batch insert
-              const conversationId = await this.getOrCreateConversationId(contact.id);
-              if (conversationId) {
-                messageRecords.push({
-                  conversation_id: conversationId,
-                  whatsapp_message_id: result.messageId,
-                  sender_type: 'ai',
-                  content: personalizedMessage,
-                  message_type: campaignImageBase64 ? 'image' : 'text',
-                  delivery_status: 'sent'
+            // ── Email send (Omnisend) ──────────────────────────────────────
+            if (sendEmail && contact.email && campaign.email_subject && campaign.email_body) {
+              const attachments: { url: string; name: string; mimeType?: string }[] =
+                Array.isArray(campaign.email_attachments)
+                  ? campaign.email_attachments.map((att) => ({
+                      url: att.url || att.path,
+                      name: att.name || 'attachment',
+                    }))
+                  : [];
+
+              if (campaign.image_url && !campaign.image_url.startsWith('data:')) {
+                attachments.push({
+                  url: campaign.image_url,
+                  name: 'campaign_image.png',
+                  mimeType: 'image/png',
                 });
               }
-              
-              return { success: true, contact: contact.id, messageId: result.messageId };
-            } else {
-              console.error(`[Campaign] Failed to send to ${contact.phone_number}: ${result.error}`);
-              return { success: false, contact: contact.id, error: result.error };
+
+              const emailResult = await this.omnisendService.sendEmail({
+                subject: campaign.email_subject.replace(/\{\{name\}\}/g, contact.name || 'Friend'),
+                body: campaign.email_body
+                  .replace(/\{\{name\}\}/g, contact.name || 'Friend')
+                  .replace(/\{\{company\}\}/g, contact.company || ''),
+                recipientEmail: contact.email,
+                attachments,
+              });
+
+              if (!emailResult.success) {
+                console.warn(`[Campaign] Email failed for ${contact.email}:`, emailResult.error);
+              }
+            } else if (sendEmail && !contact.email) {
+              console.warn(`[Campaign] Skipping email for contact ${contact.id} — no email address`);
             }
-            
+
+            // Count as sent if at least one channel succeeded
+            const overallSuccess = sendWhatsApp ? whatsappSuccess : true; // email-only always counts
+            return { success: overallSuccess, contact: contact.id };
+
           } catch (error) {
-            console.error(`Failed to send message to ${contact.phone_number}:`, error);
+            console.error(`Failed to process contact ${contact.phone_number}:`, error);
             return { success: false, contact: contact.id, error };
           }
         });
@@ -560,6 +639,10 @@ Return only the enhanced message, no explanations.`;
     message_template: string;
     target_tags?: string[] | undefined;
     scheduled_at?: string | undefined;
+    send_email?: boolean;
+    email_subject?: string;
+    email_body?: string;
+    email_attachments?: any[];
   }) {
     try {
       let initialStatus = 'draft';
@@ -578,6 +661,10 @@ Return only the enhanced message, no explanations.`;
         .insert({
           ...campaignData,
           status: initialStatus, // pending if in current quarter, otherwise draft
+          send_email: campaignData.send_email || false,
+          email_subject: campaignData.email_subject || null,
+          email_body: campaignData.email_body || null,
+          email_attachments: campaignData.email_attachments || [],
           sent_count: 0,
           delivered_count: 0,
           read_count: 0

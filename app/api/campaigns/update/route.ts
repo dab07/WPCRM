@@ -3,7 +3,7 @@ import { getSupabaseClient } from '../../../../supabase/supabase';
 
 /**
  * PATCH /api/campaigns/update
- * General-purpose campaign field update (caption, scheduled_at, image_url).
+ * General-purpose campaign field update (caption, scheduled_at, image_url, email fields).
  * Used by the Edit Campaign modal in the UI.
  */
 export async function PATCH(request: NextRequest) {
@@ -16,9 +16,25 @@ export async function PATCH(request: NextRequest) {
       scheduled_at?: string | null;
       image_url?: string | null;
       image_status?: string;
+      channel?: 'whatsapp' | 'email' | 'both';
+      send_email?: boolean;
+      email_subject?: string | null;
+      email_body?: string | null;
+      email_attachments?: any[] | null;
     };
 
-    const { campaignId, message_template, scheduled_at, image_url, image_status } = body;
+    const {
+      campaignId,
+      message_template,
+      scheduled_at,
+      image_url,
+      image_status,
+      channel,
+      send_email,
+      email_subject,
+      email_body,
+      email_attachments,
+    } = body;
 
     if (!campaignId) {
       return NextResponse.json({ error: 'campaignId is required' }, { status: 400 });
@@ -34,6 +50,17 @@ export async function PATCH(request: NextRequest) {
       payload.image_url = image_url;
       payload.image_status = image_status ?? (image_url ? 'generated' : 'not_generated');
     }
+    // channel is the source of truth; keep send_email in sync for backward compat
+    if (channel !== undefined) {
+      payload.channel = channel;
+      payload.send_email = channel === 'email' || channel === 'both';
+    } else if (send_email !== undefined) {
+      payload.send_email = send_email;
+      payload.channel = send_email ? 'both' : 'whatsapp';
+    }
+    if (email_subject !== undefined) payload.email_subject = email_subject;
+    if (email_body !== undefined) payload.email_body = email_body;
+    if (email_attachments !== undefined) payload.email_attachments = email_attachments;
 
     const { data, error } = await supabase
       .from('campaigns')
