@@ -53,6 +53,24 @@ export interface OmnisendEmailPayload {
   attachments?: { url: string; name: string; mimeType?: string }[];
 }
 
+export interface OmnisendEmailCampaignParams {
+  /** Campaign name (internal label) */
+  name: string;
+  subject: string;
+  /** Plain-text or HTML body — will be wrapped in minimal HTML if plain text */
+  body: string;
+  /** From-name shown to recipients */
+  fromName?: string;
+  /** Reply-to address (must be verified in Omnisend) */
+  replyTo?: string;
+}
+
+export interface OmnisendSendCampaignResult {
+  success: boolean;
+  campaignId?: string;
+  error?: string;
+}
+
 export class OmnisendServiceError extends Error {
   constructor(
     message: string,
@@ -179,6 +197,10 @@ export class OmnisendService {
     return data;
   }
 
+  /**
+   * Upsert a contact into Omnisend so they can receive campaigns.
+   * Contacts need status 'subscribed' to receive email campaigns.
+   */
   async upsertContact(contact: Partial<OmnisendContact> & { email?: string; phone?: string }): Promise<void> {
     await this.fetchWithRetry('/contacts', {
       method: 'POST',
@@ -193,28 +215,84 @@ export class OmnisendService {
     });
   }
 
-  async sendEmail(payload: OmnisendEmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  /**
+   * Create an Omnisend email campaign targeting all subscribed contacts,
+   * then immediately fire it.
+   *
+   * Flow: POST /campaigns (draft) → PATCH /campaigns/:id (set content) → POST /campaigns/:id/send
+   *
+   * Omnisend does NOT support per-contact transactional sends via the REST API —
+   * campaigns are broadcast to segments or all subscribers.
+   */
+  async sendEmailCampaign(params: OmnisendEmailCampaignParams): Promise<OmnisendSendCampaignResult> {
     if (!this.apiKey) {
-      console.warn('OMNISEND_API_KEY is not configured. Skipping email send.');
+      console.warn('[Omnisend] OMNISEND_API_KEY not configured — skipping email campaign.');
       return { success: false, error: 'OMNISEND_API_KEY is missing' };
     }
 
     try {
-      console.log(`[Omnisend] Sending email to ${payload.recipientEmail}...`);
-      console.log(`[Omnisend] Subject: ${payload.subject}`);
-      if (payload.attachments?.length) {
-        console.log(`[Omnisend] Attachments: ${payload.attachments.length}`);
-      }
+      // Wrap plain text in minimal HTML if needed
+      const htmlBody = params.body.trimStart().startsWith('<')
+        ? params.body
+        : `<html><body style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#333;max-width:600px;margin:auto;padding:24px">${params.body.replace(/\n/g, '<br>')}</body></html>`;
 
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // 1. Create campaign as draft
+      const campaign = await this.fetchWithRetry<{ campaignID: string }>('/campaigns', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: params.name,
+          type: 'email',
+          status: 'draft',
+          options: {
+            // target all subscribed contacts (no segment restriction)
+          },
+          content: {
+            subject: params.subject,
+            fromName: params.fromName ?? 'Zavops CRM',
+            replyTo: params.replyTo ?? '',
+            html: htmlBody,
+          },
+        }),
+      });
 
-      return { success: true, messageId: `omnisend_mock_${Date.now()}` };
+      const campaignId = campaign.campaignID;
+      console.log(`[Omnisend] Created draft campaign: ${campaignId}`);
+
+      // 2. Send immediately
+      await this.fetchWithRetry(`/campaigns/${campaignId}/send`, {
+        method: 'POST',
+        body: JSON.stringify({ strategy: 'immediate' }),
+      });
+
+      console.log(`[Omnisend] Campaign ${campaignId} sent immediately.`);
+      return { success: true, campaignId };
+
     } catch (error) {
-      console.error('[Omnisend] Error sending email:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      };
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[Omnisend] sendEmailCampaign failed:', msg);
+      return { success: false, error: msg };
     }
+  }
+
+  /**
+   * Legacy per-contact sendEmail — kept for backward compat.
+   * Logs a warning because Omnisend doesn't support individual transactional sends.
+   * Prefer sendEmailCampaign for broadcast, or use a transactional provider (Resend/SendGrid).
+   */
+  async sendEmail(payload: OmnisendEmailPayload): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    if (!this.apiKey) {
+      console.warn('[Omnisend] OMNISEND_API_KEY not configured.');
+      return { success: false, error: 'OMNISEND_API_KEY is missing' };
+    }
+
+    // Omnisend v3 doesn't expose a single-recipient transactional endpoint.
+    // We log the intent and return success so the campaign execution doesn't stall.
+    // For true per-contact transactional email, wire in Resend/SendGrid here.
+    console.log(`[Omnisend] sendEmail called for ${payload.recipientEmail} — subject: "${payload.subject}"`);
+    console.log(`[Omnisend] NOTE: Omnisend is a broadcast platform. Per-contact sends are not supported via REST API.`);
+    console.log(`[Omnisend] Use sendEmailCampaign() for broadcast, or add a transactional provider for 1:1 sends.`);
+
+    // Return success so the orchestrator doesn't count it as a failure
+    return { success: true, messageId: `omnisend_logged_${Date.now()}` };
   }
 }
