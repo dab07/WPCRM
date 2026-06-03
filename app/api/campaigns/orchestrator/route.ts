@@ -1,110 +1,233 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CampaignOrchestrator } from '@/lib/services/campaigns/CampaignOrchestrator';
+import { getSupabaseClient } from '../../../../supabase/supabase';
+import { CampaignOrchestrator } from '../../../../lib/services/campaigns/CampaignOrchestrator';
 
-export async function POST(request: NextRequest) {
-  try {
-    // Parse request body
-    const body = await request.json();
-    console.log('[Campaign Orchestrator API] Received request:', JSON.stringify(body, null, 2));
-    
-    const { campaignId, action, source, timestamp } = body;
+/**
+ * /api/campaigns/orchestrator
+ *
+ * Single unified campaign execution route. Handles two use-cases:
+ *
+ * ── SCHEDULED (N8N / Vercel Cron) ──────────────────────────────────────────
+ *   POST  { "action": "process_scheduled", "source": "n8n_schedule_trigger" }
+ *   GET   (Vercel Cron — same logic, no body needed)
+ *
+ *   1. PROMOTE  draft → pending for campaigns entering the 90-day window
+ *   2. EXECUTE  campaigns where status = 'approved' AND scheduled_at = today
+ *               Channels: 'whatsapp' | 'email' | 'both'  (falls back to send_email bool)
+ *
+ *   Auth: Authorization: Bearer <CRON_SECRET_TOKEN>
+ *         OR ?secret=<CRON_SECRET_TOKEN>
+ *
+ * ── SINGLE CAMPAIGN (UI "Execute now" button) ───────────────────────────────
+ *   POST  { "campaignId": "<uuid>" }
+ *   Executes one specific campaign regardless of scheduled_at.
+ *   No auth required — user is already authenticated via the UI session.
+ *
+ * Execution rule (both paths):
+ *   A campaign is only sent when  status = 'approved'  AND  scheduled_at = today.
+ *   The single-campaign path relaxes the date check so operators can re-run
+ *   or manually trigger from the UI.
+ */
 
-    const orchestrator = new CampaignOrchestrator();
+// ── Auth (for scheduled / cron calls) ─────────────────────────────────────
+function isCronAuthorized(request: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET_TOKEN;
+  if (!secret) return true; // no secret set → open in dev
 
-    // Handle scheduled processing from N8N
-    if (action === 'process_scheduled') {
-      console.log(`[Campaign Orchestrator API] Processing scheduled campaigns from ${source} at ${timestamp}`);
-      
-      try {
-        const result = await orchestrator.processCampaigns(source);
-        
-        return NextResponse.json({
-          success: true,
-          processed: result.processed || 0,
-          sent: result.sent || 0,
-          failed: result.failed || 0,
-          whatsapp_sent: result.whatsapp_sent || 0,
-          email_sent: result.email_sent || 0,
-          campaigns: result.campaigns || [],
-          timestamp: new Date().toISOString(),
-          source,
-          message: `Processed ${result.processed} campaigns — WA: ${result.whatsapp_sent}, Email: ${result.email_sent}, Failed: ${result.failed}`
-        });
-      } catch (error) {
-        console.error('[Campaign Orchestrator API] Error processing campaigns:', error);
-        return NextResponse.json({
-          success: false,
-          processed: 0,
-          sent: 0,
-          failed: 0,
-          timestamp: new Date().toISOString(),
-          source,
-          error: error instanceof Error ? error.message : 'Unknown error',
-          message: 'Failed to process scheduled campaigns'
-        }, { status: 500 });
-      }
-    }
+  const auth = request.headers.get('authorization') ?? '';
+  if (auth === `Bearer ${secret}`) return true;
 
-    // Handle single campaign execution (requires campaignId)
-    if (!campaignId) {
-      console.log('[Campaign Orchestrator API] No campaignId provided and action is not process_scheduled');
-      return NextResponse.json(
-        { 
-          error: 'Campaign ID is required for single campaign execution',
-          received_action: action,
-          available_actions: ['process_scheduled', 'single_campaign']
-        },
-        { status: 400 }
-      );
-    }
+  const url = new URL(request.url);
+  if (url.searchParams.get('secret') === secret) return true;
 
+  return false;
+}
+
+// ── Shared: promote draft → pending ───────────────────────────────────────
+async function promoteDraftCampaigns(): Promise<{ promoted: number; errors: string[] }> {
+  const supabase = getSupabaseClient(true);
+  const now = new Date();
+  const windowEnd = new Date(now);
+  windowEnd.setDate(windowEnd.getDate() + 90);
+  const errors: string[] = [];
+
+  const { data: promoted, error } = await supabase
+    .from('campaigns')
+    .update({ status: 'pending', updated_at: now.toISOString() })
+    .eq('status', 'draft')
+    .not('scheduled_at', 'is', null)
+    .lte('scheduled_at', windowEnd.toISOString())
+    .gte('scheduled_at', now.toISOString())
+    .select('id, name');
+
+  if (error) {
+    errors.push(`Promote error: ${error.message}`);
+  } else if (promoted && promoted.length > 0) {
+    console.log(
+      `[Orchestrator] Promoted ${promoted.length} draft → pending:`,
+      promoted.map((c) => c.name).join(', ')
+    );
+  }
+
+  return { promoted: promoted?.length ?? 0, errors };
+}
+
+// ── Shared: execute today's approved campaigns ─────────────────────────────
+async function executeScheduledCampaigns(source: string): Promise<{
+  sent: number;
+  whatsapp_sent: number;
+  email_sent: number;
+  failed: number;
+  campaigns: { id: string; name: string; channel: string; sent: number; status: string }[];
+  errors: string[];
+}> {
+  const supabase = getSupabaseClient(true);
+  const orchestrator = new CampaignOrchestrator();
+  const now = new Date();
+
+  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+  const todayEnd   = new Date(now); todayEnd.setHours(23, 59, 59, 999);
+
+  const errors: string[] = [];
+  const campaignResults: { id: string; name: string; channel: string; sent: number; status: string }[] = [];
+  let sent = 0, whatsapp_sent = 0, email_sent = 0, failed = 0;
+
+  const { data: toSend, error: fetchErr } = await supabase
+    .from('campaigns')
+    .select('id, name, channel, send_email')
+    .eq('status', 'approved')
+    .gte('scheduled_at', todayStart.toISOString())
+    .lte('scheduled_at', todayEnd.toISOString());
+
+  if (fetchErr) {
+    errors.push(`Fetch error: ${fetchErr.message}`);
+    return { sent, whatsapp_sent, email_sent, failed, campaigns: [], errors };
+  }
+
+  if (!toSend || toSend.length === 0) {
+    console.log(`[Orchestrator] No approved campaigns scheduled for today (source: ${source}).`);
+    return { sent, whatsapp_sent, email_sent, failed, campaigns: [], errors };
+  }
+
+  console.log(
+    `[Orchestrator] Executing ${toSend.length} campaign(s) from ${source}:`,
+    toSend.map((c) => `${c.name} [${c.channel ?? (c.send_email ? 'both' : 'whatsapp')}]`).join(', ')
+  );
+
+  for (const campaign of toSend) {
+    const effectiveChannel = campaign.channel ?? (campaign.send_email ? 'both' : 'whatsapp');
     try {
-      console.log(`[Campaign Orchestrator API] Executing single campaign: ${campaignId}`);
-      const result = await orchestrator.executeSingleCampaign(campaignId);
+      const result = await orchestrator.executeSingleCampaign(campaign.id);
+      sent += result.sent;
 
-      return NextResponse.json({
-        success: true,
-        result
-      });
-    } catch (error) {
-      console.error('[Campaign Orchestrator API] Error executing single campaign:', error);
-      return NextResponse.json({
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }, { status: 500 });
+      if (effectiveChannel === 'whatsapp') whatsapp_sent += result.sent;
+      else if (effectiveChannel === 'email') email_sent += result.sent;
+      else { whatsapp_sent += result.sent; email_sent += result.sent; }
+
+      campaignResults.push({ id: campaign.id, name: campaign.name, channel: effectiveChannel, sent: result.sent, status: 'executed' });
+      console.log(`[Orchestrator] ✅ "${campaign.name}" — ${result.sent} sent`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      failed++;
+      errors.push(`"${campaign.name}": ${msg}`);
+      campaignResults.push({ id: campaign.id, name: campaign.name, channel: effectiveChannel, sent: 0, status: 'failed' });
+      console.error(`[Orchestrator] ❌ "${campaign.name}" failed:`, msg);
+
+      // Reset to pending so it can be re-approved and retried
+      await supabase
+        .from('campaigns')
+        .update({ status: 'pending', updated_at: new Date().toISOString() })
+        .eq('id', campaign.id);
     }
+  }
 
-  } catch (error) {
-    console.error('[Campaign Orchestrator API] Error:', error);
+  return { sent, whatsapp_sent, email_sent, failed, campaigns: campaignResults, errors };
+}
+
+// ── GET — Vercel Cron ──────────────────────────────────────────────────────
+export async function GET(request: NextRequest) {
+  if (!isCronAuthorized(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const { promoted, errors: promoteErrors } = await promoteDraftCampaigns();
+    const exec = await executeScheduledCampaigns('vercel_cron');
+    const allErrors = [...promoteErrors, ...exec.errors];
+
+    return NextResponse.json({
+      success: allErrors.length === 0,
+      promoted,
+      ...exec,
+      errors: allErrors,
+      timestamp: new Date().toISOString(),
+    }, { status: allErrors.length > 0 ? 207 : 200 });
+  } catch (err) {
+    console.error('[Orchestrator] GET error:', err);
     return NextResponse.json(
-      { 
-        success: false,
-        error: 'Failed to execute campaign',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { success: false, error: err instanceof Error ? err.message : 'Unknown error' },
       { status: 500 }
     );
   }
 }
 
-export async function GET() {
+// ── POST — N8N scheduled trigger OR single-campaign UI execute ─────────────
+export async function POST(request: NextRequest) {
   try {
-    const orchestrator = new CampaignOrchestrator();
-    const campaigns = await orchestrator.getCampaigns();
+    const body = await request.json().catch(() => ({}));
+    const { campaignId, action, source = 'unknown' } = body;
 
-    return NextResponse.json({
-      success: true,
-      campaigns,
-      total: campaigns.length
-    });
+    // ── Path A: single campaign execution (UI) ─────────────────────────────
+    // No auth check — user is already authenticated via the browser session.
+    if (campaignId) {
+      console.log(`[Orchestrator] Single campaign execution: ${campaignId}`);
+      const orchestrator = new CampaignOrchestrator();
+      const result = await orchestrator.executeSingleCampaign(campaignId);
+      return NextResponse.json({ success: true, ...result, timestamp: new Date().toISOString() });
+    }
 
-  } catch (error) {
-    console.error('[Campaign Orchestrator API] Error fetching campaigns:', error);
+    // ── Path B: scheduled / cron trigger (N8N, manual) ────────────────────
+    // Requires CRON_SECRET_TOKEN.
+    if (!isCronAuthorized(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (action === 'process_scheduled' || !action) {
+      const { promoted, errors: promoteErrors } = await promoteDraftCampaigns();
+      const exec = await executeScheduledCampaigns(source);
+      const allErrors = [...promoteErrors, ...exec.errors];
+
+      return NextResponse.json({
+        success: allErrors.length === 0,
+        promoted,
+        processed: exec.campaigns.length,
+        sent: exec.sent,
+        whatsapp_sent: exec.whatsapp_sent,
+        email_sent: exec.email_sent,
+        failed: exec.failed,
+        campaigns: exec.campaigns,
+        errors: allErrors,
+        timestamp: new Date().toISOString(),
+        source,
+        message: [
+          `Promoted ${promoted} draft(s).`,
+          exec.campaigns.length > 0
+            ? `Executed ${exec.campaigns.length} campaign(s) — WA: ${exec.whatsapp_sent}, Email: ${exec.email_sent}.`
+            : 'No campaigns due today.',
+          exec.failed > 0 ? `⚠️ ${exec.failed} failed.` : '',
+        ].filter(Boolean).join(' '),
+      }, { status: allErrors.length > 0 ? 207 : 200 });
+    }
+
     return NextResponse.json(
-      { 
-        error: 'Failed to fetch campaigns',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { error: `Unknown action "${action}"`, available_actions: ['process_scheduled'] },
+      { status: 400 }
+    );
+
+  } catch (err) {
+    console.error('[Orchestrator] POST error:', err);
+    return NextResponse.json(
+      { success: false, error: err instanceof Error ? err.message : 'Unknown error' },
       { status: 500 }
     );
   }

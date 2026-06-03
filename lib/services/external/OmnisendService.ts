@@ -248,7 +248,7 @@ export class OmnisendService {
           },
           content: {
             subject: params.subject,
-            fromName: params.fromName ?? 'Zavops CRM',
+            fromName: params.fromName ?? 'CRM',
             replyTo: params.replyTo ?? '',
             html: htmlBody,
           },

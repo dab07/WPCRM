@@ -94,7 +94,6 @@ export class CampaignOrchestrator {
           campaign.channel === 'email' ? 'email'
           : campaign.channel === 'both' ? 'both'
           : campaign.channel === 'whatsapp' ? 'whatsapp'
-          : campaign.send_email ? 'both'
           : 'whatsapp';
 
         try {
