@@ -212,7 +212,6 @@ export class CampaignOrchestrator {
       const messageRecords: any[] = [];
 
       // ── Resolve effective channel ───────────────────────────────────────────
-      // channel column is source of truth; fall back to legacy send_email bool
       const effectiveChannel: 'whatsapp' | 'email' | 'both' =
         campaign.channel === 'email' ? 'email'
         : campaign.channel === 'both' ? 'both'
@@ -222,6 +221,60 @@ export class CampaignOrchestrator {
 
       const sendWhatsApp = effectiveChannel === 'whatsapp' || effectiveChannel === 'both';
       const sendEmail    = effectiveChannel === 'email'    || effectiveChannel === 'both';
+
+      // ── STEP 1: Omnisend email — sync contacts then broadcast ONCE ─────────
+      // Omnisend is a broadcast platform. We:
+      //   a) Upsert every eligible contact (that has an email) into Omnisend
+      //      as 'subscribed' so they appear in the audience.
+      //   b) Fire ONE campaign to all subscribed contacts.
+      // This must happen before the WhatsApp batch loop so the email is sent
+      // regardless of per-contact WhatsApp success/failure.
+      let emailCampaignFired = false;
+      if (sendEmail && campaign.email_subject && campaign.email_body) {
+        const emailContacts = contacts.filter((c) => c.email);
+        console.log(`[Campaign ${campaign.name}] Syncing ${emailContacts.length} contacts into Omnisend…`);
+
+        // Upsert each contact into Omnisend so they are in the audience
+        for (const contact of emailContacts) {
+          try {
+            const nameParts = (contact.name ?? '').split(' ');
+            await this.omnisendService.upsertContact({
+              email: contact.email ?? undefined,
+              firstName: nameParts[0] ?? undefined,
+              lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined,
+              tags: contact.tags ?? [],
+              status: 'subscribed',
+            });
+          } catch (err) {
+            console.warn(`[Campaign] Omnisend upsert failed for ${contact.email}:`, err);
+          }
+        }
+
+        // Build email HTML — attach campaign image if available
+        const imageHtml = (campaign.image_url && !campaign.image_url.startsWith('data:'))
+          ? `<div style="text-align:center;margin-bottom:24px"><img src="${campaign.image_url}" alt="${campaign.name}" style="max-width:600px;width:100%;border-radius:8px"/></div>`
+          : '';
+
+        const bodyHtml = imageHtml + campaign.email_body
+          .replace(/\{\{name\}\}/g, 'there')          // Omnisend personalisation via merge tags not supported here
+          .replace(/\{\{company\}\}/g, '')
+          .replace(/\n/g, '<br>');
+
+        // Fire one Omnisend campaign to all subscribed contacts
+        const omnisendResult = await this.omnisendService.sendEmailCampaign({
+          name: `${campaign.name} — ${new Date().toISOString().slice(0, 10)}`,
+          subject: campaign.email_subject,
+          body: bodyHtml,
+          fromName: 'Zavops CRM',
+        });
+
+        if (omnisendResult.success) {
+          emailCampaignFired = true;
+          console.log(`[Campaign ${campaign.name}] ✅ Omnisend campaign fired: ${omnisendResult.campaignId}`);
+        } else {
+          console.error(`[Campaign ${campaign.name}] ❌ Omnisend campaign failed:`, omnisendResult.error);
+        }
+      }
 
       // ── Resolve campaign image ONCE before the batch loop ──────────────────
       // Only needed when WhatsApp is in the channel mix.
@@ -325,41 +378,15 @@ export class CampaignOrchestrator {
             }
 
             // ── Email send (Omnisend) ──────────────────────────────────────
-            if (sendEmail && contact.email && campaign.email_subject && campaign.email_body) {
-              const attachments: { url: string; name: string; mimeType?: string }[] =
-                Array.isArray(campaign.email_attachments)
-                  ? campaign.email_attachments.map((att) => ({
-                      url: att.url || att.path,
-                      name: att.name || 'attachment',
-                    }))
-                  : [];
-
-              if (campaign.image_url && !campaign.image_url.startsWith('data:')) {
-                attachments.push({
-                  url: campaign.image_url,
-                  name: 'campaign_image.png',
-                  mimeType: 'image/png',
-                });
-              }
-
-              const emailResult = await this.omnisendService.sendEmail({
-                subject: campaign.email_subject.replace(/\{\{name\}\}/g, contact.name || 'Friend'),
-                body: campaign.email_body
-                  .replace(/\{\{name\}\}/g, contact.name || 'Friend')
-                  .replace(/\{\{company\}\}/g, contact.company || ''),
-                recipientEmail: contact.email,
-                attachments,
-              });
-
-              if (!emailResult.success) {
-                console.warn(`[Campaign] Email failed for ${contact.email}:`, emailResult.error);
-              }
-            } else if (sendEmail && !contact.email) {
-              console.warn(`[Campaign] Skipping email for contact ${contact.id} — no email address`);
+            // Email is sent as a single Omnisend broadcast BEFORE the batch loop.
+            // No per-contact email action needed here.
+            if (sendEmail && !contact.email) {
+              console.warn(`[Campaign] Note: contact ${contact.id} has no email — excluded from Omnisend broadcast`);
             }
 
             // Count as sent if at least one channel succeeded
-            const overallSuccess = sendWhatsApp ? whatsappSuccess : true; // email-only always counts
+            // For email-only, WhatsApp wasn't attempted — count as success if email broadcast fired
+            const overallSuccess = sendWhatsApp ? whatsappSuccess : emailCampaignFired;
             return { success: overallSuccess, contact: contact.id };
 
           } catch (error) {

@@ -201,7 +201,14 @@ export class OmnisendService {
    * Upsert a contact into Omnisend so they can receive campaigns.
    * Contacts need status 'subscribed' to receive email campaigns.
    */
-  async upsertContact(contact: Partial<OmnisendContact> & { email?: string; phone?: string }): Promise<void> {
+  async upsertContact(contact: {
+    email?: string | undefined;
+    phone?: string | undefined;
+    firstName?: string | undefined;
+    lastName?: string | undefined;
+    tags?: string[] | undefined;
+    status?: 'subscribed' | 'unsubscribed' | 'nonSubscribed' | undefined;
+  }): Promise<void> {
     await this.fetchWithRetry('/contacts', {
       method: 'POST',
       body: JSON.stringify({
