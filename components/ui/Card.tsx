@@ -11,19 +11,37 @@ interface CardProps {
 export function Card({ children, className = '', hover = false }: CardProps) {
   return (
     <div
-      className={`bg-white rounded-xl border border-slate-200 ${
-        hover ? 'hover:shadow-lg transition-shadow' : ''
-      } ${className}`}
+      className={`
+        bg-brand-slate border border-[rgba(59,91,173,0.18)] rounded-[4px] p-6
+        ${hover ? 'card-hover cursor-pointer' : ''}
+        ${className}
+      `}
     >
       {children}
     </div>
   );
 }
 
-export function CardHeader({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`p-6 border-b border-slate-200 ${className}`}>{children}</div>;
+export function CardHeader({
+  children,
+  className = '',
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`px-6 py-4 border-b border-[rgba(59,91,173,0.18)] ${className}`}>
+      {children}
+    </div>
+  );
 }
 
-export function CardContent({ children, className = '' }: { children: ReactNode; className?: string }) {
+export function CardContent({
+  children,
+  className = '',
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return <div className={`p-6 ${className}`}>{children}</div>;
 }

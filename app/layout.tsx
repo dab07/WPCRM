@@ -3,7 +3,7 @@ import '../globals.css';
 
 
 export const metadata: Metadata = {
-  title: 'WhatsApp CRM System',
+  title: 'Zavops CRM — AI-Powered Customer Management',
   description: 'AI-powered WhatsApp CRM with automated responses and agent handover',
 };
 

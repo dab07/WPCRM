@@ -1,13 +1,12 @@
 'use client';
 
 import { LucideIcon } from 'lucide-react';
-import { Card } from '../../../ui';
 
 interface MetricCardProps {
   title: string;
   value: string | number;
   icon: LucideIcon;
-  iconColor: string;
+  iconColor?: string; // kept for API compatibility, ignored in new design
   subtitle?: string;
   trend?: {
     value: string;
@@ -15,30 +14,36 @@ interface MetricCardProps {
   };
 }
 
-export function MetricCard({ title, value, icon: Icon, iconColor, subtitle, trend }: MetricCardProps) {
+export function MetricCard({ title, value, icon: Icon, subtitle, trend }: MetricCardProps) {
   return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-slate-600">{title}</p>
-          <p className="text-3xl font-bold text-slate-900 mt-2">{value}</p>
+    <div className="card-hover bg-brand-slate border border-[rgba(59,91,173,0.18)] rounded-[4px] p-6 flex flex-col gap-4">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <p className="font-mono text-[10px] uppercase tracking-label text-brand-muted mb-2">
+            {title}
+          </p>
+          <p className="font-display font-bold text-brand-yellow text-[32px] leading-none tracking-tighter">
+            {value}
+          </p>
         </div>
-        <div className={`p-3 ${iconColor} rounded-lg`}>
-          <Icon className="w-6 h-6" />
+        <div className="w-9 h-9 bg-brand-blue/20 border border-brand-blue/30 rounded-[4px] flex items-center justify-center shrink-0">
+          <Icon className="w-5 h-5 stroke-[1.5] text-brand-blue" />
         </div>
       </div>
+
+      {/* Yellow rule divider */}
+      <div className="w-[48px] h-[1px] bg-brand-yellow opacity-60" />
+
       {(trend || subtitle) && (
-        <div className="mt-4 flex items-center text-sm">
+        <div className="text-[12px] font-body">
           {trend && (
-            <>
-              <span className={trend.positive ? 'text-green-600' : 'text-red-600'}>
-                {trend.value}
-              </span>
-            </>
+            <span className={trend.positive ? 'text-green-400' : 'text-red-400'}>
+              {trend.value}
+            </span>
           )}
-          {subtitle && <span className="text-slate-600">{subtitle}</span>}
+          {subtitle && <span className="text-brand-muted">{subtitle}</span>}
         </div>
       )}
-    </Card>
+    </div>
   );
 }

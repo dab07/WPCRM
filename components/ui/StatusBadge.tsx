@@ -6,33 +6,51 @@ interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status, variant = 'default' }: StatusBadgeProps) {
-  const getStatusColor = () => {
+  const getStatusStyle = () => {
     if (variant === 'conversation') {
       switch (status) {
-        case 'active': return 'bg-green-100 text-green-700';
-        case 'ai_handled': return 'bg-blue-100 text-blue-700';
-        case 'agent_assigned': return 'bg-orange-100 text-orange-700';
-        case 'closed': return 'bg-slate-100 text-slate-700';
-        default: return 'bg-slate-100 text-slate-700';
+        case 'active':
+          return 'border-green-500 text-green-400 bg-green-500/10';
+        case 'ai_handled':
+          return 'border-brand-blue text-brand-offwhite bg-brand-blue/20';
+        case 'agent_assigned':
+          return 'border-brand-yellow text-brand-yellow bg-brand-yellow/10';
+        case 'closed':
+          return 'border-brand-muted text-brand-muted bg-brand-muted/10';
+        default:
+          return 'border-brand-muted text-brand-muted bg-brand-muted/10';
       }
     }
 
     if (variant === 'campaign') {
       switch (status) {
-        case 'draft': return 'bg-slate-100 text-slate-700';
-        case 'scheduled': return 'bg-blue-100 text-blue-700';
-        case 'running': return 'bg-orange-100 text-orange-700';
-        case 'completed': return 'bg-green-100 text-green-700';
-        case 'paused': return 'bg-yellow-100 text-yellow-700';
-        default: return 'bg-slate-100 text-slate-700';
+        case 'draft':
+          return 'border-brand-muted text-brand-muted bg-brand-muted/10';
+        case 'scheduled':
+          return 'border-brand-blue text-brand-offwhite bg-brand-blue/20';
+        case 'running':
+          return 'border-brand-yellow text-brand-yellow bg-brand-yellow/10';
+        case 'completed':
+          return 'border-green-500 text-green-400 bg-green-500/10';
+        case 'paused':
+          return 'border-brand-muted text-brand-muted bg-brand-muted/10';
+        default:
+          return 'border-brand-muted text-brand-muted bg-brand-muted/10';
       }
     }
 
-    return 'bg-slate-100 text-slate-700';
+    return 'border-brand-muted text-brand-muted bg-brand-muted/10';
   };
 
   return (
-    <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor()}`}>
+    <span
+      className={`
+        inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-label
+        px-2 py-0.5 border rounded-[4px]
+        ${getStatusStyle()}
+      `}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-current" />
       {status.replace('_', ' ')}
     </span>
   );

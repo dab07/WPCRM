@@ -1,7 +1,7 @@
 'use client';
 
 import { Zap } from 'lucide-react';
-import { Card, CardHeader, CardContent, EmptyState } from '../../../ui';
+import { EmptyState } from '../../../ui';
 import { TriggerExecution } from '../../../../lib/hooks/useTriggerExecutions';
 
 interface TriggersListProps {
@@ -10,14 +10,15 @@ interface TriggersListProps {
 
 export function TriggersList({ triggers }: TriggersListProps) {
   return (
-    <Card>
-      <CardHeader>
-        <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-          <Zap className="w-5 h-5 text-orange-600" />
+    <div className="bg-brand-slate border border-[rgba(59,91,173,0.18)] rounded-[4px]">
+      <div className="flex items-center gap-2 px-6 py-4 border-b border-[rgba(59,91,173,0.18)]">
+        <Zap className="w-4 h-4 stroke-[1.5] text-brand-yellow" />
+        <h3 className="font-heading font-semibold text-brand-offwhite text-sm tracking-tight">
           Top Performing Triggers
         </h3>
-      </CardHeader>
-      <CardContent>
+      </div>
+
+      <div className="p-6">
         {triggers.length === 0 ? (
           <EmptyState
             icon={Zap}
@@ -25,33 +26,36 @@ export function TriggersList({ triggers }: TriggersListProps) {
             description="Create triggers to automate actions"
           />
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {triggers.map((trigger) => (
               <TriggerItem key={trigger.id} trigger={trigger} />
             ))}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
 function TriggerItem({ trigger }: { trigger: TriggerExecution }) {
+  const pct = (trigger.success_rate * 100).toFixed(1);
+
   return (
-    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-      <div>
-        <p className="font-medium text-slate-900">{trigger.name}</p>
-        <p className="text-sm text-slate-600">
-          {trigger.execution_count} executions • {(trigger.success_rate * 100).toFixed(1)}% success
+    <div className="p-4 bg-brand-navy border border-[rgba(59,91,173,0.18)] rounded-[4px] hover:border-brand-yellow/40 transition-colors">
+      <div className="flex items-center justify-between mb-3">
+        <p className="font-heading font-semibold text-brand-offwhite text-[13px]">
+          {trigger.name}
         </p>
+        <span className="font-mono text-[11px] text-brand-yellow font-bold">{pct}%</span>
       </div>
-      <div className="text-right">
-        <div className="w-12 h-2 bg-slate-200 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-orange-500 rounded-full"
-            style={{ width: `${trigger.success_rate * 100}%` }}
-          />
-        </div>
+      <p className="font-mono text-[10px] uppercase tracking-label text-brand-muted mb-2">
+        {trigger.execution_count} executions
+      </p>
+      <div className="progress-brand rounded-[2px]">
+        <div
+          className="progress-brand-fill rounded-[2px]"
+          style={{ width: `${pct}%` }}
+        />
       </div>
     </div>
   );

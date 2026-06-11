@@ -1,21 +1,36 @@
 'use client';
 
-import { Bot } from 'lucide-react';
+import Image from 'next/image';
 
 export function DashboardHeader() {
   return (
-    <header className="bg-white border-b border-slate-200 px-6 py-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-lg">
-            <Bot className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">WhatsApp CRM</h1>
-            <p className="text-sm text-slate-500">AI-powered customer management</p>
-          </div>
+    <header
+      className="
+        h-[72px] shrink-0 flex items-center
+        bg-brand-navy/95 backdrop-blur-md
+        border-b border-[rgba(59,91,173,0.18)]
+        px-6
+      "
+    >
+      <div className="flex items-center gap-3">
+        <div>
+          <Image
+            src="/logos/zavops-logo.png"
+            alt="Zavops"
+            width={120}
+            height={36}
+            priority
+            className="object-contain"
+          />
         </div>
       </div>
+
+      {/* Diagonal slash accent */}
+      <div
+        aria-hidden="true"
+        className="ml-8 w-[60px] h-[2px] bg-brand-yellow opacity-60"
+        style={{ transform: 'rotate(15deg)' }}
+      />
     </header>
   );
 }

@@ -11,7 +11,8 @@ dist
 dist-ssr
 *.local
 guides
-
+Zavops_BrandGuidelines.md
+Zavops_BrandGuidelines
 # Next.js
 /.next/
 /out/

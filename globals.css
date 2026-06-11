@@ -1,3 +1,68 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ─── Zavops Brand Fonts ─────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Manrope:wght@400;500;600;700&family=Inter:wght@400;500&family=Space+Mono:wght@400;700&display=swap');
+
+/* ─── Base Reset ─────────────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html, body, #__next {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-brand-navy text-brand-offwhite font-body antialiased;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* Scrollbar – dark branded */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-brand-navy; }
+  ::-webkit-scrollbar-thumb { @apply bg-brand-blue; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-brand-yellow; }
+}
+
+/* ─── Utility Classes ─────────────────────────────────────────────────────── */
+@layer utilities {
+  /* Eyebrow label with yellow rule prefix */
+  .label-eyebrow {
+    @apply font-mono text-brand-yellow uppercase tracking-widest text-[10px];
+    letter-spacing: 0.2em;
+  }
+
+  /* Diagonal yellow slash decorative element */
+  .diagonal-slash::after {
+    content: '';
+    display: block;
+    width: 80px;
+    height: 2px;
+    background: #F7C31A;
+    transform: rotate(15deg);
+    margin-top: 12px;
+  }
+
+  /* Card hover — yellow border + yellow-glow bg */
+  .card-hover {
+    @apply transition-all duration-200;
+    border: 1px solid rgba(59,91,173,0.18);
+  }
+  .card-hover:hover {
+    border-color: #F7C31A;
+    background-color: rgba(247,195,26,0.06);
+  }
+
+  /* Progress bar brand fill */
+  .progress-brand {
+    @apply h-1 bg-brand-slate overflow-hidden;
+  }
+  .progress-brand-fill {
+    @apply h-full transition-all duration-500;
+    background: #F7C31A;
+  }
+}

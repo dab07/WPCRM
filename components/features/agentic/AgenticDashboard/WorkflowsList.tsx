@@ -1,7 +1,7 @@
 'use client';
 
 import { Workflow } from 'lucide-react';
-import { Card, CardHeader, CardContent, EmptyState } from '../../../ui';
+import { EmptyState } from '../../../ui';
 import { WorkflowExecution } from '../../../../lib/hooks/useWorkflowExecutions';
 import { formatDateTime } from '../../../../lib/utils/date-formatting';
 
@@ -11,14 +11,15 @@ interface WorkflowsListProps {
 
 export function WorkflowsList({ workflows }: WorkflowsListProps) {
   return (
-    <Card>
-      <CardHeader>
-        <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-          <Workflow className="w-5 h-5 text-purple-600" />
+    <div className="bg-brand-slate border border-[rgba(59,91,173,0.18)] rounded-[4px]">
+      <div className="flex items-center gap-2 px-6 py-4 border-b border-[rgba(59,91,173,0.18)]">
+        <Workflow className="w-4 h-4 stroke-[1.5] text-brand-blue" />
+        <h3 className="font-heading font-semibold text-brand-offwhite text-sm tracking-tight">
           Recent Workflow Executions
         </h3>
-      </CardHeader>
-      <CardContent>
+      </div>
+
+      <div className="p-6">
         {workflows.length === 0 ? (
           <EmptyState
             icon={Workflow}
@@ -26,45 +27,44 @@ export function WorkflowsList({ workflows }: WorkflowsListProps) {
             description="Connect n8n to see workflow activity"
           />
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {workflows.map((workflow) => (
               <WorkflowItem key={workflow.id} workflow={workflow} />
             ))}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
 function WorkflowItem({ workflow }: { workflow: WorkflowExecution }) {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'text-green-600 bg-green-100';
-      case 'running':
-        return 'text-blue-600 bg-blue-100';
-      case 'failed':
-        return 'text-red-600 bg-red-100';
-      default:
-        return 'text-gray-600 bg-gray-100';
-    }
-  };
+  const statusStyle = {
+    completed: 'border-green-500/40 text-green-400 bg-green-500/10',
+    running:   'border-brand-blue/40 text-brand-offwhite bg-brand-blue/20',
+    failed:    'border-red-500/40 text-red-400 bg-red-500/10',
+  }[workflow.status] ?? 'border-brand-muted/30 text-brand-muted bg-brand-muted/10';
 
   return (
-    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+    <div className="p-4 bg-brand-navy border border-[rgba(59,91,173,0.18)] rounded-[4px] flex items-center justify-between hover:border-brand-yellow/40 transition-colors">
       <div>
-        <p className="font-medium text-slate-900">{workflow.workflow_name}</p>
-        <p className="text-sm text-slate-600">
+        <p className="font-heading font-semibold text-brand-offwhite text-[13px]">
+          {workflow.workflow_name}
+        </p>
+        <p className="font-mono text-[10px] uppercase tracking-label text-brand-muted mt-1">
           {formatDateTime(workflow.started_at)}
         </p>
       </div>
       <div className="flex items-center gap-3">
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(workflow.status)}`}>
+        <span
+          className={`font-mono text-[10px] uppercase tracking-label px-2 py-0.5 border rounded-[4px] ${statusStyle}`}
+        >
           {workflow.status}
         </span>
         {workflow.execution_time_ms && (
-          <span className="text-sm text-slate-500">{workflow.execution_time_ms}ms</span>
+          <span className="font-mono text-[11px] text-brand-muted">
+            {workflow.execution_time_ms}ms
+          </span>
         )}
       </div>
     </div>

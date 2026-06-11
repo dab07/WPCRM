@@ -38,15 +38,15 @@ export const STATUS_COLORS: Record<string, string> = {
 };
 
 export const QUARTER_COLORS: Record<Quarter, string> = {
-  Q1: 'bg-sky-50 border-sky-200 text-sky-700',
-  Q2: 'bg-violet-50 border-violet-200 text-violet-700',
-  Q3: 'bg-orange-50 border-orange-200 text-orange-700',
-  Q4: 'bg-rose-50 border-rose-200 text-rose-700',
+  Q1: 'bg-brand-slate/80 border-brand-blue/20 text-brand-offwhite',
+  Q2: 'bg-brand-slate/80 border-brand-blue/20 text-brand-offwhite',
+  Q3: 'bg-brand-slate/80 border-brand-blue/20 text-brand-offwhite',
+  Q4: 'bg-brand-slate/80 border-brand-blue/20 text-brand-offwhite',
 };
 
 export const QUARTER_BADGE: Record<Quarter, string> = {
-  Q1: 'bg-sky-100 text-sky-700',
-  Q2: 'bg-violet-100 text-violet-700',
-  Q3: 'bg-orange-100 text-orange-700',
-  Q4: 'bg-rose-100 text-rose-700',
+  Q1: 'border-brand-blue/40 text-brand-blue bg-brand-blue/10',
+  Q2: 'border-brand-yellow/40 text-brand-yellow bg-brand-yellow/10',
+  Q3: 'border-green-500/40 text-green-400 bg-green-500/10',
+  Q4: 'border-red-500/40 text-red-400 bg-red-500/10',
 };
