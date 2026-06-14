@@ -290,13 +290,34 @@ interface CampaignDetailPanelProps {
   generatingIds: Set<string>;
 }
 
+// Channel options shown in the detail panel picker
+const DETAIL_CHANNEL_OPTIONS: Array<{ id: CampaignChannel; label: string; icon: React.ReactNode; desc: string }> = [
+  { id: 'whatsapp', label: 'WhatsApp',       icon: <MessageSquare className="w-3.5 h-3.5 stroke-[1.5]" />, desc: 'Gallabox' },
+  { id: 'email',    label: 'Email',          icon: <Mail          className="w-3.5 h-3.5 stroke-[1.5]" />, desc: 'Omnisend' },
+  { id: 'both',     label: 'Both',           icon: <Layers        className="w-3.5 h-3.5 stroke-[1.5]" />, desc: 'WA + Email' },
+];
+
 function CampaignDetailPanel({
   campaign, onClose, onEdit, onGenerate, onApprove, onReject, onMoveToPending, onChannelChange, generatingIds,
 }: CampaignDetailPanelProps) {
   const isGenerating = generatingIds.has(campaign.id) || campaign.image_status === 'generating';
   const effectiveChannel: CampaignChannel = campaign.channel ?? (campaign.send_email ? 'both' : 'whatsapp');
-  const showWA = effectiveChannel === 'whatsapp' || effectiveChannel === 'both';
-  const showEmail = effectiveChannel === 'email' || effectiveChannel === 'both';
+  const showWA    = effectiveChannel === 'whatsapp' || effectiveChannel === 'both';
+  const showEmail = effectiveChannel === 'email'    || effectiveChannel === 'both';
+
+  // Local channel picker state
+  const [pickerOpen,    setPickerOpen]    = useState(false);
+  const [pickerChannel, setPickerChannel] = useState<CampaignChannel>(effectiveChannel);
+
+  function handlePickerSave() {
+    onChannelChange(campaign.id, pickerChannel);
+    setPickerOpen(false);
+  }
+
+  function handlePickerCancel() {
+    setPickerChannel(effectiveChannel);
+    setPickerOpen(false);
+  }
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -409,16 +430,76 @@ function CampaignDetailPanel({
         <div className="p-5 border-t border-[rgba(59,91,173,0.18)] shrink-0">
           <div className="flex flex-wrap gap-2 justify-end">
             {campaign.status !== 'executed' && (
-              <div className="flex items-center border border-[rgba(59,91,173,0.18)] rounded-[4px] overflow-hidden">
-                {(['whatsapp', 'email', 'both'] as CampaignChannel[]).map((ch) => (
-                  <button
-                    key={ch}
-                    onClick={() => onChannelChange(campaign.id, ch)}
-                    className={`px-3 py-1.5 font-mono text-[10px] uppercase tracking-label transition-colors ${effectiveChannel === ch ? 'bg-brand-blue text-brand-offwhite' : 'text-brand-muted hover:bg-brand-slate'}`}
-                  >
-                    {ch === 'whatsapp' ? 'WA' : ch === 'email' ? 'Email' : 'Both'}
-                  </button>
-                ))}
+              <div className="relative">
+                {/* Channel picker trigger */}
+                <button
+                  onClick={() => { setPickerChannel(effectiveChannel); setPickerOpen((v) => !v); }}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-[rgba(59,91,173,0.18)] text-brand-muted hover:border-brand-blue hover:text-brand-offwhite rounded-[4px] font-mono text-[11px] uppercase tracking-label transition-all"
+                >
+                  <Layers className="w-3.5 h-3.5 stroke-[1.5]" />
+                  Channel: {effectiveChannel === 'whatsapp' ? 'WA' : effectiveChannel === 'email' ? 'Email' : 'Both'}
+                </button>
+
+                {/* Dropdown picker */}
+                {pickerOpen && (
+                  <div className="absolute bottom-full right-0 mb-2 w-64 bg-brand-navy border border-[rgba(59,91,173,0.3)] rounded-[4px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-10 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-[rgba(59,91,173,0.18)]">
+                      <p className="font-mono text-[10px] uppercase tracking-label text-brand-muted">Select Channel</p>
+                    </div>
+
+                    <div className="px-4 py-3 space-y-2">
+                      {DETAIL_CHANNEL_OPTIONS.map((opt) => {
+                        const active = pickerChannel === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setPickerChannel(opt.id)}
+                            className={`
+                              w-full flex items-center gap-3 px-3 py-2.5 border rounded-[4px]
+                              font-mono text-[11px] uppercase tracking-label transition-all text-left
+                              ${active
+                                ? 'border-brand-yellow bg-brand-yellow/10 text-brand-yellow'
+                                : 'border-[rgba(59,91,173,0.2)] text-brand-muted hover:border-brand-blue/50 hover:text-brand-offwhite'}
+                            `}
+                          >
+                            {/* Checkbox */}
+                            <span className={`w-3.5 h-3.5 rounded-[2px] border flex items-center justify-center shrink-0 transition-colors
+                              ${active ? 'border-brand-yellow bg-brand-yellow' : 'border-brand-muted/40'}`}
+                            >
+                              {active && (
+                                <svg viewBox="0 0 8 8" aria-hidden="true">
+                                  <path d="M1 4l2 2 4-4" stroke="#1A2847" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              )}
+                            </span>
+                            {opt.icon}
+                            <div>
+                              <span>{opt.label}</span>
+                              <span className="ml-1.5 font-body text-[10px] normal-case tracking-normal opacity-60">{opt.desc}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Save / Cancel */}
+                    <div className="flex gap-2 px-4 pb-4">
+                      <button
+                        onClick={handlePickerCancel}
+                        className="flex-1 px-3 py-2 border border-[rgba(59,91,173,0.18)] text-brand-muted hover:text-brand-offwhite rounded-[4px] font-mono text-[10px] uppercase tracking-label transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handlePickerSave}
+                        className="flex-1 px-3 py-2 bg-brand-yellow text-brand-navy font-mono text-[10px] uppercase tracking-label rounded-[4px] hover:brightness-110 transition-all"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
