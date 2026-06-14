@@ -26,14 +26,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../supabase/supabase';
-import {
-  GeminiService,
-  GeminiServiceError,
-} from '../../../../../lib/services/external/GeminiService';
-import {
-  GallaboxService,
-  getGallaboxService,
-} from '../../../../../lib/services/external/GallaboxService';
+import { GeminiService } from '../../../../../lib/services/external/GeminiService';
+import { getGallaboxService } from '../../../../../lib/services/external/GallaboxService';
 
 const supabase = supabaseAdmin;
 const GALLABOX_WEBHOOK_SECRET = process.env.GALLABOX_WEBHOOK_SECRET ?? '';
@@ -165,7 +159,7 @@ async function maybeAutoSyncToGallabox(
   _channelId: string
 ) {
   try {
-    const gallabox = getGallaboxService();
+    const gallabox = await getGallaboxService();
     const existing = await gallabox.findContactByPhone(contact.phone_number);
 
     if (existing) {
@@ -202,7 +196,7 @@ async function maybeAutoSyncToGallabox(
 
 async function sendReply(to: string, channelId: string, text: string) {
   try {
-    const gallabox = getGallaboxService();
+    const gallabox = await getGallaboxService();
     return gallabox.sendMessage({ to, channelId, type: 'text', text });
   } catch (err) {
     console.error('[Gallabox Webhook] Reply failed:', err);
@@ -465,16 +459,13 @@ async function persistBusinessCard(
 }
 
 function getStaticReply(intent: string): string | null {
-  const replies: Record<string, string> = {
-    greeting: `Hello! 👋 Welcome! We're excited to connect with you.\n\nHow can we help you today?`,
-    schedule_call: `📞 *Quick Call Scheduled*\n\nOur team will contact you within 24 hours to arrange a convenient time.\n\n📧 contact@zavops.com\n🌐 zavops.com`,
+  const knownIntents: Record<string, string> = {
+    greeting:         `Hello! 👋 Welcome! We're excited to connect with you.\n\nHow can we help you today?`,
+    schedule_call:    `📞 *Quick Call Scheduled*\n\nOur team will contact you within 24 hours to arrange a convenient time.\n\n📧 contact@zavops.com\n🌐 zavops.com`,
     schedule_meeting: `🤝 *Meeting Request*\n\nOur business development team will reach out within 24 hours.\n\n📧 contact@zavops.com\n🌐 zavops.com`,
-    talk_to_expert: `💬 *Expert Consultation*\n\nConnecting you with a specialist shortly.\n\n📧 expert@zavops.com\n🌐 zavops.com`,
-    pricing_inquiry: `💰 *Pricing Information*\n\nPlease reach out directly for a personalised quote.\n\n📧 contact@zavops.com\n🌐 zavops.com`,
-    support_request: `🛠️ *Support*\n\nOur support team will be with you shortly.\n\n📧 support@zavops.com`,
-    schedule_call_response:    null,
-    schedule_meeting_response: null,
-    talk_to_expert_response:   null,
+    talk_to_expert:   `💬 *Expert Consultation*\n\nConnecting you with a specialist shortly.\n\n📧 expert@zavops.com\n🌐 zavops.com`,
+    pricing_inquiry:  `💰 *Pricing Information*\n\nPlease reach out directly for a personalised quote.\n\n📧 contact@zavops.com\n🌐 zavops.com`,
+    support_request:  `🛠️ *Support*\n\nOur support team will be with you shortly.\n\n📧 support@zavops.com`,
   };
-  return replies[intent] ?? null;
+  return knownIntents[intent] ?? null;
 }

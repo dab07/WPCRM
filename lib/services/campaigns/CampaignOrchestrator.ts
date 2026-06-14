@@ -4,7 +4,7 @@ import { GallaboxService, getGallaboxService } from '../external/GallaboxService
 import { CampaignImageService } from '../external/CampaignImageService';
 import { supabaseAdmin } from '../../../supabase/supabase';
 import { getQuarter } from '@/lib/types/api/campaigns';
-import { OmnisendService } from '../external/OmnisendService';
+import { OmnisendService, getOmnisendService } from '../external/OmnisendService';
 
 export interface Campaign {
   id: string;
@@ -53,7 +53,7 @@ export class CampaignOrchestrator {
   private supabase = supabaseAdmin;
   private geminiService: GeminiService;
   private campaignImageService: CampaignImageService;
-  private omnisendService: OmnisendService;
+  private omnisendService: OmnisendService | null = null;
   private whatsappService: WhatsAppService | null = null;
   private gallaboxService: GallaboxService | null = null;
 
@@ -63,10 +63,15 @@ export class CampaignOrchestrator {
   constructor() {
     this.geminiService = new GeminiService();
     this.campaignImageService = new CampaignImageService();
-    this.omnisendService = new OmnisendService();
     this.whatsappProvider =
       (process.env.WHATSAPP_PROVIDER ?? 'meta') === 'gallabox' ? 'gallabox' : 'meta';
-    // Don't initialize WhatsApp service here - do it lazily
+  }
+
+  private async getOmnisendService(): Promise<OmnisendService> {
+    if (!this.omnisendService) {
+      this.omnisendService = await getOmnisendService();
+    }
+    return this.omnisendService;
   }
 
   private getWhatsAppService(): WhatsAppService {
@@ -76,9 +81,9 @@ export class CampaignOrchestrator {
     return this.whatsappService;
   }
 
-  private getGallaboxService(): GallaboxService {
+  private async getGallaboxService(): Promise<GallaboxService> {
     if (!this.gallaboxService) {
-      this.gallaboxService = getGallaboxService();
+      this.gallaboxService = await getGallaboxService();
     }
     return this.gallaboxService;
   }
@@ -96,7 +101,7 @@ export class CampaignOrchestrator {
     imagePublicUrl?: string | undefined;
   }): Promise<{ success: boolean; messageId?: string | undefined; error?: string | undefined }> {
     if (this.whatsappProvider === 'gallabox') {
-      const gallabox = this.getGallaboxService();
+      const gallabox = await this.getGallaboxService();
       const channelId = process.env.GALLABOX_WHATSAPP_PHONE_NUMBER_ID ?? '';
 
       if (params.type === 'image' && params.imagePublicUrl) {
@@ -302,45 +307,56 @@ export class CampaignOrchestrator {
         const emailContacts = contacts.filter((c) => c.email);
         console.log(`[Campaign ${campaign.name}] Syncing ${emailContacts.length} contacts into Omnisend…`);
 
-        // Upsert each contact into Omnisend so they are in the audience
-        for (const contact of emailContacts) {
-          try {
-            const nameParts = (contact.name ?? '').split(' ');
-            await this.omnisendService.upsertContact({
-              email: contact.email ?? undefined,
-              firstName: nameParts[0] ?? undefined,
-              lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined,
-              tags: contact.tags ?? [],
-              status: 'subscribed',
-            });
-          } catch (err) {
-            console.warn(`[Campaign] Omnisend upsert failed for ${contact.email}:`, err);
-          }
+        let omnisend: OmnisendService;
+        try {
+          omnisend = await this.getOmnisendService();
+        } catch (err) {
+          console.error(`[Campaign ${campaign.name}] ❌ Omnisend not configured:`, err);
+          // Skip email entirely if credentials aren't set up
+          omnisend = null as unknown as OmnisendService;
         }
 
-        // Build email HTML — attach campaign image if available
-        const imageHtml = (campaign.image_url && !campaign.image_url.startsWith('data:'))
-          ? `<div style="text-align:center;margin-bottom:24px"><img src="${campaign.image_url}" alt="${campaign.name}" style="max-width:600px;width:100%;border-radius:8px"/></div>`
-          : '';
+        if (omnisend) {
+          // Upsert each contact into Omnisend so they are in the audience
+          for (const contact of emailContacts) {
+            try {
+              const nameParts = (contact.name ?? '').split(' ');
+              await omnisend.upsertContact({
+                email: contact.email ?? undefined,
+                firstName: nameParts[0] ?? undefined,
+                lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined,
+                tags: contact.tags ?? [],
+                status: 'subscribed',
+              });
+            } catch (err) {
+              console.warn(`[Campaign] Omnisend upsert failed for ${contact.email}:`, err);
+            }
+          }
 
-        const bodyHtml = imageHtml + campaign.email_body
-          .replace(/\{\{name\}\}/g, 'there')          // Omnisend personalisation via merge tags not supported here
-          .replace(/\{\{company\}\}/g, '')
-          .replace(/\n/g, '<br>');
+          // Build email HTML — attach campaign image if available
+          const imageHtml = (campaign.image_url && !campaign.image_url.startsWith('data:'))
+            ? `<div style="text-align:center;margin-bottom:24px"><img src="${campaign.image_url}" alt="${campaign.name}" style="max-width:600px;width:100%;border-radius:8px"/></div>`
+            : '';
 
-        // Fire one Omnisend campaign to all subscribed contacts
-        const omnisendResult = await this.omnisendService.sendEmailCampaign({
-          name: `${campaign.name} — ${new Date().toISOString().slice(0, 10)}`,
-          subject: campaign.email_subject,
-          body: bodyHtml,
-          fromName: 'Zavops CRM',
-        });
+          const bodyHtml = imageHtml + campaign.email_body
+            .replace(/\{\{name\}\}/g, 'there')
+            .replace(/\{\{company\}\}/g, '')
+            .replace(/\n/g, '<br>');
 
-        if (omnisendResult.success) {
-          emailCampaignFired = true;
-          console.log(`[Campaign ${campaign.name}] ✅ Omnisend campaign fired: ${omnisendResult.campaignId}`);
-        } else {
-          console.error(`[Campaign ${campaign.name}] ❌ Omnisend campaign failed:`, omnisendResult.error);
+          // Fire one Omnisend campaign to all subscribed contacts
+          const omnisendResult = await omnisend.sendEmailCampaign({
+            name: `${campaign.name} — ${new Date().toISOString().slice(0, 10)}`,
+            subject: campaign.email_subject,
+            body: bodyHtml,
+            fromName: 'Zavops CRM',
+          });
+
+          if (omnisendResult.success) {
+            emailCampaignFired = true;
+            console.log(`[Campaign ${campaign.name}] ✅ Omnisend campaign fired: ${omnisendResult.campaignId}`);
+          } else {
+            console.error(`[Campaign ${campaign.name}] ❌ Omnisend campaign failed:`, omnisendResult.error);
+          }
         }
       }
 
@@ -409,18 +425,29 @@ export class CampaignOrchestrator {
 
             // ── WhatsApp send ──────────────────────────────────────────────
             if (sendWhatsApp) {
-              const result = await this.sendWhatsAppMessage({
+              // Build params without explicit `undefined` values (exactOptionalPropertyTypes)
+              const waParams: {
+                to: string;
+                message: string;
+                type?: 'text' | 'image';
+                imageBase64?: string;
+                imageCaption?: string;
+                imageMimeType?: string;
+                imagePublicUrl?: string;
+              } = {
                 to: contact.phone_number,
                 message: personalizedMessage,
                 type: campaignImageBase64 ? 'image' : 'text',
-                imageBase64: campaignImageBase64 ?? undefined,
-                imageCaption: personalizedMessage,
-                imageMimeType: campaignImageMimeType,
-                // Pass the storage URL for Gallabox (it needs a public URL, not base64)
-                imagePublicUrl: campaign.image_url && !campaign.image_url.startsWith('data:')
-                  ? campaign.image_url
-                  : undefined,
-              });
+              };
+
+              if (campaignImageBase64) waParams.imageBase64 = campaignImageBase64;
+              waParams.imageCaption = personalizedMessage;
+              waParams.imageMimeType = campaignImageMimeType;
+              if (campaign.image_url && !campaign.image_url.startsWith('data:')) {
+                waParams.imagePublicUrl = campaign.image_url;
+              }
+
+              const result = await this.sendWhatsAppMessage(waParams);
               whatsappSuccess = result.success;
 
               if (result.success) {

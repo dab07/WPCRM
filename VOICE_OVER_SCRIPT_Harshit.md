@@ -75,3 +75,15 @@ Here's the voiceover script, written to match Zavops' brand voice — elite, pre
 - Tone: authoritative but not cold; "your team", "you stay in control" keeps it human
 - Emphasis words: *automatically*, *simultaneously*, *in real time*, *every step* — these carry the weight
 - Works as a product demo voiceover, investor deck narration, or LinkedIn video
+
+
+
+## Multi-User Secure Credential Management (Production Scale)
+
+### Context
+10,000+ users, each connecting their own third-party platforms 
+(Gallabox, Omnisend, etc.). Credentials must be stored securely per user 
+without exposing raw API keys anywhere.
+
+---
+

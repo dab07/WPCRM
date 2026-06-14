@@ -1,5 +1,4 @@
 // [NEW: brand-sync + campaign-execution] — added 2026-04-11
-import { config } from '../../config/environment';
 import { externalServicesConfig } from '../../config/external-services';
 
 export interface OmnisendContact {
@@ -82,14 +81,24 @@ export class OmnisendServiceError extends Error {
   }
 }
 
+export interface OmnisendTestResult {
+  success: boolean;
+  brandName?: string;
+  error?: string;
+}
+
+export interface OmnisendServiceOverrides {
+  apiKey?: string;
+}
+
 export class OmnisendService {
   private readonly apiKey: string;
   private readonly baseUrl = 'https://api.omnisend.com/v3';
   private readonly timeout: number;
   private readonly retries: number;
 
-  constructor() {
-    this.apiKey = config.omnisend.apiKey || process.env.OMNISEND_API_KEY || '';
+  constructor(overrides?: OmnisendServiceOverrides) {
+    this.apiKey = overrides?.apiKey ?? '';
     this.timeout = externalServicesConfig.omnisend.timeout;
     this.retries = externalServicesConfig.omnisend.retries;
   }
@@ -99,6 +108,32 @@ export class OmnisendService {
       'X-API-KEY': this.apiKey,
       'Content-Type': 'application/json',
     };
+  }
+
+  /**
+   * Test the connection by fetching the current brand info.
+   * Calls GET /brands/current — a lightweight read that validates the API key.
+   */
+  async testConnection(): Promise<OmnisendTestResult> {
+    if (!this.apiKey) {
+      return { success: false, error: 'API key is required for Omnisend.' };
+    }
+
+    try {
+      const data = await this.fetchWithRetry<Record<string, unknown>>('/brands/current');
+      const brandName =
+        (data?.name as string | undefined) ??
+        (data?.brandName as string | undefined);
+
+      return brandName !== undefined
+        ? { success: true, brandName }
+        : { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Connection test failed',
+      };
+    }
   }
 
   private async fetchWithRetry<T>(
@@ -302,4 +337,61 @@ export class OmnisendService {
     // Return success so the orchestrator doesn't count it as a failure
     return { success: true, messageId: `omnisend_logged_${Date.now()}` };
   }
+}
+
+// ── Factory & Singleton ───────────────────────────────────────────────────────
+
+/**
+ * Creates an OmnisendService instance with explicit credential overrides.
+ * Used by the credential verifier which passes decrypted plaintext directly.
+ */
+export function createOmnisendService(overrides?: OmnisendServiceOverrides): OmnisendService {
+  return new OmnisendService(overrides);
+}
+
+let _instance: OmnisendService | null = null;
+
+/**
+ * Returns an OmnisendService instance whose credentials are sourced exclusively
+ * from `platform_credentials` (the encrypted store). No env-var fallback —
+ * if no row exists, throws so callers can surface a clear error.
+ *
+ * This is async because it needs to decrypt credentials from Supabase Vault.
+ */
+export async function getOmnisendService(): Promise<OmnisendService> {
+  if (_instance) return _instance;
+
+  const { supabaseAdmin } = await import('../../../supabase/supabase');
+  const { decryptCredential } = await import('../../credentials/crypto');
+
+  const { data, error } = await supabaseAdmin
+    .from('platform_credentials')
+    .select('encrypted_payload, encrypted_dek, iv')
+    .eq('platform_name', 'omnisend')
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new OmnisendServiceError(`Failed to load Omnisend credentials: ${error.message}`);
+  }
+
+  if (!data) {
+    throw new OmnisendServiceError(
+      'Omnisend credentials not configured. Add them in Settings → Platform Credentials.'
+    );
+  }
+
+  const plaintext = await decryptCredential({
+    encryptedPayload: data.encrypted_payload as string,
+    encryptedDek:     data.encrypted_dek as string,
+    iv:               data.iv as string,
+  });
+
+  _instance = new OmnisendService({ apiKey: plaintext['apiKey'] ?? '' });
+  return _instance;
+}
+
+/** Call after saving/deleting Omnisend credentials so the next call re-fetches from DB. */
+export function resetOmnisendService(): void {
+  _instance = null;
 }
