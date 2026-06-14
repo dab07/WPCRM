@@ -24,7 +24,21 @@ export const config = {
     accessToken: process.env.WHATSAPP_ACCESS_TOKEN,
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
     webhookVerifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
-    provider: process.env.WHATSAPP_PROVIDER || 'meta',
+    /**
+     * 'gallabox' | 'meta'
+     * Set WHATSAPP_PROVIDER=gallabox to route all outbound WhatsApp messages
+     * through Gallabox instead of the Meta Cloud API.
+     */
+    provider: (process.env.WHATSAPP_PROVIDER ?? 'meta') as 'meta' | 'gallabox',
+  },
+
+  gallabox: {
+    apiKey:     process.env.GALLABOX_API_KEY    ?? '',
+    apiSecret:  process.env.GALLABOX_SECRET_API ?? '',
+    accountId:  process.env.GALLABOX_ACCOUNT_ID ?? '',
+    /** WhatsApp channel / phone number ID inside Gallabox */
+    channelId:  process.env.GALLABOX_WHATSAPP_PHONE_NUMBER_ID ?? '',
+    webhookSecret: process.env.GALLABOX_WEBHOOK_SECRET ?? '',
   },
   
 

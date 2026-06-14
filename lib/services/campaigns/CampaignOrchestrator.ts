@@ -1,5 +1,6 @@
 import { GeminiService } from '../external/GeminiService';
 import { WhatsAppService, getWhatsAppService } from '../external/WhatsAppService';
+import { GallaboxService, getGallaboxService } from '../external/GallaboxService';
 import { CampaignImageService } from '../external/CampaignImageService';
 import { supabaseAdmin } from '../../../supabase/supabase';
 import { getQuarter } from '@/lib/types/api/campaigns';
@@ -54,11 +55,17 @@ export class CampaignOrchestrator {
   private campaignImageService: CampaignImageService;
   private omnisendService: OmnisendService;
   private whatsappService: WhatsAppService | null = null;
+  private gallaboxService: GallaboxService | null = null;
+
+  /** Resolved once per orchestrator instance to avoid env reads per message */
+  private readonly whatsappProvider: 'meta' | 'gallabox';
 
   constructor() {
     this.geminiService = new GeminiService();
     this.campaignImageService = new CampaignImageService();
     this.omnisendService = new OmnisendService();
+    this.whatsappProvider =
+      (process.env.WHATSAPP_PROVIDER ?? 'meta') === 'gallabox' ? 'gallabox' : 'meta';
     // Don't initialize WhatsApp service here - do it lazily
   }
 
@@ -67,6 +74,67 @@ export class CampaignOrchestrator {
       this.whatsappService = getWhatsAppService();
     }
     return this.whatsappService;
+  }
+
+  private getGallaboxService(): GallaboxService {
+    if (!this.gallaboxService) {
+      this.gallaboxService = getGallaboxService();
+    }
+    return this.gallaboxService;
+  }
+
+  /**
+   * Send a WhatsApp message via the configured provider (Meta or Gallabox).
+   */
+  private async sendWhatsAppMessage(params: {
+    to: string;
+    message: string;
+    type?: 'text' | 'image' | undefined;
+    imageBase64?: string | undefined;
+    imageCaption?: string | undefined;
+    imageMimeType?: string | undefined;
+    imagePublicUrl?: string | undefined;
+  }): Promise<{ success: boolean; messageId?: string | undefined; error?: string | undefined }> {
+    if (this.whatsappProvider === 'gallabox') {
+      const gallabox = this.getGallaboxService();
+      const channelId = process.env.GALLABOX_WHATSAPP_PHONE_NUMBER_ID ?? '';
+
+      if (params.type === 'image' && params.imagePublicUrl) {
+        // Gallabox requires a publicly accessible URL — use the storage URL if available
+        return gallabox.sendMessage({
+          to: params.to,
+          channelId,
+          type: 'image',
+          image: {
+            url: params.imagePublicUrl,
+            caption: params.imageCaption ?? params.message,
+          },
+        });
+      }
+
+      // Text message
+      return gallabox.sendMessage({
+        to: params.to,
+        channelId,
+        type: 'text',
+        text: params.message,
+      });
+    }
+
+    // Meta provider (existing behaviour)
+    const metaParams: any = {
+      to: params.to,
+      message: params.message,
+    };
+    if (params.type === 'image' && params.imageBase64) {
+      metaParams.type = 'image';
+      metaParams.imageBase64 = params.imageBase64;
+      metaParams.imageCaption = params.imageCaption;
+      metaParams.imageMimeType = params.imageMimeType;
+    } else {
+      metaParams.type = 'text';
+    }
+    return this.getWhatsAppService().sendMessage(metaParams);
   }
 
   /**
@@ -341,23 +409,18 @@ export class CampaignOrchestrator {
 
             // ── WhatsApp send ──────────────────────────────────────────────
             if (sendWhatsApp) {
-              const sendParams: any = {
+              const result = await this.sendWhatsAppMessage({
                 to: contact.phone_number,
                 message: personalizedMessage,
-              };
-
-              if (campaignImageBase64) {
-                sendParams.type = 'image';
-                sendParams.imageBase64 = campaignImageBase64;
-                sendParams.imageCaption = personalizedMessage;
-                sendParams.imageMimeType = campaignImageMimeType;
-              } else {
-                console.warn(`[Campaign] No image for ${contact.phone_number}, sending text only`);
-                sendParams.type = 'text';
-                sendParams.message = `🎉 ${campaign.name}\n\n${personalizedMessage}`;
-              }
-
-              const result = await this.getWhatsAppService().sendMessage(sendParams);
+                type: campaignImageBase64 ? 'image' : 'text',
+                imageBase64: campaignImageBase64 ?? undefined,
+                imageCaption: personalizedMessage,
+                imageMimeType: campaignImageMimeType,
+                // Pass the storage URL for Gallabox (it needs a public URL, not base64)
+                imagePublicUrl: campaign.image_url && !campaign.image_url.startsWith('data:')
+                  ? campaign.image_url
+                  : undefined,
+              });
               whatsappSuccess = result.success;
 
               if (result.success) {

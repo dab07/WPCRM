@@ -52,6 +52,11 @@ export const externalServicesConfig = {
     retries: 3,
   },
 
+  gallabox: {
+    timeout: 30000,
+    retries: 3,
+  },
+
   // Rate limiting
   rateLimits: {
     gemini: {

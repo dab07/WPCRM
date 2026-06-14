@@ -7,18 +7,20 @@ import {
   ShoppingBag,
   Workflow,
   Instagram,
+  Settings2,
 } from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
 import type { Tab, TabConfig } from './types';
 import { TABS } from './constants';
 
 const TAB_ICONS: Record<Tab, LucideIcon> = {
-  agentic:   Brain,
-  contacts:  Users,
-  campaigns: Megaphone,
-  shopify:   ShoppingBag,
-  workflows: Workflow,
-  instagram: Instagram,
+  agentic:      Brain,
+  contacts:     Users,
+  campaigns:    Megaphone,
+  shopify:      ShoppingBag,
+  workflows:    Workflow,
+  instagram:    Instagram,
+  integrations: Settings2,
 };
 
 interface SidebarProps {
