@@ -8,18 +8,43 @@ const KEY_BYTES = 32;       // 256-bit key
 const AUTH_TAG_BYTES = 16;  // 128-bit GCM auth tag
 
 /**
- * Retrieves the Master Encryption Key (MEK) from Supabase Vault.
- * NEVER falls back to environment variables.
- * Throws if vault returns an error or null.
+ * Retrieves the Master Encryption Key (MEK).
+ *
+ * Resolution order:
+ *  1. Supabase Vault (`vault_get_secret` RPC) — preferred in production.
+ *  2. `PLATFORM_CREDENTIALS_MEK` env var (base64-encoded 32-byte key) — used
+ *     when Vault is not yet provisioned (e.g. dev / Supabase free tier).
+ *
+ * Throws if neither source yields a valid 32-byte key.
  */
 export async function getMEK(): Promise<Buffer> {
-  const { data, error } = await supabaseAdmin.rpc('vault_get_secret', {
-    secret_name: VAULT_SECRET_NAME,
-  });
-  if (error || data == null) {
-    throw new Error('Failed to retrieve MEK from Vault');
+  // Try Vault first
+  try {
+    const { data, error } = await supabaseAdmin.rpc('vault_get_secret', {
+      secret_name: VAULT_SECRET_NAME,
+    });
+    if (!error && data != null) {
+      const key = Buffer.from(data as string, 'base64');
+      if (key.length === KEY_BYTES) return key;
+    }
+  } catch {
+    // Vault not available — fall through to env var
   }
-  return Buffer.from(data as string, 'base64');
+
+  // Fall back to env var
+  const envMek = process.env.PLATFORM_CREDENTIALS_MEK;
+  if (envMek) {
+    const key = Buffer.from(envMek, 'base64');
+    if (key.length === KEY_BYTES) return key;
+    throw new Error(
+      'PLATFORM_CREDENTIALS_MEK env var is set but is not a valid base64-encoded 32-byte key.'
+    );
+  }
+
+  throw new Error(
+    'MEK not available: set PLATFORM_CREDENTIALS_MEK env var (base64, 32 bytes) ' +
+    'or provision the Vault secret "platform_credentials_mek".'
+  );
 }
 
 export interface EncryptedCredential {
