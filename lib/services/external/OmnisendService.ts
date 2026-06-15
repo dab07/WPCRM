@@ -93,7 +93,7 @@ export interface OmnisendServiceOverrides {
 
 export class OmnisendService {
   private readonly apiKey: string;
-  private readonly baseUrl = 'https://api.omnisend.com/v3';
+  private readonly baseUrl = 'https://api.omnisend.com';
   private readonly timeout: number;
   private readonly retries: number;
 
@@ -105,14 +105,15 @@ export class OmnisendService {
 
   private get headers() {
     return {
-      'X-API-KEY': this.apiKey,
-      'Content-Type': 'application/json',
+      'Authorization':    `Omnisend-API-Key ${this.apiKey}`,
+      'Omnisend-Version': '2026-03-15',
+      // 'Content-Type':     'application/json',
     };
   }
 
   /**
-   * Test the connection by fetching the current brand info.
-   * Calls GET /brands/current — a lightweight read that validates the API key.
+   * Test the connection by fetching segments.
+   * Calls GET /api/segments — a lightweight read that validates the API key.
    */
   async testConnection(): Promise<OmnisendTestResult> {
     if (!this.apiKey) {
@@ -120,14 +121,9 @@ export class OmnisendService {
     }
 
     try {
-      const data = await this.fetchWithRetry<Record<string, unknown>>('/brands/current');
-      const brandName =
-        (data?.name as string | undefined) ??
-        (data?.brandName as string | undefined);
-
-      return brandName !== undefined
-        ? { success: true, brandName }
-        : { success: true };
+      const data = await this.fetchWithRetry<Record<string, unknown>>('/api/segments?limit=1');
+      const hasSegments = Array.isArray((data as { segments?: unknown[] })?.segments);
+      return hasSegments ? { success: true, brandName: 'Connected' } : { success: true };
     } catch (error) {
       return {
         success: false,
@@ -184,17 +180,17 @@ export class OmnisendService {
   }
 
   async getContacts(): Promise<OmnisendContact[]> {
-    const data = await this.fetchWithRetry<{ contacts: OmnisendContact[] }>('/contacts?limit=250');
+    const data = await this.fetchWithRetry<{ contacts: OmnisendContact[] }>('/api/contacts?limit=250');
     return data.contacts ?? [];
   }
 
   async getCampaigns(): Promise<OmnisendCampaign[]> {
-    const data = await this.fetchWithRetry<{ campaigns: OmnisendCampaign[] }>('/campaigns?limit=100');
+    const data = await this.fetchWithRetry<{ campaigns: OmnisendCampaign[] }>('/api/campaigns?limit=100');
     return data.campaigns ?? [];
   }
 
   async getMetrics(): Promise<OmnisendMetrics> {
-    const data = await this.fetchWithRetry<{ metrics: OmnisendMetrics }>('/reporting/campaigns');
+    const data = await this.fetchWithRetry<{ metrics: OmnisendMetrics }>('/api/reporting/campaigns');
     return data.metrics ?? { sent: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, unsubscribed: 0 };
   }
 
@@ -224,7 +220,7 @@ export class OmnisendService {
       payload.scheduledAt = params.scheduledAt;
     }
 
-    const data = await this.fetchWithRetry<OmnisendCampaign>('/campaigns', {
+    const data = await this.fetchWithRetry<OmnisendCampaign>('/api/campaigns', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -244,7 +240,7 @@ export class OmnisendService {
     tags?: string[] | undefined;
     status?: 'subscribed' | 'unsubscribed' | 'nonSubscribed' | undefined;
   }): Promise<void> {
-    await this.fetchWithRetry('/contacts', {
+    await this.fetchWithRetry('/api/contacts', {
       method: 'POST',
       body: JSON.stringify({
         email: contact.email,
@@ -279,20 +275,18 @@ export class OmnisendService {
         : `<html><body style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#333;max-width:600px;margin:auto;padding:24px">${params.body.replace(/\n/g, '<br>')}</body></html>`;
 
       // 1. Create campaign as draft
-      const campaign = await this.fetchWithRetry<{ campaignID: string }>('/campaigns', {
+      const campaign = await this.fetchWithRetry<{ campaignID: string }>('/api/campaigns', {
         method: 'POST',
         body: JSON.stringify({
           name: params.name,
           type: 'email',
           status: 'draft',
-          options: {
-            // target all subscribed contacts (no segment restriction)
-          },
+          options: {},
           content: {
-            subject: params.subject,
+            subject:  params.subject,
             fromName: params.fromName ?? 'CRM',
-            replyTo: params.replyTo ?? '',
-            html: htmlBody,
+            replyTo:  params.replyTo ?? '',
+            html:     htmlBody,
           },
         }),
       });
@@ -301,7 +295,7 @@ export class OmnisendService {
       console.log(`[Omnisend] Created draft campaign: ${campaignId}`);
 
       // 2. Send immediately
-      await this.fetchWithRetry(`/campaigns/${campaignId}/send`, {
+      await this.fetchWithRetry(`/api/campaigns/${campaignId}/send`, {
         method: 'POST',
         body: JSON.stringify({ strategy: 'immediate' }),
       });
