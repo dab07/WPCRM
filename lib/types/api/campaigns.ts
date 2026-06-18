@@ -38,6 +38,12 @@ export interface Campaign {
   email_attachments?: any | null;
   /** @deprecated use channel instead */
   send_email?: boolean | null;
+  // WhatsApp specific features
+  wa_campaign_type?: 'standard' | 'discount' | 'url_button' | null;
+  wa_button_text?: string | null;
+  wa_button_url?: string | null;
+  discount_code?: string | null;
+  discount_percentage?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -57,6 +63,11 @@ export interface CreateCampaignRequest {
   email_body?: string;
   email_attachments?: any[];
   send_email?: boolean;
+  wa_campaign_type?: 'standard' | 'discount' | 'url_button';
+  wa_button_text?: string;
+  wa_button_url?: string;
+  discount_code?: string;
+  discount_percentage?: number;
 }
 
 export interface UpdateCampaignRequest {
@@ -75,6 +86,11 @@ export interface UpdateCampaignRequest {
   email_subject?: string | null;
   email_body?: string | null;
   email_attachments?: any[] | null;
+  wa_campaign_type?: 'standard' | 'discount' | 'url_button' | null;
+  wa_button_text?: string | null;
+  wa_button_url?: string | null;
+  discount_code?: string | null;
+  discount_percentage?: number | null;
 }
 
 // Helper: derive quarter from a date string

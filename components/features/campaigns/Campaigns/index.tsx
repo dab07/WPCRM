@@ -17,6 +17,7 @@ import {
 import { ApprovalModal } from './ApprovalModal';
 import { CreateCampaignModal } from './CreateCampaignModal';
 import { EditCampaignModal } from './EditCampaignModal';
+import { IntelligentCampaignTab } from './IntelligentCampaignTab';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 interface Toast { id: string; message: string; type: 'success' | 'error' | 'info'; }
@@ -982,7 +983,7 @@ export function CampaignsPanel() {
       {/* Content */}
       <div className="flex-1 px-6 py-4">
         {loading ? (
-          <div className="flex items-center justify-center h-48">
+          <div className="p-12 flex flex-col items-center justify-center gap-3">
             <div className="relative w-10 h-10">
               <div className="absolute inset-0 rounded-full border-2 border-brand-blue/30" />
               <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-brand-yellow animate-spin" />

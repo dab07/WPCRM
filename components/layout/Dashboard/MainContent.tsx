@@ -5,6 +5,7 @@ import { ContactsPanel } from '../../features/contacts/ContactsPanel';
 import { CampaignsPanel } from '../../features/campaigns';
 import { ShopifyPanel } from '../../features/shopify';
 import { IntegrationsPanel } from '../../features/integrations/IntegrationsPanel';
+import { IntelligentPanel } from '../../features/intelligent/IntelligentPanel';
 import type { Tab } from './types';
 
 interface MainContentProps {
@@ -14,10 +15,15 @@ interface MainContentProps {
 export function MainContent({ activeTab }: MainContentProps) {
   return (
     <main className="flex-1 flex overflow-hidden bg-brand-navy">
-      {activeTab === 'agentic'      && <AgenticDashboard />}
-      {activeTab === 'contacts'     && <ContactsPanel />}
-      {activeTab === 'campaigns'    && <CampaignsPanel />}
-      {activeTab === 'shopify'      && <ShopifyPanel />}
+      {activeTab === 'agentic' && <AgenticDashboard />}
+      {activeTab === 'intelligent' && (
+        <div className="flex-1 overflow-y-auto">
+          <IntelligentPanel />
+        </div>
+      )}
+      {activeTab === 'contacts' && <ContactsPanel />}
+      {activeTab === 'campaigns' && <CampaignsPanel />}
+      {activeTab === 'shopify' && <ShopifyPanel />}
       {activeTab === 'integrations' && <IntegrationsPanel />}
     </main>
   );

@@ -12,6 +12,7 @@ export interface TabCount {
   approved: number;
   executed: number;
   rejected: number;
+  intelligent: number;
 }
 
 export interface QuarterGroup {

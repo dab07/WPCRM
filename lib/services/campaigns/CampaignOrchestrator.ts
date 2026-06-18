@@ -26,6 +26,11 @@ export interface Campaign {
   email_attachments?: any | null;
   /** @deprecated use channel */
   send_email?: boolean | null;
+  wa_campaign_type?: 'standard' | 'discount' | 'url_button' | null;
+  wa_button_text?: string | null;
+  wa_button_url?: string | null;
+  discount_code?: string | null;
+  discount_percentage?: number | null;
 }
 
 export interface Contact {
@@ -94,11 +99,12 @@ export class CampaignOrchestrator {
   private async sendWhatsAppMessage(params: {
     to: string;
     message: string;
-    type?: 'text' | 'image' | undefined;
+    type?: 'text' | 'image' | 'interactive' | undefined;
     imageBase64?: string | undefined;
     imageCaption?: string | undefined;
     imageMimeType?: string | undefined;
     imagePublicUrl?: string | undefined;
+    interactivePayload?: any | undefined;
   }): Promise<{ success: boolean; messageId?: string | undefined; error?: string | undefined }> {
     if (this.whatsappProvider === 'gallabox') {
       const gallabox = await this.getGallaboxService();
@@ -114,6 +120,15 @@ export class CampaignOrchestrator {
             url: params.imagePublicUrl,
             caption: params.imageCaption ?? params.message,
           },
+        });
+      }
+
+      if (params.type === 'interactive' && params.interactivePayload) {
+        return gallabox.sendMessage({
+          to: params.to,
+          channelId,
+          type: 'interactive',
+          interactive: params.interactivePayload,
         });
       }
 
@@ -429,11 +444,12 @@ export class CampaignOrchestrator {
               const waParams: {
                 to: string;
                 message: string;
-                type?: 'text' | 'image';
+                type?: 'text' | 'image' | 'interactive';
                 imageBase64?: string;
                 imageCaption?: string;
                 imageMimeType?: string;
                 imagePublicUrl?: string;
+                interactivePayload?: any;
               } = {
                 to: contact.phone_number,
                 message: personalizedMessage,
@@ -445,6 +461,35 @@ export class CampaignOrchestrator {
               waParams.imageMimeType = campaignImageMimeType;
               if (campaign.image_url && !campaign.image_url.startsWith('data:')) {
                 waParams.imagePublicUrl = campaign.image_url;
+              }
+
+              // Handle interactive campaigns via Gallabox session messages
+              if (campaign.wa_campaign_type === 'discount' || campaign.wa_campaign_type === 'url_button') {
+                waParams.type = 'interactive';
+                
+                const buttons = [];
+                if (campaign.wa_button_url && campaign.wa_button_text) {
+                  buttons.push({
+                    type: 'url',
+                    url: { title: campaign.wa_button_text, url: campaign.wa_button_url }
+                  });
+                }
+                
+                if (campaign.wa_campaign_type === 'discount' && campaign.discount_code) {
+                  // Fallback to text copy-code simulation if needed, or quick reply
+                  buttons.push({
+                    type: 'reply',
+                    reply: { id: `copy_${campaign.discount_code}`, title: `Code: ${campaign.discount_code}` }
+                  });
+                }
+
+                if (buttons.length > 0) {
+                  waParams.interactivePayload = {
+                    type: 'button',
+                    body: { text: personalizedMessage },
+                    action: { buttons }
+                  };
+                }
               }
 
               const result = await this.sendWhatsAppMessage(waParams);
@@ -759,6 +804,11 @@ Return only the enhanced message, no explanations.`;
     email_subject?: string;
     email_body?: string;
     email_attachments?: any[];
+    wa_campaign_type?: 'standard' | 'discount' | 'url_button';
+    wa_button_text?: string;
+    wa_button_url?: string;
+    discount_code?: string;
+    discount_percentage?: number;
   }) {
     try {
       let initialStatus = 'draft';
@@ -781,6 +831,11 @@ Return only the enhanced message, no explanations.`;
           email_subject: campaignData.email_subject || null,
           email_body: campaignData.email_body || null,
           email_attachments: campaignData.email_attachments || [],
+          wa_campaign_type: campaignData.wa_campaign_type || 'standard',
+          wa_button_text: campaignData.wa_button_text || null,
+          wa_button_url: campaignData.wa_button_url || null,
+          discount_code: campaignData.discount_code || null,
+          discount_percentage: campaignData.discount_percentage || null,
           sent_count: 0,
           delivered_count: 0,
           read_count: 0

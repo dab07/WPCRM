@@ -54,6 +54,11 @@ interface PreviewState {
   target_tags: string[];
   channel: Channel;
   email: EmailComposerValue;
+  wa_campaign_type: 'standard' | 'discount' | 'url_button';
+  wa_button_text: string;
+  wa_button_url: string;
+  discount_code: string;
+  discount_percentage: string;
 }
 
 interface CreateCampaignModalProps {
@@ -143,6 +148,11 @@ Return ONLY valid JSON, no markdown, no explanation.`,
           body:        parsed.email_body ?? '',
           attachments: [],
         },
+        wa_campaign_type: 'standard',
+        wa_button_text:   '',
+        wa_button_url:    '',
+        discount_code:    '',
+        discount_percentage: '',
       });
       setStep('preview');
     } catch (err) {
@@ -194,6 +204,11 @@ Return ONLY valid JSON, no markdown, no explanation.`,
           email_subject:     sendEmail ? preview.email.subject : null,
           email_body:        sendEmail ? preview.email.body    : null,
           email_attachments: sendEmail ? uploadedAttachments   : [],
+          wa_campaign_type:  preview.wa_campaign_type,
+          wa_button_text:    preview.wa_button_text || null,
+          wa_button_url:     preview.wa_button_url || null,
+          discount_code:     preview.discount_code || null,
+          discount_percentage: preview.discount_percentage ? Number(preview.discount_percentage) : null,
         }),
       });
       const data = await res.json();
@@ -360,12 +375,76 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                   <p className="font-mono text-[10px] uppercase tracking-label text-green-400 flex items-center gap-1.5">
                     <MessageSquare className="w-3.5 h-3.5 stroke-[1.5]" /> WhatsApp Message
                   </p>
+
+                  <div>
+                    <label className={LABEL_CLS}>Campaign Type</label>
+                    <select
+                      value={preview.wa_campaign_type}
+                      onChange={(e) => setPreview({ ...preview, wa_campaign_type: e.target.value as any })}
+                      className={INPUT_CLS}
+                    >
+                      <option value="standard">Standard Message</option>
+                      <option value="discount">Discount Campaign (with Quick Reply code)</option>
+                      <option value="url_button">URL Button Campaign</option>
+                    </select>
+                  </div>
+
                   <textarea
                     value={preview.message_template}
                     onChange={(e) => setPreview({ ...preview, message_template: e.target.value })}
                     rows={4}
                     className={`${INPUT_CLS} resize-none border-green-500/20 focus:border-green-500/50`}
                   />
+
+                  {preview.wa_campaign_type === 'discount' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={LABEL_CLS}>Discount Percentage</label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 20"
+                          value={preview.discount_percentage}
+                          onChange={(e) => setPreview({ ...preview, discount_percentage: e.target.value })}
+                          className={INPUT_CLS}
+                        />
+                      </div>
+                      <div>
+                        <label className={LABEL_CLS}>Discount Code</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. SUMMER20"
+                          value={preview.discount_code}
+                          onChange={(e) => setPreview({ ...preview, discount_code: e.target.value })}
+                          className={INPUT_CLS}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {preview.wa_campaign_type === 'url_button' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={LABEL_CLS}>Button Text</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Shop Now"
+                          value={preview.wa_button_text}
+                          onChange={(e) => setPreview({ ...preview, wa_button_text: e.target.value })}
+                          className={INPUT_CLS}
+                        />
+                      </div>
+                      <div>
+                        <label className={LABEL_CLS}>Button URL</label>
+                        <input
+                          type="url"
+                          placeholder="e.g. https://store.com/sale"
+                          value={preview.wa_button_url}
+                          onChange={(e) => setPreview({ ...preview, wa_button_url: e.target.value })}
+                          className={INPUT_CLS}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

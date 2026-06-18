@@ -105,15 +105,14 @@ export class OmnisendService {
 
   private get headers() {
     return {
-      'Authorization':    `Omnisend-API-Key ${this.apiKey}`,
+      'Authorization': `Omnisend-API-Key ${this.apiKey}`,
       'Omnisend-Version': '2026-03-15',
-      // 'Content-Type':     'application/json',
+      'Content-Type': 'application/json',
     };
   }
 
   /**
-   * Test the connection by fetching segments.
-   * Calls GET /api/segments — a lightweight read that validates the API key.
+   * Test the connection to Omnisend.
    */
   async testConnection(): Promise<OmnisendTestResult> {
     if (!this.apiKey) {
@@ -283,10 +282,10 @@ export class OmnisendService {
           status: 'draft',
           options: {},
           content: {
-            subject:  params.subject,
+            subject: params.subject,
             fromName: params.fromName ?? 'CRM',
-            replyTo:  params.replyTo ?? '',
-            html:     htmlBody,
+            replyTo: params.replyTo ?? '',
+            html: htmlBody,
           },
         }),
       });
@@ -377,8 +376,8 @@ export async function getOmnisendService(): Promise<OmnisendService> {
 
   const plaintext = await decryptCredential({
     encryptedPayload: data.encrypted_payload as string,
-    encryptedDek:     data.encrypted_dek as string,
-    iv:               data.iv as string,
+    encryptedDek: data.encrypted_dek as string,
+    iv: data.iv as string,
   });
 
   _instance = new OmnisendService({ apiKey: plaintext['apiKey'] ?? '' });

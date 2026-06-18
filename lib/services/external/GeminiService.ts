@@ -19,6 +19,60 @@ export interface GeminiResponse<T = any> {
   error?: string;
 }
 
+export interface IntelligentCampaignParams {
+  brand: {
+    name: string;
+    category: string;
+    avg_repurchase_days: number;
+    max_discount_pct: number;
+    voice: string;
+    suppression_days: number;
+  };
+  products: {
+    top: Array<{ title: string; price: string }>;
+  };
+  counts: {
+    pre_purchase: number;
+    first_purchase: number;
+    repeat_active: number;
+    at_risk: number;
+    dormant: number;
+    birthday_this_week: number;
+  };
+  abandoned: {
+    top_product_1: string;
+    top_product_2: string;
+  };
+  at_risk: {
+    top_last_product: string;
+  };
+  omnisend: {
+    subscriber_count: number;
+    recent_campaigns: Array<{
+      name: string;
+      type: string;
+      date: string;
+      size: number;
+      open_rate: number;
+      click_rate: number;
+      revenue: string;
+      offer: string;
+    }>;
+  };
+  context: {
+    weather_cities: Array<{
+      name: string;
+      customer_count: number;
+      weather: string;
+      temp: number;
+    }>;
+    upcoming_events: string;
+    local_time: string;
+    today_date: string;
+    day_of_week: string;
+  };
+}
+
 export class GeminiServiceError extends Error {
   constructor(
     message: string,
@@ -523,6 +577,157 @@ Festival context: ${config.theme ?? config.campaignName}`;
     
     return { intent: 'general_inquiry', confidence: 0.6 };
   }
+
+  /**
+   * Generate an Intelligent Campaign using ZavopsAI
+   */
+  async generateIntelligentCampaign(params: IntelligentCampaignParams): Promise<GeminiResponse<any>> {
+    try {
+      const result = await this.executeWithRetry(async () => {
+        const client = this.getClient();
+        
+        const systemPrompt = `You are ZavopsAI — an intelligent campaign strategist embedded inside a
+multi-tenant marketing automation platform for e-commerce brands.
+
+You receive real brand and customer data collected automatically from
+Shopify and Omnisend, along with live contextual signals.
+
+Your job:
+1. Decide the single best campaign to run RIGHT NOW for this brand.
+2. Define the target audience segment.
+3. Write all campaign content ready for execution.
+4. Return a structured JSON object that will be shown to the brand owner
+   for approval, then passed to the Campaign Component which sends via
+   Gallabox (WhatsApp), Omnisend (email/SMS), and Meta Ads.
+
+Rules:
+- Reason only from the data provided. Never invent numbers or customer details.
+- Never exceed the brand's configured max discount percentage.
+- Never target customers within the suppression window.
+- Prefer no-discount offers when historical data shows they perform equally well.
+- Always apply weather, location, birthday, season, and time signals when
+  they are relevant to the product category.
+- Output valid JSON only. No prose, no markdown, no explanation outside the JSON.`;
+
+        const userPrompt = `=== BRAND PROFILE ===
+Brand name: ${params.brand.name}
+Product category: ${params.brand.category}
+Average repurchase cycle: ${params.brand.avg_repurchase_days} days
+Max discount allowed: ${params.brand.max_discount_pct}%
+Brand voice: ${params.brand.voice}
+Top 3 products by order volume:
+${params.products.top.map((p, i) => `  ${i + 1}. ${p.title} — ${p.price}`).join('\\n')}
+
+=== CUSTOMER LIFECYCLE COUNTS ===
+Pre-purchase (abandoned cart, never ordered): ${params.counts.pre_purchase}
+  └─ Top abandoned products: ${params.abandoned.top_product_1}, ${params.abandoned.top_product_2}
+First purchase (1 order placed ≤30 days ago): ${params.counts.first_purchase}
+Repeat active (2+ orders, within repurchase window): ${params.counts.repeat_active}
+At-risk (past repurchase window, no reorder): ${params.counts.at_risk}
+  └─ Top product they last bought: ${params.at_risk.top_last_product}
+Dormant (no order in 120+ days): ${params.counts.dormant}
+Total Omnisend email subscribers: ${params.omnisend.subscriber_count}
+Birthday customers this week: ${params.counts.birthday_this_week}
+
+=== RECENT CAMPAIGN PERFORMANCE (last 3 from Omnisend) ===
+${params.omnisend.recent_campaigns.map((c, i) => `Campaign ${i + 1}: ${c.name} | Type: ${c.type} | Sent: ${c.date} | Audience: ${c.size}
+  Open: ${c.open_rate}% | Click: ${c.click_rate}% | Revenue: ${c.revenue} | Offer: ${c.offer}`).join('\\n\\n')}
+
+=== CONTEXTUAL SIGNALS ===
+WEATHER (current conditions per top city):
+${params.context.weather_cities.map(c => `  ${c.name} — ${c.customer_count} customers — ${c.weather}, ${c.temp}°C`).join('\\n')}
+
+SEASON / EVENTS (next 30 days):
+  ${params.context.upcoming_events}
+
+BIRTHDAY:
+  ${params.counts.birthday_this_week} customers have a birthday within the next 7 days.
+
+LOCAL TIME:
+  Current time in primary market: ${params.context.local_time}
+
+DATE:
+  Today: ${params.context.today_date} (${params.context.day_of_week})
+
+=== SUPPRESSION ===
+Exclude any customer who received a campaign in the last ${params.brand.suppression_days} days.
+Unsubscribes and hard bounces are excluded by Omnisend automatically.
+
+=== YOUR TASK ===
+Analyze all signals above. Choose the single best campaign to run right now.
+
+The campaign MUST be one of the following contextual types:
+  1. WEATHER URGENCY
+  2. SEASON PRE-EMPTION
+  3. FESTIVAL / EVENT CAMPAIGN
+  4. BIRTHDAY OFFER
+  5. LOCATION-SPECIFIC CAMPAIGN
+  6. TIME-OPTIMIZED SEND
+
+Choose the one contextual type whose trigger is most strongly supported by the
+data provided. If two signals are equally strong, combine them.
+
+Then return ONLY this JSON matching the structure:
+{
+  "decision": {
+    "campaign_type": "", "contextual_trigger": "", "why_now": "", "customer_stage_targeted": "", "estimated_audience_size": 0, "confidence": "high | medium | low", "confidence_reason": ""
+  },
+  "segment": {
+    "description": "", "filters": [{ "field": "", "operator": "", "value": "" }], "exclusions": ""
+  },
+  "strategy": {
+    "objective": "", "offer_type": "discount | free_shipping | bundle | value_message | birthday | urgency", "offer_detail": "", "discount_percent": 0, "discount_code": "", "primary_channel": "email | whatsapp | sms | meta_ad", "send_sequence": [{ "step": 1, "channel": "", "timing": "", "purpose": "" }]
+  },
+  "content": {
+    "email": { "subject_line_options": ["", "", ""], "preview_text": "", "headline": "", "body_paragraph_1": "", "body_paragraph_2": "", "cta_text": "", "urgency_footer": "" },
+    "whatsapp": { "wa_campaign_type": "standard | discount | url_button", "message_body": "", "cta_button_text": "", "cta_button_url": "", "media_suggestion": "" },
+    "sms": { "message": "", "character_count": 0 },
+    "meta_ad": { "headline": "", "primary_text": "", "description": "", "cta_button": "SHOP_NOW | LEARN_MORE | GET_OFFER" }
+  },
+  "projected_results": { "estimated_open_rate_pct": 0, "estimated_click_rate_pct": 0, "estimated_conversion_rate_pct": 0, "estimated_revenue": 0, "projection_basis": "" },
+  "guardrails": { "discount_within_limit": true, "suppression_respected": true, "risk_flag": "" }
+}`;
+
+        const response = await client.models.generateContent({
+          model: externalServicesConfig.gemini.model,
+          systemInstruction: {
+            role: "system",
+            parts: [{ text: systemPrompt }]
+          },
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: userPrompt }]
+            }
+          ]
+        });
+
+        const generatedText = response.text;
+        if (!generatedText) {
+          throw new GeminiServiceError('No response from Gemini');
+        }
+
+        const jsonMatch = generatedText.match(/\{[\\s\\S]*\}/);
+        if (!jsonMatch) {
+          throw new GeminiServiceError('No JSON found in response');
+        }
+
+        return JSON.parse(jsonMatch[0]);
+      }, 'generateIntelligentCampaign');
+
+      return {
+        success: true,
+        data: result,
+        confidence: 0.9
+      };
+    } catch (error) {
+      console.error('[Gemini Service] Error generating intelligent campaign:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
 }
 
 // Legacy exports for backward compatibility
@@ -575,4 +780,9 @@ export async function generateCampaignImage(config: {
 }>> {
   const service = new GeminiService();
   return service.generateCampaignImage(config);
+}
+
+export async function generateIntelligentCampaign(params: IntelligentCampaignParams): Promise<GeminiResponse<any>> {
+  const service = new GeminiService();
+  return service.generateIntelligentCampaign(params);
 }

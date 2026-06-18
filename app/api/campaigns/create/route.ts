@@ -14,7 +14,12 @@ export async function POST(request: NextRequest) {
       send_email,
       email_subject,
       email_body,
-      email_attachments
+      email_attachments,
+      wa_campaign_type,
+      wa_button_text,
+      wa_button_url,
+      discount_code,
+      discount_percentage
     } = body;
 
     // Validate required fields
@@ -59,7 +64,12 @@ export async function POST(request: NextRequest) {
       send_email,
       email_subject,
       email_body,
-      email_attachments
+      email_attachments,
+      wa_campaign_type,
+      wa_button_text,
+      wa_button_url,
+      discount_code,
+      discount_percentage
     });
 
     return NextResponse.json({

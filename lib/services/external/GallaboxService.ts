@@ -19,10 +19,11 @@ export interface GallaboxSendMessageParams {
   to: string;
   /** Gallabox channel ID (WhatsApp channel, from Settings > WhatsApp Channel) */
   channelId?: string | undefined;
-  type: 'text' | 'template' | 'image';
+  type: 'text' | 'template' | 'image' | 'interactive';
   text?: string | undefined;
   template?: GallaboxTemplateParams | undefined;
   image?: GallaboxImageParams | undefined;
+  interactive?: any | undefined;
 }
 
 export interface GallaboxTemplateParams {
@@ -259,8 +260,13 @@ export class GallaboxService {
             caption: params.image.caption,
           },
         };
+      } else if (params.type === 'interactive' && params.interactive) {
+        payload.whatsapp = {
+          type: 'interactive',
+          interactive: params.interactive,
+        };
       } else {
-        return { success: false, error: 'Invalid params: provide text, template, or image' };
+        return { success: false, error: 'Invalid params: provide text, template, image, or interactive' };
       }
 
       const result = await this.fetchWithRetry<any>(this.path('messages'), {
