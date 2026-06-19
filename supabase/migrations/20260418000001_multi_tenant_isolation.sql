@@ -1,8 +1,7 @@
 CREATE TABLE IF NOT EXISTS users (
   id          UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email       TEXT NOT NULL,
-  full_name   TEXT,
-  role        TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member')),
+  username    TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -17,7 +16,6 @@ CREATE TABLE IF NOT EXISTS user_brands (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   brand_id    UUID NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
-  role        TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member')),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, brand_id)
 );
@@ -153,7 +151,7 @@ CREATE POLICY "brands_owner_write" ON brands
   FOR ALL USING (
     id IN (
       SELECT brand_id FROM user_brands
-      WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
+      WHERE user_id = auth.uid()
     )
   );
 

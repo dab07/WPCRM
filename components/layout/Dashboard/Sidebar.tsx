@@ -13,11 +13,11 @@ import type { Tab, TabConfig } from './types';
 import { TABS } from './constants';
 
 const TAB_ICONS: Record<Tab, LucideIcon> = {
-  agentic:      Brain,
-  intelligent:  Sparkles,
-  contacts:     Users,
-  campaigns:    Megaphone,
-  shopify:      ShoppingBag,
+  agentic: Brain,
+  intelligent: Sparkles,
+  contacts: Users,
+  campaigns: Megaphone,
+  shopify: ShoppingBag,
   integrations: Plug,
 };
 
@@ -40,32 +40,22 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 
       <div className="flex flex-col gap-0.5 px-3">
         {TABS.map((tab: TabConfig) => {
-          const Icon = TAB_ICONS[tab.id];
           const isActive = activeTab === tab.id;
-
           return (
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
               className={`
-                group w-full flex items-center gap-3 px-3 py-2.5
+                group w-full flex gap-3 px-3 py-2.5
                 font-mono text-[11px] uppercase tracking-label
                 rounded-[4px] transition-all duration-150
-                ${
-                  isActive
-                    ? 'bg-brand-blue text-brand-offwhite'
-                    : 'text-brand-muted hover:bg-brand-slate hover:text-brand-offwhite'
+                ${isActive
+                  ? 'bg-brand-blue text-brand-offwhite'
+                  : 'text-brand-muted hover:bg-brand-slate hover:text-brand-offwhite'
                 }
               `}
             >
-              <Icon
-                className={`
-                  w-4 h-4 stroke-[1.5] shrink-0 transition-colors
-                  ${isActive ? 'text-brand-yellow' : 'text-brand-blue group-hover:text-brand-yellow'}
-                `}
-              />
               {tab.label}
-
               {/* Active indicator bar */}
               {isActive && (
                 <span className="ml-auto w-1 h-4 bg-brand-yellow rounded-full" />

@@ -40,6 +40,8 @@ export interface CredentialCardProps {
   initialLastVerifiedAt: string | null;
   /** Called by the card before each API request to obtain the session JWT */
   getToken: () => Promise<string>;
+  /** Called when the credential status changes (e.g. after save, verify, or delete) */
+  onStatusChange?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,6 +119,7 @@ export function CredentialCard({
   initialStatus,
   initialLastVerifiedAt,
   getToken,
+  onStatusChange,
 }: CredentialCardProps) {
   // ── Form state: one entry per field key ──────────────────────────────────
   const [values, setValues] = useState<Record<string, string>>(
@@ -207,6 +210,7 @@ export function CredentialCard({
       clearForm();
       setStatus('configured');
       setLastVerifiedAt(null);
+      onStatusChange?.();
     } catch {
       setSaveError('Network error — please try again.');
     } finally {
@@ -248,6 +252,7 @@ export function CredentialCard({
         setStatus('verified');
         setLastVerifiedAt(new Date().toISOString());
         setVerifyResult({ success: true, message: 'Verification successful' });
+        onStatusChange?.();
       } else {
         const raw = json.error ?? `Verification failed (HTTP ${res.status})`;
         // Cap error message at 200 characters per requirements 6.6
@@ -286,6 +291,7 @@ export function CredentialCard({
       clearForm();
       setStatus('not_configured');
       setLastVerifiedAt(null);
+      onStatusChange?.();
     } catch {
       setDeleteError('Network error — could not delete credentials.');
     } finally {

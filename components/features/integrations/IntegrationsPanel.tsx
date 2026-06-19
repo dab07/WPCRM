@@ -196,6 +196,7 @@ export function IntegrationsPanel() {
                     initialStatus={status}
                     initialLastVerifiedAt={lastVerifiedAt}
                     getToken={getToken}
+                    onStatusChange={loadStatuses}
                   />
                 </div>
               )}

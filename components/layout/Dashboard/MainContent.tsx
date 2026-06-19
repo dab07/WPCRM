@@ -16,11 +16,7 @@ export function MainContent({ activeTab }: MainContentProps) {
   return (
     <main className="flex-1 flex overflow-hidden bg-brand-navy">
       {activeTab === 'agentic' && <AgenticDashboard />}
-      {activeTab === 'intelligent' && (
-        <div className="flex-1 overflow-y-auto">
-          <IntelligentPanel />
-        </div>
-      )}
+      {activeTab === 'intelligent' && <IntelligentPanel />}
       {activeTab === 'contacts' && <ContactsPanel />}
       {activeTab === 'campaigns' && <CampaignsPanel />}
       {activeTab === 'shopify' && <ShopifyPanel />}

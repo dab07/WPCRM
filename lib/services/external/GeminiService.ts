@@ -461,17 +461,7 @@ Hashtags: ${hashtags.join(', ')}`;
 
       const prompt = `Create a professional festive WhatsApp campaign image for Zavops — ${config.campaignName}.
 
-${config.brandGuidelines ?? `STRICT BRAND GUIDELINES:
-- Background: solid bright golden yellow (#F5C400), full bleed, no gradients
-- Place the provided Zavops logo image exactly as-is, centered at the top of the image — do NOT redraw or recreate it
-- Below the logo: small elegant text "wishes you" in dark navy (#1C3080)
-- Large decorative script headline: "HAPPY ${config.campaignName.toUpperCase()}" in deep maroon-red (#7B1A1A) cursive/calligraphy font
-- Center illustration: vibrant, detailed festive artwork symbolising ${config.campaignName}
-- Bottom tagline in dark brown serif font appropriate for ${config.campaignName}
-- Color palette: #F5C400 (background), #1C3080 (accents), #7B1A1A (headline), warm reds/oranges (illustration), dark brown (body text)
-- NO white backgrounds, NO gradients, NO purple tones
-- Square 1:1 format, WhatsApp-ready
-- Warm, devotional, community-oriented Indian festive aesthetic`}
+${config.brandGuidelines ?? `WHite Background, Title of campaign in bold and centered with a subtitle \`[Add Brand Guideline or provide more information for inovative campaign  generation]\``}
 
 Festival context: ${config.theme ?? config.campaignName}`;
 

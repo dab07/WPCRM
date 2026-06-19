@@ -155,124 +155,137 @@ export function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignMo
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl">
+    <div className="fixed inset-0 bg-[#1A2847]/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="bg-[#2C3A5C] rounded-[4px] border border-[#3B5BAD]/30 w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden relative">
+        {/* Subtle background pixel pattern (optional simulated via CSS or just the color) */}
+        
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-200 shrink-0">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <Pencil className="w-5 h-5 text-blue-500" />
-              Edit Campaign
+        <div className="flex items-center justify-between p-6 border-b border-[#3B5BAD]/30 shrink-0 relative overflow-hidden bg-[#1A2847]">
+          {/* Subtle diagonal accent */}
+          <div className="absolute -left-16 top-0 w-32 h-full bg-[#F7C31A]/5 rotate-15 pointer-events-none" />
+          <div className="absolute left-1/4 -top-10 w-px h-32 bg-[#F7C31A]/20 rotate-[15deg] pointer-events-none" />
+          
+          <div className="relative z-10">
+            <h2 className="text-2xl font-bold text-white uppercase tracking-tighter flex items-center gap-3" style={{ fontFamily: 'Syne, sans-serif' }}>
+              <Pencil className="w-5 h-5 text-[#F7C31A]" />
+              EDIT CAMPAIGN
             </h2>
-            <p className="text-sm text-slate-500 mt-0.5">{campaign.festival ?? campaign.name}</p>
+            <p className="text-xs text-[#8A96B0] mt-1 tracking-[0.1em] uppercase" style={{ fontFamily: 'Space Mono, monospace' }}>{campaign.festival ?? campaign.name}</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
+            className="p-2 hover:bg-[#2C3A5C] rounded-[4px] text-[#8A96B0] hover:text-[#F7C31A] transition-colors relative z-10"
           >
-            <X className="w-5 h-5" />
+            <X className="w-6 h-6" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-[#1A2847]">
           {/* ── Channel selector ── */}
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-              Send via
+            <p className="text-[10px] font-bold text-[#F7C31A] uppercase tracking-[0.2em] mb-3 flex items-center gap-2" style={{ fontFamily: 'Space Mono, monospace' }}>
+              <span className="w-8 h-[1px] bg-[#F7C31A]"></span>
+              SEND VIA
             </p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-0 border border-[#3B5BAD]/30 rounded-[4px] p-1 bg-[#0F1A30]">
               {(
                 [
                   {
                     id: 'whatsapp' as Channel,
-                    label: 'WhatsApp',
-                    icon: <MessageSquare className="w-4 h-4" />,
-                    active: 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-2 ring-emerald-200',
-                    idle: 'border-slate-200 text-slate-600 hover:border-emerald-300 hover:bg-emerald-50',
+                    label: 'WHATSAPP',
+                    icon: <MessageSquare className="w-3.5 h-3.5" />,
                   },
                   {
                     id: 'email' as Channel,
-                    label: 'Email',
-                    icon: <Mail className="w-4 h-4" />,
-                    active: 'border-violet-500 bg-violet-50 text-violet-700 ring-2 ring-violet-200',
-                    idle: 'border-slate-200 text-slate-600 hover:border-violet-300 hover:bg-violet-50',
+                    label: 'EMAIL',
+                    icon: <Mail className="w-3.5 h-3.5" />,
                   },
                   {
                     id: 'both' as Channel,
-                    label: 'Both',
-                    icon: <Layers className="w-4 h-4" />,
-                    active: 'border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-200',
-                    idle: 'border-slate-200 text-slate-600 hover:border-blue-300 hover:bg-blue-50',
+                    label: 'BOTH',
+                    icon: <Layers className="w-3.5 h-3.5" />,
                   },
                 ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setChannel(opt.id)}
-                  className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-all ${
-                    channel === opt.id ? opt.active : opt.idle
-                  }`}
-                >
-                  {opt.icon}
-                  {opt.label}
-                </button>
-              ))}
+              ).map((opt) => {
+                const isActive = channel === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setChannel(opt.id)}
+                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-[2px] text-[11px] font-semibold transition-all uppercase tracking-[0.1em] ${
+                      isActive 
+                        ? 'bg-[#F7C31A] text-[#1A2847]' 
+                        : 'text-[#8A96B0] hover:text-white hover:bg-[#2C3A5C]'
+                    }`}
+                    style={{ fontFamily: 'Space Mono, monospace' }}
+                  >
+                    {opt.icon}
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* ── Scheduled date ── */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5" />
-              Scheduled Date &amp; Time
+            <label className="text-[10px] font-bold text-[#8A96B0] uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5" style={{ fontFamily: 'Space Mono, monospace' }}>
+              <Calendar className="w-3.5 h-3.5 text-[#F7C31A]" />
+              SCHEDULED DATE & TIME
             </label>
             <input
               type="datetime-local"
               value={scheduledAt}
               onChange={(e) => setScheduledAt(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              className="w-full px-0 py-2.5 border-b border-[#3B5BAD]/40 bg-transparent text-white focus:outline-none focus:border-[#F7C31A] transition-colors text-sm"
+              style={{ colorScheme: 'dark', fontFamily: 'Inter, sans-serif' }}
             />
           </div>
 
           {/* ── WhatsApp section ── */}
           {showWhatsApp && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-4">
-              <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide flex items-center gap-1.5">
+            <div className="rounded-[4px] border border-[#3B5BAD]/30 bg-[#2C3A5C]/40 p-6 space-y-6 relative group hover:border-[#F7C31A]/30 transition-colors">
+              <div className="absolute top-0 right-0 p-4 opacity-10 font-bold text-6xl pointer-events-none" style={{ fontFamily: 'Syne, sans-serif' }}>I</div>
+              
+              <p className="text-[10px] font-bold text-[#F7C31A] uppercase tracking-[0.2em] flex items-center gap-2" style={{ fontFamily: 'Space Mono, monospace' }}>
+                <span className="w-4 h-[1px] bg-[#F7C31A]"></span>
                 <MessageSquare className="w-3.5 h-3.5" />
-                WhatsApp
+                WHATSAPP PAYLOAD
               </p>
 
               {/* Image upload */}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <label className="text-[10px] font-bold text-[#8A96B0] uppercase tracking-[0.12em] mb-3 flex items-center gap-1.5" style={{ fontFamily: 'Space Mono, monospace' }}>
                   <ImageIcon className="w-3.5 h-3.5" />
-                  Campaign Image
+                  CAMPAIGN MEDIA
                 </label>
                 {imagePreview && (
-                  <div className="w-full aspect-square rounded-xl overflow-hidden border border-slate-200 bg-[#F5C400] mb-3 max-h-48 object-cover">
+                  <div className="w-full aspect-video rounded-[4px] overflow-hidden border border-[#3B5BAD]/30 bg-[#1A2847] mb-4 relative group-hover:border-[#F7C31A]/50 transition-colors">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover mix-blend-luminosity opacity-70 group-hover:mix-blend-normal group-hover:opacity-100 transition-all duration-500" />
+                    <div className="absolute inset-0 bg-[#3B5BAD]/20 mix-blend-overlay pointer-events-none" />
                   </div>
                 )}
-                <label className="flex items-center justify-center gap-2 w-full px-4 py-3 border-2 border-dashed border-slate-300 hover:border-blue-400 rounded-xl cursor-pointer text-sm text-slate-500 hover:text-blue-600 transition-colors">
+                <label className="flex items-center justify-center gap-2 w-full px-4 py-4 border border-dashed border-[#3B5BAD]/50 hover:border-[#F7C31A] bg-[#1A2847]/50 rounded-[4px] cursor-pointer text-xs text-[#8A96B0] hover:text-[#F7C31A] transition-colors" style={{ fontFamily: 'Space Mono, monospace' }}>
                   <Upload className="w-4 h-4" />
-                  {imageFile ? imageFile.name : 'Upload new image (replaces AI-generated)'}
+                  {imageFile ? imageFile.name.toUpperCase() : 'UPLOAD MEDIA OVERRIDE'}
                   <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
                 </label>
               </div>
 
               {/* Caption */}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <label className="text-[10px] font-bold text-[#8A96B0] uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5" style={{ fontFamily: 'Space Mono, monospace' }}>
                   <MessageSquare className="w-3.5 h-3.5" />
-                  Caption
+                  CAPTION TEXT
                 </label>
                 <textarea
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
                   rows={5}
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none bg-white"
+                  className="w-full px-0 py-3 border-b border-[#3B5BAD]/40 focus:border-[#F7C31A] bg-transparent text-white transition-colors text-[13px] resize-none focus:outline-none"
+                  style={{ fontFamily: 'Inter, sans-serif', lineHeight: 1.6 }}
                 />
               </div>
             </div>
@@ -280,44 +293,51 @@ export function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignMo
 
           {/* ── Email section ── */}
           {showEmail && (
-            <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-4">
-              <p className="text-xs font-bold text-violet-700 uppercase tracking-wide flex items-center gap-1.5 mb-4">
+            <div className="rounded-[4px] border border-[#3B5BAD]/30 bg-[#2C3A5C]/40 p-6 relative hover:border-[#F7C31A]/30 transition-colors">
+              <div className="absolute top-0 right-0 p-4 opacity-10 font-bold text-6xl pointer-events-none" style={{ fontFamily: 'Syne, sans-serif' }}>II</div>
+              
+              <p className="text-[10px] font-bold text-[#F7C31A] uppercase tracking-[0.2em] flex items-center gap-2 mb-6" style={{ fontFamily: 'Space Mono, monospace' }}>
+                <span className="w-4 h-[1px] bg-[#F7C31A]"></span>
                 <Mail className="w-3.5 h-3.5" />
-                Email (via Omnisend)
+                EMAIL SEQUENCE
               </p>
-              <EmailComposerSection
-                value={email}
-                onChange={setEmail}
-                campaignContext={`${campaign.festival ?? campaign.name}`}
-                whatsappCaption={caption}
-                showAIGenerate
-              />
+              <div className="[&_input]:border-[#3B5BAD]/40 [&_input]:bg-transparent [&_input]:text-white [&_input:focus]:border-[#F7C31A] [&_textarea]:border-[#3B5BAD]/40 [&_textarea]:bg-transparent [&_textarea]:text-white [&_textarea:focus]:border-[#F7C31A] [&_label]:text-[#8A96B0] [&_label]:font-mono [&_label]:text-[10px] [&_label]:tracking-[0.12em] [&_button]:rounded-[4px]">
+                <EmailComposerSection
+                  value={email}
+                  onChange={setEmail}
+                  campaignContext={`${campaign.festival ?? campaign.name}`}
+                  whatsappCaption={caption}
+                  showAIGenerate
+                />
+              </div>
             </div>
           )}
 
           {error && (
-            <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+            <div className="flex items-center gap-3 px-4 py-3 bg-[#1A2847] border-l-2 border-red-500 rounded-r-[4px] text-sm text-red-400">
               <AlertTriangle className="w-4 h-4 shrink-0" />
-              {error}
+              <span style={{ fontFamily: 'Space Mono, monospace', fontSize: '11px', letterSpacing: '0.05em' }}>{error}</span>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-slate-200 flex gap-3 shrink-0">
+        <div className="p-6 border-t border-[#3B5BAD]/30 flex gap-4 shrink-0 bg-[#0F1A30]">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium text-sm"
+            className="flex-1 px-4 py-3 border-[1.5px] border-[#3B5BAD] text-[#3B5BAD] hover:bg-[#F7C31A]/10 hover:text-[#F7C31A] hover:border-[#F7C31A] transition-colors font-semibold text-[12px] tracking-[0.1em] uppercase h-12"
+            style={{ fontFamily: 'Manrope, sans-serif' }}
           >
-            Cancel
+            CANCEL
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors font-semibold text-sm shadow-sm disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-[#F7C31A] hover:bg-[#E5B518] hover:-translate-y-[2px] text-[#1A2847] transition-all font-bold text-[12px] tracking-[0.1em] uppercase h-12 disabled:opacity-50 disabled:hover:translate-y-0"
+            style={{ fontFamily: 'Manrope, sans-serif' }}
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-            {saving ? 'Saving…' : 'Save Changes'}
+            {saving ? 'PROCESSING...' : 'DEPLOY CHANGES'}
           </button>
         </div>
       </div>

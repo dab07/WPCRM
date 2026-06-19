@@ -34,7 +34,20 @@ Provide your response according to the exact JSON structure requested in the use
       );
     }
 
-    return NextResponse.json({ success: true, content: result.data.response });
+    let content = result.data.response;
+
+    try {
+      // Clean up markdown block if present
+      const cleanContent = content.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanContent);
+      if (parsed && typeof parsed === 'object' && parsed.caption) {
+        content = parsed.caption;
+      }
+    } catch (err) {
+      // If parsing fails, we just use the raw text response
+    }
+
+    return NextResponse.json({ success: true, content });
   } catch (error) {
     console.error('[generate-caption] Error:', error);
     return NextResponse.json(

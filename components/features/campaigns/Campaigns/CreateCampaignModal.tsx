@@ -89,6 +89,7 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
   const [brandGuidelines,setBrandGuidelines]= useState('');
   const [newLabel,       setNewLabel]       = useState('');
   const [saveForFuture,  setSaveForFuture]  = useState(false);
+  const [guidelineFile,  setGuidelineFile]  = useState<File | null>(null);
 
   useEffect(() => {
     fetch('/api/campaigns/guidelines')
@@ -106,6 +107,29 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
       const sb = getSupabaseClient();
       const { data: { session } } = await sb.auth.getSession();
       const token = session?.access_token ?? 'anon';
+
+      let uploadedFileUrl = '';
+      if (saveForFuture && newLabel.trim()) {
+        if (guidelineFile) {
+          const ext = guidelineFile.name.split('.').pop();
+          const filePath = `${Math.random().toString(36).slice(2)}_${Date.now()}.${ext}`;
+          const { error: uploadError } = await sb.storage.from('brand-guidelines').upload(filePath, guidelineFile);
+          if (uploadError) {
+             console.error('Failed to upload guidelines file:', uploadError);
+             setError(`Failed to upload guidelines: ${uploadError.message}`);
+             setStep('prompt');
+             return;
+          }
+          const { data: { publicUrl } } = sb.storage.from('brand-guidelines').getPublicUrl(filePath);
+          uploadedFileUrl = publicUrl;
+        }
+        
+        await fetch('/api/campaigns/guidelines', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ label: newLabel.trim(), content: brandGuidelines, file_url: uploadedFileUrl })
+        }).catch(e => console.error('Failed to save guideline:', e));
+      }
 
       const res = await fetch('/api/campaigns/generate-caption', {
         method: 'POST',
@@ -514,7 +538,31 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                   rows={3}
                   className={`${INPUT_CLS} resize-none`}
                 />
-                <div className="flex items-center gap-3">
+                
+                <div className="flex flex-col gap-2 mt-2">
+                  <label className={LABEL_CLS}>Upload Guidelines Document (Optional)</label>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.txt,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 2 * 1024 * 1024) {
+                          setError('File size must be less than 2MB');
+                          e.target.value = '';
+                          return;
+                        }
+                        setError('');
+                        setGuidelineFile(file);
+                      } else {
+                        setGuidelineFile(null);
+                      }
+                    }}
+                    className="text-[12px] text-brand-muted file:mr-4 file:py-2 file:px-4 file:rounded-[4px] file:border-0 file:text-[12px] file:font-semibold file:bg-brand-yellow/10 file:text-brand-yellow hover:file:bg-brand-yellow/20"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 mt-3">
                   <input
                     type="text"
                     placeholder="New label (optional)"
