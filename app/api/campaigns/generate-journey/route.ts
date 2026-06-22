@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { generateIntelligentCampaign, IntelligentCampaignParams } from '@/lib/services/external/GeminiService';
+import { generateCustomerJourneyStrategy, IntelligentCampaignParams } from '@/lib/services/external/GeminiService';
 import { ShopifyService } from '@/lib/services/external/ShopifyService';
 import { getOmnisendService } from '@/lib/services/external/OmnisendService';
 import { OpportunityEngine } from '@/lib/services/intelligence/OpportunityEngine';
@@ -19,14 +19,6 @@ export async function POST() {
       shopifyService.getCustomers().catch(e => { console.warn('Failed to fetch customers:', e.message); return []; }),
       shopifyService.getOrders().catch(e => { console.warn('Failed to fetch orders:', e.message); return []; })
     ]);
-
-    // Fetch Omnisend data if available
-    let omnisendCampaigns: any[] = [];
-    let omnisendContacts: any[] = [];
-    if (omnisendService) {
-      omnisendContacts = await omnisendService.getContacts();
-      omnisendCampaigns = await omnisendService.getCampaigns();
-    }
 
     // Process top products based on orders
     const productSales: Record<string, { title: string, price: string, count: number }> = {};
@@ -53,15 +45,6 @@ export async function POST() {
     const atRiskCount = Math.floor(customers.length * 0.1);
     const dormantCount = Math.floor(customers.length * 0.2);
 
-    // Run Opportunity Engine to get real signals
-    const engine = new OpportunityEngine();
-    // Using a mock brand ID for demo purposes; in production this would be the actual user's brand_id
-    const opportunities = await engine.runDailyScan("WPCRM_Demo_Brand_123");
-
-    const upcomingEventsText = opportunities.length > 0
-      ? opportunities.map(o => `- ${o.title}: ${o.description}`).join('\n')
-      : "No specific weather or local events right now. Focus on lifecycle marketing (e.g., dormant recovery).";
-
     // Build the payload
     const params: IntelligentCampaignParams = {
       brand: {
@@ -85,7 +68,7 @@ export async function POST() {
         repeat_active: repeatActiveCount,
         at_risk: atRiskCount,
         dormant: dormantCount,
-        birthday_this_week: Math.floor(customers.length * 0.02) // Approx 2%
+        birthday_this_week: Math.floor(customers.length * 0.02)
       },
       abandoned: {
         top_product_1: topProducts[0]?.title || "Premium Widget",
@@ -95,47 +78,34 @@ export async function POST() {
         top_last_product: topProducts[2]?.title || "Essential Kit"
       },
       omnisend: {
-        subscriber_count: omnisendContacts.length || 1500,
-        recent_campaigns: omnisendCampaigns.slice(0, 3).map((c: any) => ({
-          name: c.name,
-          type: c.type,
-          date: c.createdAt,
-          size: 500,
-          open_rate: 22.5,
-          click_rate: 3.2,
-          revenue: "$1,250",
-          offer: "No offer"
-        }))
+        subscriber_count: 0,
+        recent_campaigns: []
       },
       context: {
-        weather_cities: [
-          { name: "New York", customer_count: 350, weather: "Rain", temp: 15 },
-          { name: "Los Angeles", customer_count: 280, weather: "Sunny", temp: 28 },
-          { name: "Chicago", customer_count: 200, weather: "Cloudy", temp: 12 }
-        ],
-        upcoming_events: upcomingEventsText,
+        weather_cities: [],
+        upcoming_events: "",
         local_time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
         today_date: new Date().toLocaleDateString('en-US'),
         day_of_week: new Date().toLocaleDateString('en-US', { weekday: 'long' })
       }
     };
 
-    const campaign = await generateIntelligentCampaign(params);
+    const strategy = await generateCustomerJourneyStrategy(params);
 
-    if (!campaign.success) {
-      return NextResponse.json({ error: campaign.error }, { status: 500 });
+    if (!strategy.success) {
+      return NextResponse.json({ error: strategy.error }, { status: 500 });
     }
 
     return NextResponse.json({
       success: true,
-      data: campaign.data
+      data: strategy.data
     });
 
   } catch (error) {
-    console.error('[Generate Intelligent Campaign API] Error:', error);
+    console.error('[Generate Journey Strategy API] Error:', error);
     return NextResponse.json(
       { 
-        error: 'Failed to generate intelligent campaign',
+        error: 'Failed to generate journey strategy',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }

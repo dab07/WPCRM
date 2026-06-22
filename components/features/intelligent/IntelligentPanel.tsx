@@ -6,7 +6,9 @@ import { getSupabaseClient } from '../../../supabase/supabase';
 
 export function IntelligentPanel() {
   const [loading, setLoading] = useState(false);
+  const [journeyLoading, setJourneyLoading] = useState(false);
   const [result, setResult] = useState<any | null>(null);
+  const [journeyResult, setJourneyResult] = useState<any | null>(null);
   const [error, setError] = useState('');
 
   const generateCampaign = async () => {
@@ -34,6 +36,32 @@ export function IntelligentPanel() {
       setLoading(false);
     }
   };
+  const generateJourneyStrategy = async () => {
+    setJourneyLoading(true);
+    setError('');
+    setJourneyResult(null);
+
+    try {
+      const sb = getSupabaseClient();
+      const { data: { session } } = await sb.auth.getSession();
+      const token = session?.access_token ?? 'anon';
+
+      const res = await fetch('/api/campaigns/generate-journey', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed to generate journey strategy');
+
+      setJourneyResult(data.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setJourneyLoading(false);
+    }
+  };
+
   const createCampaignFromStrategy = async () => {
     if (!result) return;
     setLoading(true);
@@ -91,17 +119,30 @@ export function IntelligentPanel() {
               Let ZavopsAI analyze your Shopify and Omnisend data, weather patterns, and customer lifecycle to propose the best campaign right now.
             </p>
           </div>
-          <button
-            onClick={generateCampaign}
-            disabled={loading}
-            className="mt-2 flex items-center gap-2 px-6 py-3 bg-brand-yellow hover:brightness-110 text-brand-navy font-heading font-semibold text-[13px] uppercase tracking-label rounded-[4px] transition-all hover:-translate-y-0.5 disabled:opacity-50"
-          >
-            {loading ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing Signals…</>
-            ) : (
-              <><Sparkles className="w-4 h-4" /> Generate Campaign</>
-            )}
-          </button>
+          <div className="flex gap-4 mt-2">
+            <button
+              onClick={generateCampaign}
+              disabled={loading || journeyLoading}
+              className="flex items-center gap-2 px-6 py-3 bg-brand-yellow hover:brightness-110 text-brand-navy font-heading font-semibold text-[13px] uppercase tracking-label rounded-[4px] transition-all hover:-translate-y-0.5 disabled:opacity-50"
+            >
+              {loading ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing Signals…</>
+              ) : (
+                <><Sparkles className="w-4 h-4" /> Generate Campaign</>
+              )}
+            </button>
+            <button
+              onClick={generateJourneyStrategy}
+              disabled={loading || journeyLoading}
+              className="flex items-center gap-2 px-6 py-3 border border-brand-yellow text-brand-yellow hover:bg-brand-yellow/10 font-heading font-semibold text-[13px] uppercase tracking-label rounded-[4px] transition-all hover:-translate-y-0.5 disabled:opacity-50"
+            >
+              {journeyLoading ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Mapping Journey…</>
+              ) : (
+                <><BrainCircuit className="w-4 h-4" /> Generate Lifecycle Strategy</>
+              )}
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -209,6 +250,45 @@ export function IntelligentPanel() {
               >
                 {loading ? 'Creating...' : 'Create Campaign from Strategy'}
               </button>
+            </div>
+          </div>
+        )}
+
+        {journeyResult && (
+          <div className="bg-brand-slate border border-[rgba(59,91,173,0.18)] rounded-[4px] p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center gap-2 mb-6 pb-4 border-b border-[rgba(59,91,173,0.18)]">
+              <CheckCircle className="w-5 h-5 text-green-400" />
+              <h3 className="font-heading font-semibold text-brand-offwhite text-lg">Full Customer Journey Strategy</h3>
+            </div>
+            <div className="space-y-8">
+              {journeyResult.journey_strategy?.map((stage: any, index: number) => (
+                <div key={index} className="border border-[rgba(59,91,173,0.18)] rounded-[4px] p-4 bg-brand-navy">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h4 className="font-heading font-bold text-brand-yellow text-md">{stage.stage}</h4>
+                      <p className="text-xs text-brand-muted mt-1 font-body">{stage.objective}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-brand-muted">Targeting:</p>
+                      <p className="text-sm font-semibold text-brand-offwhite">{stage.segmentation}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <p className="label-eyebrow text-brand-muted">Touchpoints ({stage.touchpoints_count})</p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {stage.touchpoints?.map((tp: any, tpIndex: number) => (
+                        <div key={tpIndex} className="flex items-center gap-3 bg-brand-slate/50 p-2 text-sm rounded border border-brand-border">
+                          <span className="flex items-center justify-center w-6 h-6 rounded bg-brand-blue/20 text-brand-blue text-xs font-bold">{tp.step}</span>
+                          <span className="font-mono text-brand-yellow text-xs px-2 py-1 bg-brand-yellow/10 rounded">{tp.channel}</span>
+                          <span className="text-brand-offwhite font-medium text-xs w-24 shrink-0">{tp.timing}</span>
+                          <span className="text-brand-muted text-xs truncate">{tp.purpose}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}

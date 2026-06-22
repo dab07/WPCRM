@@ -710,6 +710,104 @@ Then return ONLY this JSON matching the structure:
       };
     }
   }
+
+  /**
+   * Generate a comprehensive Customer Journey Lifecycle Strategy
+   */
+  async generateCustomerJourneyStrategy(params: IntelligentCampaignParams): Promise<GeminiResponse<any>> {
+    try {
+      const result = await this.executeWithTimeout(async () => {
+        const client = this.getClient();
+
+        const systemPrompt = `You are an expert marketing strategist for a D2C brand.
+You will be provided with Shopify product data and customer lifecycle metrics.
+Based on the user's instructions, create a comprehensive list of email and WhatsApp campaigns
+through the full cycle of the customer journey.
+
+Output ONLY a valid JSON object with the following structure. No markdown, no prose:
+{
+  "journey_strategy": [
+    {
+      "stage": "Pre-Purchase | First Purchase | Repeat Active | At-Risk | Dormant",
+      "objective": "High level objective (e.g., maximize CLTV, minimize CAC)",
+      "segmentation": "Who is targeted",
+      "touchpoints_count": 0,
+      "touchpoints": [
+        {
+          "step": 1,
+          "channel": "Email | WhatsApp | SMS",
+          "timing": "When this is sent (e.g., Day 0, Day 3)",
+          "purpose": "What this message achieves"
+        }
+      ]
+    }
+  ]
+}`;
+
+        const userPrompt = `I am the marketing manager for a D2C brand selling health foods online on
+our website as well as marketplaces like Amazon, Zepto, Blinkit and
+Instamart. We need a comprehensive list of email and whatsapp campaigns
+through the full cycle of customer journey. Please build a structure of
+campaigns based on their status in the customer cycle, segmentation and
+targeting with an objective to maximize CLTV and minimizing the cost of
+acquisition and retention. I need the structure with the details of frequency
+of touchpoints, touch point channels, number of touch points in each such
+campaign. Right now let's just stick to the structure I don't require the
+messaging of these campaigns.
+
+=== BRAND & PRODUCT DATA ===
+Brand name: ${params.brand.name}
+Top 3 products:
+${params.products.top.map((p, i) => `  ${i + 1}. ${p.title} — ${p.price}`).join('\n')}
+
+=== CUSTOMER LIFECYCLE METRICS ===
+Pre-purchase: ${params.counts.pre_purchase}
+First purchase: ${params.counts.first_purchase}
+Repeat active: ${params.counts.repeat_active}
+At-risk: ${params.counts.at_risk}
+Dormant: ${params.counts.dormant}
+`;
+
+        const response = await client.models.generateContent({
+          model: externalServicesConfig.gemini.model,
+          config: {
+            systemInstruction: systemPrompt
+          },
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: userPrompt }]
+            }
+          ]
+        });
+
+        const generatedText = response.text;
+        if (!generatedText) {
+          throw new GeminiServiceError('No response from Gemini');
+        }
+
+        const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          console.error('[Gemini Raw Output]:', generatedText);
+          throw new GeminiServiceError('No JSON found in response');
+        }
+
+        return JSON.parse(jsonMatch[0]);
+      }, 'generateCustomerJourneyStrategy');
+
+      return {
+        success: true,
+        data: result,
+        confidence: 0.9
+      };
+    } catch (error) {
+      console.error('[Gemini Service] Error generating journey strategy:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
 }
 
 let _instance: GeminiService | null = null;
@@ -798,4 +896,9 @@ export async function generateCampaignImage(config: {
 export async function generateIntelligentCampaign(params: IntelligentCampaignParams): Promise<GeminiResponse<any>> {
   const service = await getGeminiService();
   return service.generateIntelligentCampaign(params);
+}
+
+export async function generateCustomerJourneyStrategy(params: IntelligentCampaignParams): Promise<GeminiResponse<any>> {
+  const service = await getGeminiService();
+  return service.generateCustomerJourneyStrategy(params);
 }
