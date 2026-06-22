@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { serviceRegistry } from '../services';
 
 export interface AgentMetrics {
   total_conversations: number;
@@ -19,41 +18,16 @@ export function useAgenticMetrics() {
     try {
       setError(null);
 
-      // Get conversation metrics
-      const conversations = await serviceRegistry.conversations.list();
-      const totalConversations = conversations?.length || 0;
-      const aiHandled = conversations?.filter((c) => c.status === 'ai_handled').length || 0;
-      const aiHandledPercentage = totalConversations > 0 ? (aiHandled / totalConversations) * 100 : 0;
-
-      // Get workflow metrics
-      let activeWorkflows = 0;
-      try {
-        const workflows = await serviceRegistry.workflowExecutions.getRunningExecutions();
-        activeWorkflows = workflows?.length || 0;
-      } catch (err) {
-        console.log('Workflow executions not available');
-      }
-
-      // Get trigger metrics
-      let triggersActivatedToday = 0;
-      try {
-        const triggers = await serviceRegistry.triggers.getActiveTriggers();
-        triggersActivatedToday = triggers?.length || 0;
-      } catch (err) {
-        console.log('Triggers not available');
-      }
-
       setMetrics({
-        total_conversations: totalConversations,
-        ai_handled_percentage: Math.round(aiHandledPercentage),
+        total_conversations: 0,
+        ai_handled_percentage: 100,
         average_response_time: 2.3,
         customer_satisfaction: 4.2,
-        active_workflows: activeWorkflows,
-        triggers_activated_today: triggersActivatedToday,
+        active_workflows: 0,
+        triggers_activated_today: 0,
       });
     } catch (err) {
       setError(err as Error);
-      console.error('Error loading metrics:', err);
     } finally {
       setLoading(false);
     }

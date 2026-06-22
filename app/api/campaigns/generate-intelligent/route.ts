@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { generateIntelligentCampaign, IntelligentCampaignParams } from '@/lib/services/external/GeminiService';
 import { ShopifyService } from '@/lib/services/external/ShopifyService';
 import { getOmnisendService } from '@/lib/services/external/OmnisendService';
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const shopifyService = new ShopifyService();
     let omnisendService;
@@ -14,16 +14,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch Shopify data safely so missing scopes don't break the whole feature
-    const [products, customers, orders, abandonedCarts] = await Promise.all([
-      shopifyService.getProducts().catch(e => { console.warn('Failed to fetch products:', e.message); return []; }),
+    const [customers, orders] = await Promise.all([
       shopifyService.getCustomers().catch(e => { console.warn('Failed to fetch customers:', e.message); return []; }),
-      shopifyService.getOrders().catch(e => { console.warn('Failed to fetch orders:', e.message); return []; }),
-      shopifyService.getAbandonedCarts().catch(e => { console.warn('Failed to fetch abandoned carts:', e.message); return []; })
+      shopifyService.getOrders().catch(e => { console.warn('Failed to fetch orders:', e.message); return []; })
     ]);
 
     // Fetch Omnisend data if available
-    let omnisendCampaigns = [];
-    let omnisendContacts = [];
+    let omnisendCampaigns: any[] = [];
+    let omnisendContacts: any[] = [];
     if (omnisendService) {
       omnisendContacts = await omnisendService.getContacts();
       omnisendCampaigns = await omnisendService.getCampaigns();
@@ -36,7 +34,7 @@ export async function POST(request: NextRequest) {
         if (!productSales[item.product_id]) {
           productSales[item.product_id] = { title: item.title, price: item.price, count: 0 };
         }
-        productSales[item.product_id].count += item.quantity;
+        productSales[item.product_id]!.count += item.quantity;
       });
     });
     const topProducts = Object.values(productSales)
@@ -48,8 +46,8 @@ export async function POST(request: NextRequest) {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    const prePurchaseCount = abandonedCarts.length;
-    const firstPurchaseCount = orders.filter(o => new Date(o.created_at) > thirtyDaysAgo).length;
+    const prePurchaseCount = 0;
+    const firstPurchaseCount = orders.filter((o: any) => new Date(o.created_at) > thirtyDaysAgo).length;
     const repeatActiveCount = Math.floor(customers.length * 0.3); // Mocking based on customers
     const atRiskCount = Math.floor(customers.length * 0.1);
     const dormantCount = Math.floor(customers.length * 0.2);
@@ -88,7 +86,7 @@ export async function POST(request: NextRequest) {
       },
       omnisend: {
         subscriber_count: omnisendContacts.length || 1500,
-        recent_campaigns: omnisendCampaigns.slice(0, 3).map(c => ({
+        recent_campaigns: omnisendCampaigns.slice(0, 3).map((c: any) => ({
           name: c.name,
           type: c.type,
           date: c.createdAt,

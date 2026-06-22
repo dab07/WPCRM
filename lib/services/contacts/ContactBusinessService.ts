@@ -1,5 +1,5 @@
 import { ContactsService } from './ContactsService';
-import { ConversationsService } from '../conversations/ConversationsService';
+
 import { sendWelcomeMessage } from '../external/WhatsAppService';
 import type { Contact, CreateContactRequest } from '../../types/api/contacts';
 
@@ -9,8 +9,7 @@ import type { Contact, CreateContactRequest } from '../../types/api/contacts';
  */
 export class ContactBusinessService {
   constructor(
-    private contactsService: ContactsService,
-    private conversationsService: ConversationsService
+    private contactsService: ContactsService
   ) {}
 
   /**
@@ -47,35 +46,9 @@ export class ContactBusinessService {
     );
 
     if (messageResult.success) {
-      // Create conversation
-      const conversation = await this.conversationsService.create({
-        contact_id: contact.id,
-        status: 'active',
-        channel: 'whatsapp',
-        last_message_at: new Date().toISOString(),
-        last_message_from: 'agent'
-      });
-
-      // Add initial message
-      const messageData: any = {
-        conversation_id: conversation.id,
-        sender_type: 'agent',
-        content: 'Welcome message sent',
-        message_type: 'text',
-        delivery_status: 'sent'
-      };
-
-      // Only add whatsapp_message_id if it exists
-      if (messageResult.messageId) {
-        messageData.whatsapp_message_id = messageResult.messageId;
-      }
-
-      await this.conversationsService.addMessage(messageData);
-
       return {
         contact,
         messageId: messageResult.messageId,
-        conversationId: conversation.id,
         success: true
       };
     } else {

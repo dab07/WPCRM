@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { ShopifyService } from '../../../../lib/services/external/ShopifyService';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const shopify  = new ShopifyService();
     const orders = await shopify.getOrders();

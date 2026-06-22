@@ -86,16 +86,10 @@ export {
   
   // Data services (CRUD operations)
   ContactsService,
-  ConversationsService,
   CampaignsService,
-  TriggersService,
-  WorkflowExecutionsService,
-  FollowUpRulesService,
   
   // Business services (complex workflows)
   ContactBusinessService,
-  ConversationBusinessService,
-  FollowUpBusinessService,
   
   // External services
   WhatsAppService,
@@ -110,16 +104,7 @@ export {
   extractBusinessCardFromText,
   extractBusinessCardFromImage,
   generateAIResponse,
-  generateInstagramMessage,
-  detectIntent,
-  InstagramService,
-  InstagramServiceError,
-  fetchInstagramPosts,
-  storeInstagramPost,
-  getBroadcastRules,
-  getTargetContacts,
-  matchesHashtagFilters,
-  logBroadcast
+  detectIntent
 } from './services';
 
 // Hooks layer (depends on services, should be imported separately to avoid SSR issues)

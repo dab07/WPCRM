@@ -3,8 +3,8 @@ import '../globals.css';
 
 
 export const metadata: Metadata = {
-  title: 'Zavops CRM — AI-Powered Customer Management',
-  description: 'AI-powered WhatsApp CRM with automated responses and agent handover',
+  title: 'Zavops CRM',
+  description: 'AI-powered CRM with automated responses and agent handover',
 };
 
 export default function RootLayout({
@@ -15,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-          {children}
+        {children}
       </body>
     </html>
   );

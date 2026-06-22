@@ -2,24 +2,17 @@
 
 import { useState } from 'react';
 import {
-  Brain, Bot, Workflow, Zap,
-  MessageSquare, Target, Users, Settings,
+  Brain, Bot, MessageSquare, Target, Settings,
 } from 'lucide-react';
 import { useAgenticMetrics } from '../../../../lib/hooks/useAgenticMetrics';
-import { useWorkflowExecutions } from '../../../../lib/hooks/useWorkflowExecutions';
-import { useTriggerExecutions } from '../../../../lib/hooks/useTriggerExecutions';
 import { LoadingSpinner, Button } from '../../../ui';
 import { MetricCard } from './MetricCard';
-import { TriggersList } from './TriggersList';
-import { WorkflowsList } from './WorkflowsList';
 import { AIAgentsStatus } from './AIAgentsStatus';
 import { ConfigureAIModal } from './ConfigureAIModal';
 
 export function AgenticDashboard() {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const { metrics, loading: metricsLoading } = useAgenticMetrics();
-  const { workflows } = useWorkflowExecutions(10);
-  const { triggers } = useTriggerExecutions(10);
 
   if (metricsLoading) {
     return (
@@ -33,10 +26,6 @@ export function AgenticDashboard() {
     <div className="p-6 space-y-6 w-full h-full overflow-y-auto bg-brand-navy">
       <DashboardHeader onConfigureClick={() => setIsConfigModalOpen(true)} />
       <MetricsGrid metrics={metrics} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <TriggersList triggers={triggers} />
-        <WorkflowsList workflows={workflows} />
-      </div>
       <AIAgentsStatus />
       <ConfigureAIModal
         isOpen={isConfigModalOpen}
@@ -79,18 +68,6 @@ function MetricsGrid({ metrics }: { metrics: any }) {
         trend={{ value: '+12% from last week', positive: true }}
       />
       <MetricCard
-        title="Active Workflows"
-        value={metrics.active_workflows}
-        icon={Workflow}
-        subtitle={`Across ${metrics.total_conversations} conversations`}
-      />
-      <MetricCard
-        title="Triggers Today"
-        value={metrics.triggers_activated_today}
-        icon={Zap}
-        subtitle="Automated actions executed"
-      />
-      <MetricCard
         title="Avg Response Time"
         value={`${metrics.average_response_time}s`}
         icon={MessageSquare}
@@ -101,12 +78,6 @@ function MetricsGrid({ metrics }: { metrics: any }) {
         value={`${metrics.customer_satisfaction}/5`}
         icon={Target}
         subtitle="Based on AI interactions"
-      />
-      <MetricCard
-        title="Total Conversations"
-        value={metrics.total_conversations}
-        icon={Users}
-        subtitle="Active customer interactions"
       />
     </div>
   );

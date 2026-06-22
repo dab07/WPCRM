@@ -1,25 +1,8 @@
 'use client';
 
-import {
-  Brain,
-  Users,
-  Megaphone,
-  ShoppingBag,
-  Plug,
-  Sparkles,
-} from 'lucide-react';
-import { LucideIcon } from 'lucide-react';
+
 import type { Tab, TabConfig } from './types';
 import { TABS } from './constants';
-
-const TAB_ICONS: Record<Tab, LucideIcon> = {
-  agentic: Brain,
-  intelligent: Sparkles,
-  contacts: Users,
-  campaigns: Megaphone,
-  shopify: ShoppingBag,
-  integrations: Plug,
-};
 
 interface SidebarProps {
   activeTab: Tab;
