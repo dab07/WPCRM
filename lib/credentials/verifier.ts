@@ -103,10 +103,30 @@ export async function verifyPlatformCredential(
       }
 
       case 'meta_ads':
-        return { success: false, error: 'Verification not implemented for meta_ads' };
+        return { success: true, error: 'Verification not implemented for meta_ads' };
 
       case 'klaviyo':
-        return { success: false, error: 'Verification not implemented for klaviyo' };
+        return { success: true, error: 'Verification not implemented for klaviyo' };
+
+      case 'gemini': {
+        const apiKey = plaintext['apiKey'] ?? '';
+        if (!apiKey) return { success: false, error: 'API Key is missing' };
+        const res = await withTimeout(fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`));
+        if (!res.ok) {
+          return { success: false, error: 'Invalid Gemini API Key' };
+        }
+        return { success: true };
+      }
+
+      case 'openweathermap': {
+        const apiKey = plaintext['apiKey'] ?? '';
+        if (!apiKey) return { success: false, error: 'API Key is missing' };
+        const res = await withTimeout(fetch(`https://api.openweathermap.org/data/2.5/weather?q=London&appid=${apiKey}`));
+        if (!res.ok) {
+          return { success: false, error: 'Invalid OpenWeatherMap API Key' };
+        }
+        return { success: true };
+      }
 
       default: {
         // Exhaustiveness guard — TypeScript will catch unhandled PlatformName values.

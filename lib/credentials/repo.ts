@@ -10,7 +10,9 @@ export type PlatformName =
   | 'omnisend'
   | 'shopify'
   | 'meta_ads'
-  | 'klaviyo';
+  | 'klaviyo'
+  | 'openweathermap'
+  | 'gemini';
 
 export interface CredentialRow extends EncryptedCredential {
   id: string;

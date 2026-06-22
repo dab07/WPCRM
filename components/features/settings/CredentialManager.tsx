@@ -20,9 +20,11 @@ interface CredentialManagerProps {
 const PLATFORMS: Array<{ name: PlatformName; label: string }> = [
   { name: 'gallabox', label: 'Gallabox' },
   { name: 'omnisend', label: 'Omnisend' },
-  { name: 'shopify',  label: 'Shopify' },
+  { name: 'shopify', label: 'Shopify' },
   { name: 'meta_ads', label: 'Meta Ads' },
-  { name: 'klaviyo',  label: 'Klaviyo' },
+  { name: 'klaviyo', label: 'Klaviyo' },
+  { name: 'openweathermap', label: 'OpenWeatherMap' },
+  { name: 'gemini', label: 'Google Gemini' },
 ];
 
 // ---------------------------------------------------------------------------

@@ -33,6 +33,8 @@ export interface Opportunity {
   suggested_channels: string[];
   priority: 'high' | 'medium' | 'low';
   reasoning: string;
+  projected_impact_usd?: number;
+  signal_source?: string;
   status: 'pending_approval' | 'approved' | 'rejected' | 'content_generated' | 'executed';
   approved_at?: string;
   approved_by?: string;

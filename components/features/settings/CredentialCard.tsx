@@ -50,24 +50,30 @@ export interface CredentialCardProps {
 
 export const PLATFORM_FIELDS: Record<PlatformName, FieldDef[]> = {
   gallabox: [
-    { key: 'apiKey',     label: 'API Key' },
-    { key: 'apiSecret',  label: 'API Secret' },
-    { key: 'accountId',  label: 'Account ID' },
-    { key: 'channelId',  label: 'WhatsApp Channel ID', optional: true },
+    { key: 'apiKey', label: 'API Key' },
+    { key: 'apiSecret', label: 'API Secret' },
+    { key: 'accountId', label: 'Account ID' },
+    { key: 'channelId', label: 'WhatsApp Channel ID', optional: true },
   ],
   omnisend: [
     { key: 'apiKey', label: 'API Key' },
   ],
   shopify: [
-    { key: 'shopDomain',    label: 'Shop Domain' },
-    { key: 'clientId',      label: 'Client ID' },
-    { key: 'clientSecret',  label: 'Client Secret' },
+    { key: 'shopDomain', label: 'Shop Domain' },
+    { key: 'clientId', label: 'Client ID' },
+    { key: 'clientSecret', label: 'Client Secret' },
   ],
   meta_ads: [
-    { key: 'accessToken',  label: 'Access Token' },
-    { key: 'adAccountId',  label: 'Ad Account ID' },
+    { key: 'accessToken', label: 'Access Token' },
+    { key: 'adAccountId', label: 'Ad Account ID' },
   ],
   klaviyo: [
+    { key: 'apiKey', label: 'API Key' },
+  ],
+  openweathermap: [
+    { key: 'apiKey', label: 'API Key' },
+  ],
+  gemini: [
     { key: 'apiKey', label: 'API Key' },
   ],
 };
@@ -136,14 +142,14 @@ export function CredentialCard({
   const [lastVerifiedAt, setLastVerifiedAt] = useState<string | null>(initialLastVerifiedAt);
 
   // ── Loading flags ────────────────────────────────────────────────────────
-  const [saving,    setSaving]    = useState(false);
+  const [saving, setSaving] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [deleting,  setDeleting]  = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // ── Message state ────────────────────────────────────────────────────────
-  const [saveError,    setSaveError]    = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [deleteError,  setDeleteError]  = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -215,8 +221,8 @@ export function CredentialCard({
       setSaveError('Network error — please try again.');
       setSaving(false);
       return;
-    } 
-    
+    }
+
     setSaving(false);
 
     // Automatically verify to check if connected

@@ -84,11 +84,18 @@ export class GeminiServiceError extends Error {
   }
 }
 
+export interface GeminiServiceOverrides {
+  apiKey?: string;
+}
+
 export class GeminiService {
   private client: GoogleGenAI | null = null;
   private readonly timeout: number;
-  constructor() {
+  private readonly apiKey: string;
+
+  constructor(overrides?: GeminiServiceOverrides) {
     this.timeout = externalServicesConfig.gemini.timeout;
+    this.apiKey = overrides?.apiKey || config.gemini.apiKey || '';
   }
 
   private getClient(): GoogleGenAI {
@@ -98,12 +105,12 @@ export class GeminiService {
     }
 
     if (!this.client) {
-      if (!config.gemini.apiKey) {
+      if (!this.apiKey) {
         throw new GeminiServiceError('GEMINI_API_KEY is required');
       }
 
       this.client = new GoogleGenAI({
-        apiKey: config.gemini.apiKey
+        apiKey: this.apiKey
       });
     }
 
@@ -705,14 +712,45 @@ Then return ONLY this JSON matching the structure:
   }
 }
 
+let _instance: GeminiService | null = null;
+
+export async function getGeminiService(): Promise<GeminiService> {
+  if (_instance) return _instance;
+
+  const { supabaseAdmin } = await import('../../../supabase/supabase');
+  const { decryptCredential } = await import('../../credentials/crypto');
+
+  const { data, error } = await supabaseAdmin
+    .from('platform_credentials')
+    .select('encrypted_payload, encrypted_dek, iv')
+    .eq('platform_name', 'gemini')
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) {
+    // Fallback to env config if not found in db
+    _instance = new GeminiService();
+    return _instance;
+  }
+
+  const plaintext = await decryptCredential({
+    encryptedPayload: data.encrypted_payload as string,
+    encryptedDek: data.encrypted_dek as string,
+    iv: data.iv as string,
+  });
+
+  _instance = new GeminiService({ apiKey: plaintext['apiKey'] || '' });
+  return _instance;
+}
+
 // Legacy exports for backward compatibility
 export async function extractBusinessCardFromText(text: string): Promise<GeminiResponse<BusinessCardData>> {
-  const service = new GeminiService();
+  const service = await getGeminiService();
   return service.extractBusinessCardFromText(text);
 }
 
 export async function extractBusinessCardFromImage(imageBase64: string): Promise<GeminiResponse<BusinessCardData>> {
-  const service = new GeminiService();
+  const service = await getGeminiService();
   return service.extractBusinessCardFromImage(imageBase64);
 }
 
@@ -723,7 +761,7 @@ export async function generateAIResponse(
   response: string;
   intent: string;
 }>> {
-  const service = new GeminiService();
+  const service = await getGeminiService();
   return service.generateAIResponse(customerMessage, conversationHistory);
 }
 
@@ -733,7 +771,7 @@ export async function generateInstagramMessage(
   hashtags: string[] = [],
   customPrompt?: string
 ): Promise<GeminiResponse<string>> {
-  const service = new GeminiService();
+  const service = await getGeminiService();
   return service.generateInstagramMessage(reelUrl, caption, hashtags, customPrompt);
 }
 
@@ -741,7 +779,7 @@ export async function detectIntent(message: string): Promise<{
   intent: string;
   confidence: number;
 }> {
-  const service = new GeminiService();
+  const service = await getGeminiService();
   return service.detectIntent(message);
 }
 
@@ -753,11 +791,11 @@ export async function generateCampaignImage(config: {
   imageBase64: string;
   mimeType: string;
 }>> {
-  const service = new GeminiService();
+  const service = await getGeminiService();
   return service.generateCampaignImage(config);
 }
 
 export async function generateIntelligentCampaign(params: IntelligentCampaignParams): Promise<GeminiResponse<any>> {
-  const service = new GeminiService();
+  const service = await getGeminiService();
   return service.generateIntelligentCampaign(params);
 }

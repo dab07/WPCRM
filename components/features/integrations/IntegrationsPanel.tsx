@@ -42,6 +42,20 @@ const INTEGRATION_PLATFORMS: PlatformConfig[] = [
     accentColor: '#96BF48',
     iconText: 'SH',
   },
+  {
+    name: 'gemini',
+    label: 'Google Gemini',
+    description: 'AI model used for generating intelligent campaign briefs and content.',
+    accentColor: '#4285F4',
+    iconText: 'GM',
+  },
+  {
+    name: 'openweathermap',
+    label: 'OpenWeatherMap',
+    description: 'Weather forecasting API used for detecting micromoment campaign triggers.',
+    accentColor: '#EB6E4B',
+    iconText: 'OW',
+  },
 ];
 
 // ---------------------------------------------------------------------------

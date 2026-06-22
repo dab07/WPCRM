@@ -37,6 +37,8 @@ const VALID_PLATFORMS = new Set<string>([
   'shopify',
   'meta_ads',
   'klaviyo',
+  'gemini',
+  'openweathermap',
 ]);
 
 function isValidPlatform(value: string): value is PlatformName {

@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS platform_credentials (
   id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id           UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   platform_name     TEXT        NOT NULL
-                                CHECK (platform_name IN ('gallabox','omnisend','shopify','meta_ads','klaviyo')),
+                                CHECK (platform_name IN ('gallabox','omnisend','shopify','meta_ads','klaviyo','gemini','openweathermap')),
   encrypted_payload TEXT        NOT NULL,   -- base64 AES-256-GCM ciphertext + auth tag
   encrypted_dek     TEXT        NOT NULL,   -- base64 [ dekIv | encryptedDek | dekAuthTag ]
   iv                TEXT        NOT NULL,   -- base64 96-bit payload IV

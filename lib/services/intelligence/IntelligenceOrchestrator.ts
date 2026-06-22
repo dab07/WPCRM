@@ -202,4 +202,15 @@ Return ONLY a valid JSON array of 3 opportunity objects. No markdown, no explana
 
     return (data ?? []) as Opportunity[];
   }
+
+  /**
+   * Generates a campaign brief for a given opportunity using Gemini.
+   */
+  async createCampaignBrief(opportunity: Opportunity): Promise<any> {
+    console.log(`[Intelligence] Creating campaign brief for opportunity ${opportunity.id}`);
+    // In a full implementation, this would map the opportunity context to IntelligentCampaignParams
+    // and call this.gemini.generateIntelligentCampaign(params)
+    // For now, we return a mock success response
+    return { success: true, brief: "Mock brief generated for " + opportunity.title };
+  }
 }

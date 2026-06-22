@@ -40,6 +40,8 @@ const ALL_PLATFORMS: PlatformName[] = [
   'shopify',
   'meta_ads',
   'klaviyo',
+  'gemini',
+  'openweathermap',
 ];
 
 // ---------------------------------------------------------------------------
