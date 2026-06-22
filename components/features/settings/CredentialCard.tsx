@@ -213,9 +213,14 @@ export function CredentialCard({
       onStatusChange?.();
     } catch {
       setSaveError('Network error — please try again.');
-    } finally {
       setSaving(false);
-    }
+      return;
+    } 
+    
+    setSaving(false);
+
+    // Automatically verify to check if connected
+    await handleVerify();
   }
 
   // ── Verify (POST /api/credentials/{platform}/verify) ─────────────────────

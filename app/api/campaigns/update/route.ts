@@ -21,6 +21,11 @@ export async function PATCH(request: NextRequest) {
       email_subject?: string | null;
       email_body?: string | null;
       email_attachments?: any[] | null;
+      wa_campaign_type?: 'standard' | 'discount' | 'url_button' | null;
+      discount_percentage?: number | null;
+      discount_code?: string | null;
+      wa_button_text?: string | null;
+      wa_button_url?: string | null;
     };
 
     const {
@@ -61,6 +66,11 @@ export async function PATCH(request: NextRequest) {
     if (email_subject !== undefined) payload.email_subject = email_subject;
     if (email_body !== undefined) payload.email_body = email_body;
     if (email_attachments !== undefined) payload.email_attachments = email_attachments;
+    if (body.wa_campaign_type !== undefined) payload.wa_campaign_type = body.wa_campaign_type;
+    if (body.discount_percentage !== undefined) payload.discount_percentage = body.discount_percentage;
+    if (body.discount_code !== undefined) payload.discount_code = body.discount_code;
+    if (body.wa_button_text !== undefined) payload.wa_button_text = body.wa_button_text;
+    if (body.wa_button_url !== undefined) payload.wa_button_url = body.wa_button_url;
 
     const { data, error } = await supabase
       .from('campaigns')

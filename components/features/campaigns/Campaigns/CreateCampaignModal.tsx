@@ -66,15 +66,21 @@ interface CreateCampaignModalProps {
   onSuccess: () => void;
 }
 
-// ── Shared input className ────────────────────────────────────────────────────
 const INPUT_CLS = `
-  w-full px-3 py-2.5 bg-brand-navy
-  border border-[rgba(59,91,173,0.3)] rounded-[4px]
+  w-full px-0 py-2.5 bg-transparent
+  border-0 border-b border-[rgba(59,91,173,0.18)] rounded-none
   font-body text-[13px] text-brand-offwhite
   placeholder:text-brand-muted/50
-  focus:outline-none focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow/20
+  focus:outline-none focus:ring-0 focus:border-brand-yellow
   transition-colors
 `;
+
+const SELECT_ARROW_STYLE = {
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23F7C31A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+  backgroundPosition: 'right 0px center',
+  backgroundRepeat: 'no-repeat',
+  paddingRight: '24px'
+};
 
 const LABEL_CLS = 'block font-mono text-[10px] uppercase tracking-label text-brand-muted mb-1.5';
 
@@ -92,10 +98,21 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
   const [guidelineFile,  setGuidelineFile]  = useState<File | null>(null);
 
   useEffect(() => {
-    fetch('/api/campaigns/guidelines')
-      .then((r) => r.json())
-      .then((d) => { if (d?.guidelines) setGuidelines(d.guidelines); })
-      .catch((e) => console.error('Failed to load guidelines', e));
+    const loadGuidelines = async () => {
+      try {
+        const sb = getSupabaseClient();
+        const { data: { session } } = await sb.auth.getSession();
+        const token = session?.access_token ?? 'anon';
+        const res = await fetch('/api/campaigns/guidelines', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const d = await res.json();
+        if (d?.guidelines) setGuidelines(d.guidelines);
+      } catch (e) {
+        console.error('Failed to load guidelines', e);
+      }
+    };
+    loadGuidelines();
   }, []);
 
   // ── Generate ────────────────────────────────────────────────────────────────
@@ -309,7 +326,7 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                       <button
                         key={opt.id}
                         type="button"
-                        onClick={() => setPreview({ ...preview, channel: opt.id })}
+                        onClick={() => setPreview(prev => prev ? { ...prev, channel: opt.id } : null)}
                         className={`
                           flex flex-col items-center gap-1.5 px-3 py-3 border rounded-[4px]
                           font-mono text-[11px] uppercase tracking-label transition-all
@@ -367,18 +384,18 @@ Return ONLY valid JSON, no markdown, no explanation.`,
               <div className="space-y-3">
                 <div>
                   <label className={LABEL_CLS}>Campaign Name</label>
-                  <input value={preview.name} onChange={(e) => setPreview({ ...preview, name: e.target.value })} className={INPUT_CLS} />
+                  <input value={preview.name} onChange={(e) => setPreview(prev => prev ? { ...prev, name: e.target.value } : null)} className={INPUT_CLS} />
                 </div>
                 <div>
                   <label className={LABEL_CLS}>Festival / Event</label>
-                  <input value={preview.festival} onChange={(e) => setPreview({ ...preview, festival: e.target.value })} className={INPUT_CLS} />
+                  <input value={preview.festival} onChange={(e) => setPreview(prev => prev ? { ...prev, festival: e.target.value } : null)} className={INPUT_CLS} />
                 </div>
                 <div>
                   <label className={LABEL_CLS}>Scheduled Date &amp; Time</label>
                   <input
                     type="datetime-local"
                     value={preview.scheduled_at ? preview.scheduled_at.slice(0, 16) : ''}
-                    onChange={(e) => setPreview({ ...preview, scheduled_at: e.target.value })}
+                    onChange={(e) => setPreview(prev => prev ? { ...prev, scheduled_at: e.target.value } : null)}
                     className={INPUT_CLS}
                   />
                 </div>
@@ -386,7 +403,7 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                   <label className={LABEL_CLS}>Target Tags</label>
                   <input
                     value={preview.target_tags.join(', ')}
-                    onChange={(e) => setPreview({ ...preview, target_tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) })}
+                    onChange={(e) => setPreview(prev => prev ? { ...prev, target_tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) } : null)}
                     placeholder="vip, premium, active — leave empty for all contacts"
                     className={INPUT_CLS}
                   />
@@ -404,18 +421,19 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                     <label className={LABEL_CLS}>Campaign Type</label>
                     <select
                       value={preview.wa_campaign_type}
-                      onChange={(e) => setPreview({ ...preview, wa_campaign_type: e.target.value as any })}
-                      className={INPUT_CLS}
+                      onChange={(e) => setPreview(prev => prev ? { ...prev, wa_campaign_type: e.target.value as any } : null)}
+                      className={`${INPUT_CLS} cursor-pointer appearance-none`}
+                      style={SELECT_ARROW_STYLE}
                     >
-                      <option value="standard">Standard Message</option>
-                      <option value="discount">Discount Campaign (with Quick Reply code)</option>
-                      <option value="url_button">URL Button Campaign</option>
+                      <option value="standard" className="bg-[#1A2847]">Standard Message</option>
+                      <option value="discount" className="bg-[#1A2847]">Discount Campaign (with Quick Reply code)</option>
+                      <option value="url_button" className="bg-[#1A2847]">URL Button Campaign</option>
                     </select>
                   </div>
 
                   <textarea
                     value={preview.message_template}
-                    onChange={(e) => setPreview({ ...preview, message_template: e.target.value })}
+                    onChange={(e) => setPreview(prev => prev ? { ...prev, message_template: e.target.value } : null)}
                     rows={4}
                     className={`${INPUT_CLS} resize-none border-green-500/20 focus:border-green-500/50`}
                   />
@@ -428,7 +446,7 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                           type="number"
                           placeholder="e.g. 20"
                           value={preview.discount_percentage}
-                          onChange={(e) => setPreview({ ...preview, discount_percentage: e.target.value })}
+                          onChange={(e) => setPreview(prev => prev ? { ...prev, discount_percentage: e.target.value } : null)}
                           className={INPUT_CLS}
                         />
                       </div>
@@ -438,7 +456,7 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                           type="text"
                           placeholder="e.g. SUMMER20"
                           value={preview.discount_code}
-                          onChange={(e) => setPreview({ ...preview, discount_code: e.target.value })}
+                          onChange={(e) => setPreview(prev => prev ? { ...prev, discount_code: e.target.value } : null)}
                           className={INPUT_CLS}
                         />
                       </div>
@@ -453,7 +471,7 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                           type="text"
                           placeholder="e.g. Shop Now"
                           value={preview.wa_button_text}
-                          onChange={(e) => setPreview({ ...preview, wa_button_text: e.target.value })}
+                          onChange={(e) => setPreview(prev => prev ? { ...prev, wa_button_text: e.target.value } : null)}
                           className={INPUT_CLS}
                         />
                       </div>
@@ -463,7 +481,7 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                           type="url"
                           placeholder="e.g. https://store.com/sale"
                           value={preview.wa_button_url}
-                          onChange={(e) => setPreview({ ...preview, wa_button_url: e.target.value })}
+                          onChange={(e) => setPreview(prev => prev ? { ...prev, wa_button_url: e.target.value } : null)}
                           className={INPUT_CLS}
                         />
                       </div>
@@ -480,7 +498,7 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                   </p>
                   <EmailComposerSection
                     value={preview.email}
-                    onChange={(email) => setPreview({ ...preview, email })}
+                    onChange={(email) => setPreview(prev => prev ? { ...prev, email } : null)}
                     campaignContext={`${preview.festival} — ${preview.name}`}
                     whatsappCaption={preview.message_template}
                     showAIGenerate
@@ -524,11 +542,12 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                     setBrandGuidelines(found?.content ?? '');
                     setNewLabel('');
                   }}
-                  className={`${INPUT_CLS} cursor-pointer`}
+                  className={`${INPUT_CLS} cursor-pointer appearance-none`}
+                  style={SELECT_ARROW_STYLE}
                 >
-                  <option value="">Select a preset…</option>
+                  <option value="" className="bg-[#1A2847]">Select a preset…</option>
                   {guidelines.map((g) => (
-                    <option key={g.id} value={g.label}>{g.label}</option>
+                    <option key={g.id} value={g.label} className="bg-[#1A2847]">{g.label}</option>
                   ))}
                 </select>
                 <textarea

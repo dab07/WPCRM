@@ -56,6 +56,11 @@ export function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignMo
         }))
       : [],
   });
+  const [waCampaignType, setWaCampaignType] = useState(campaign.wa_campaign_type || 'standard');
+  const [discountPercentage, setDiscountPercentage] = useState(campaign.discount_percentage?.toString() || '');
+  const [discountCode, setDiscountCode] = useState(campaign.discount_code || '');
+  const [waButtonText, setWaButtonText] = useState(campaign.wa_button_text || '');
+  const [waButtonUrl, setWaButtonUrl] = useState(campaign.wa_button_url || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -141,6 +146,11 @@ export function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignMo
           email_subject: sendEmail ? email.subject : null,
           email_body: sendEmail ? email.body : null,
           email_attachments: sendEmail ? uploadedAttachments : [],
+          wa_campaign_type: showWhatsApp ? waCampaignType : campaign.wa_campaign_type,
+          discount_percentage: showWhatsApp && waCampaignType === 'discount' && discountPercentage ? Number(discountPercentage) : null,
+          discount_code: showWhatsApp && waCampaignType === 'discount' ? discountCode : null,
+          wa_button_text: showWhatsApp && waCampaignType === 'url_button' ? waButtonText : null,
+          wa_button_url: showWhatsApp && waCampaignType === 'url_button' ? waButtonUrl : null,
         }),
       });
 
@@ -274,6 +284,30 @@ export function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignMo
                 </label>
               </div>
 
+              {/* Campaign Type */}
+              <div>
+                <label className="text-[10px] font-bold text-[#8A96B0] uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5" style={{ fontFamily: 'Space Mono, monospace' }}>
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  CAMPAIGN TYPE
+                </label>
+                <select
+                  value={waCampaignType}
+                  onChange={(e) => setWaCampaignType(e.target.value as any)}
+                  className="w-full px-0 py-3 border-b border-[#3B5BAD]/40 focus:border-[#F7C31A] bg-[#1A2847]/50 text-white transition-colors text-[13px] focus:outline-none rounded-none cursor-pointer appearance-none"
+                  style={{ 
+                    fontFamily: 'Inter, sans-serif',
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23F7C31A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                    backgroundPosition: 'right 0px center',
+                    backgroundRepeat: 'no-repeat',
+                    paddingRight: '24px'
+                  }}
+                >
+                  <option value="standard" className="bg-[#1A2847]">Standard Message</option>
+                  <option value="discount" className="bg-[#1A2847]">Discount Campaign (with Quick Reply code)</option>
+                  <option value="url_button" className="bg-[#1A2847]">URL Button Campaign</option>
+                </select>
+              </div>
+
               {/* Caption */}
               <div>
                 <label className="text-[10px] font-bold text-[#8A96B0] uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5" style={{ fontFamily: 'Space Mono, monospace' }}>
@@ -288,6 +322,60 @@ export function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignMo
                   style={{ fontFamily: 'Inter, sans-serif', lineHeight: 1.6 }}
                 />
               </div>
+
+              {waCampaignType === 'discount' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-[#8A96B0] uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5" style={{ fontFamily: 'Space Mono, monospace' }}>DISCOUNT PERCENTAGE</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 20"
+                      value={discountPercentage}
+                      onChange={(e) => setDiscountPercentage(e.target.value)}
+                      className="w-full px-0 py-2.5 border-b border-[#3B5BAD]/40 bg-transparent text-white focus:outline-none focus:border-[#F7C31A] transition-colors text-[13px]"
+                      style={{ fontFamily: 'Inter, sans-serif' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-[#8A96B0] uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5" style={{ fontFamily: 'Space Mono, monospace' }}>DISCOUNT CODE</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. SUMMER20"
+                      value={discountCode}
+                      onChange={(e) => setDiscountCode(e.target.value)}
+                      className="w-full px-0 py-2.5 border-b border-[#3B5BAD]/40 bg-transparent text-white focus:outline-none focus:border-[#F7C31A] transition-colors text-[13px]"
+                      style={{ fontFamily: 'Inter, sans-serif' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {waCampaignType === 'url_button' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-[#8A96B0] uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5" style={{ fontFamily: 'Space Mono, monospace' }}>BUTTON TEXT</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Shop Now"
+                      value={waButtonText}
+                      onChange={(e) => setWaButtonText(e.target.value)}
+                      className="w-full px-0 py-2.5 border-b border-[#3B5BAD]/40 bg-transparent text-white focus:outline-none focus:border-[#F7C31A] transition-colors text-[13px]"
+                      style={{ fontFamily: 'Inter, sans-serif' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-[#8A96B0] uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5" style={{ fontFamily: 'Space Mono, monospace' }}>BUTTON URL</label>
+                    <input
+                      type="url"
+                      placeholder="e.g. https://store.com/sale"
+                      value={waButtonUrl}
+                      onChange={(e) => setWaButtonUrl(e.target.value)}
+                      className="w-full px-0 py-2.5 border-b border-[#3B5BAD]/40 bg-transparent text-white focus:outline-none focus:border-[#F7C31A] transition-colors text-[13px]"
+                      style={{ fontFamily: 'Inter, sans-serif' }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

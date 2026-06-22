@@ -104,12 +104,12 @@ export class GeminiService {
       if (!config.gemini.apiKey) {
         throw new GeminiServiceError('GEMINI_API_KEY is required');
       }
-      
+
       this.client = new GoogleGenAI({
         apiKey: config.gemini.apiKey
       });
     }
-    
+
     return this.client;
   }
 
@@ -117,39 +117,27 @@ export class GeminiService {
     operation: () => Promise<T>,
     operationName: string
   ): Promise<T> {
-    let lastError: Error | null = null;
-    
-    for (let attempt = 0; attempt <= this.retries; attempt++) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-        
-        try {
-          const result = await operation();
-          clearTimeout(timeoutId);
-          return result;
-        } catch (error) {
-          clearTimeout(timeoutId);
-          throw error;
-        }
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        
-        if (attempt < this.retries) {
-          // Exponential backoff
-          const delay = Math.pow(2, attempt) * 1000;
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue;
-        }
-      }
-    }
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-    console.error(`[Gemini Service] ${operationName} failed after retries:`, lastError);
-    throw new GeminiServiceError(
-      `${operationName} failed after ${this.retries} retries: ${lastError?.message}`,
-      undefined,
-      lastError || undefined
-    );
+      try {
+        const result = await operation();
+        clearTimeout(timeoutId);
+        return result;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
+      }
+    } catch (error) {
+      const lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`[Gemini Service] ${operationName} failed:`, lastError);
+      throw new GeminiServiceError(
+        `${operationName} failed: ${lastError.message}`,
+        undefined,
+        lastError
+      );
+    }
   }
 
   /**
@@ -172,7 +160,7 @@ export class GeminiService {
             }
           ]
         });
-      
+
         const generatedText = response.text;
 
         if (!generatedText) {
@@ -188,7 +176,7 @@ export class GeminiService {
         const data = JSON.parse(jsonMatch[0]);
         return data;
       }, 'extractBusinessCardFromText');
-      
+
       return {
         success: true,
         data: result,
@@ -245,7 +233,7 @@ export class GeminiService {
         const data = JSON.parse(jsonMatch[0]);
         return data;
       }, 'extractBusinessCardFromImage');
-      
+
       return {
         success: true,
         data: result,
@@ -260,7 +248,7 @@ export class GeminiService {
     }
   }
 
- 
+
   async generateAIResponse(
     customerMessage: string,
     conversationHistory: string[] = []
@@ -335,9 +323,9 @@ Points to remeber befopre generating response
     try {
       const result = await this.executeWithRetry(async () => {
         const defaultPrompt = 'Generate a brief, engaging 20-30 word message about this Instagram reel to share with customers via WhatsApp. Include the reel link and make it sound natural and exciting.';
-        
+
         const prompt = customPrompt || defaultPrompt;
-        
+
         const contextInfo = `
 Instagram Reel URL: ${reelUrl}
 Caption: ${caption}
@@ -433,7 +421,7 @@ Hashtags: ${hashtags.join(', ')}`;
         const analysis = JSON.parse(jsonMatch[0]);
         return analysis;
       }, 'analyzeInstagramContent');
-      
+
       return {
         success: true,
         data: result
@@ -485,7 +473,7 @@ Festival context: ${config.theme ?? config.campaignName}`;
       }
 
       const contents = [{ role: 'user', parts: userParts }];
-      const generationConfig = { 
+      const generationConfig = {
         responseModalities: ['IMAGE', 'TEXT'],
         imageConfig: { aspectRatio: '1:1' }
       };
@@ -533,38 +521,38 @@ Festival context: ${config.theme ?? config.campaignName}`;
     confidence: number;
   } {
     const lowerMessage = message.toLowerCase();
-    
+
     // Simple keyword-based intent detection
-    if (lowerMessage.includes('hi') || lowerMessage.includes('hello') || lowerMessage.includes('hey') || 
-        lowerMessage.includes('good morning') || lowerMessage.includes('good afternoon') || 
-        lowerMessage.includes('good evening') || lowerMessage.includes('greetings')) {
+    if (lowerMessage.includes('hi') || lowerMessage.includes('hello') || lowerMessage.includes('hey') ||
+      lowerMessage.includes('good morning') || lowerMessage.includes('good afternoon') ||
+      lowerMessage.includes('good evening') || lowerMessage.includes('greetings')) {
       return { intent: 'greeting', confidence: 0.95 };
     }
-    
+
     if (lowerMessage.includes('call') && (lowerMessage.includes('schedule') || lowerMessage === 'call')) {
       return { intent: 'schedule_call', confidence: 0.9 };
     }
-    
+
     if (lowerMessage.includes('meeting') && (lowerMessage.includes('schedule') || lowerMessage === 'meeting')) {
       return { intent: 'schedule_meeting', confidence: 0.9 };
     }
-    
+
     if (lowerMessage.includes('expert') || lowerMessage.includes('specialist')) {
       return { intent: 'talk_to_expert', confidence: 0.9 };
     }
-    
+
     if (lowerMessage.includes('lead') || lowerMessage.includes('business card') || lowerMessage.includes('visiting card')) {
       return { intent: 'business_card', confidence: 0.95 };
     }
-    
+
     if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('quote')) {
       return { intent: 'pricing_inquiry', confidence: 0.9 };
     }
-    
+
     if (lowerMessage.includes('help') || lowerMessage.includes('support')) {
       return { intent: 'support_request', confidence: 0.85 };
     }
-    
+
     return { intent: 'general_inquiry', confidence: 0.6 };
   }
 
@@ -575,7 +563,7 @@ Festival context: ${config.theme ?? config.campaignName}`;
     try {
       const result = await this.executeWithRetry(async () => {
         const client = this.getClient();
-        
+
         const systemPrompt = `You are ZavopsAI — an intelligent campaign strategist embedded inside a
 multi-tenant marketing automation platform for e-commerce brands.
 
@@ -680,9 +668,8 @@ Then return ONLY this JSON matching the structure:
 
         const response = await client.models.generateContent({
           model: externalServicesConfig.gemini.model,
-          systemInstruction: {
-            role: "system",
-            parts: [{ text: systemPrompt }]
+          config: {
+            systemInstruction: systemPrompt
           },
           contents: [
             {
@@ -697,8 +684,9 @@ Then return ONLY this JSON matching the structure:
           throw new GeminiServiceError('No response from Gemini');
         }
 
-        const jsonMatch = generatedText.match(/\{[\\s\\S]*\}/);
+        const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
+          console.error('[Gemini Raw Output]:', generatedText);
           throw new GeminiServiceError('No JSON found in response');
         }
 

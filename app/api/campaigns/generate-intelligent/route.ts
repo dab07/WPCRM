@@ -13,12 +13,12 @@ export async function POST(request: NextRequest) {
       console.warn("Omnisend service not available, using mock data for Omnisend.");
     }
 
-    // Fetch Shopify data
+    // Fetch Shopify data safely so missing scopes don't break the whole feature
     const [products, customers, orders, abandonedCarts] = await Promise.all([
-      shopifyService.getProducts(),
-      shopifyService.getCustomers(),
-      shopifyService.getOrders(),
-      shopifyService.getAbandonedCarts()
+      shopifyService.getProducts().catch(e => { console.warn('Failed to fetch products:', e.message); return []; }),
+      shopifyService.getCustomers().catch(e => { console.warn('Failed to fetch customers:', e.message); return []; }),
+      shopifyService.getOrders().catch(e => { console.warn('Failed to fetch orders:', e.message); return []; }),
+      shopifyService.getAbandonedCarts().catch(e => { console.warn('Failed to fetch abandoned carts:', e.message); return []; })
     ]);
 
     // Fetch Omnisend data if available

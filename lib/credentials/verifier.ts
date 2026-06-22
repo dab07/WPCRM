@@ -10,6 +10,7 @@
 
 import { createGallaboxService } from '../services/external/GallaboxService';
 import { createOmnisendService } from '../services/external/OmnisendService';
+import { ShopifyService } from '../services/external/ShopifyService';
 import type { PlatformName } from './repo';
 
 // ---------------------------------------------------------------------------
@@ -90,8 +91,16 @@ export async function verifyPlatformCredential(
         return { success: result.success, ...(result.error ? { error: result.error } : {}) };
       }
 
-      case 'shopify':
-        return { success: false, error: 'Verification not implemented for shopify' };
+      case 'shopify': {
+        const svc = new ShopifyService(
+          plaintext['shopDomain'] ?? '',
+          undefined,
+          plaintext['clientId'] ?? '',
+          plaintext['clientSecret'] ?? ''
+        );
+        const result = await withTimeout(svc.testConnection());
+        return { success: result.success, ...(result.error ? { error: result.error } : {}) };
+      }
 
       case 'meta_ads':
         return { success: false, error: 'Verification not implemented for meta_ads' };

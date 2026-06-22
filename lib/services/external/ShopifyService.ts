@@ -82,22 +82,75 @@ export class ShopifyServiceError extends Error {
 
 export class ShopifyService {
   private readonly shopDomain: string;
-  // Shopify Custom Apps use a static Admin API access token — not OAuth client_credentials.
-  // The token is the value of SHOPIFY_SECRET from the Custom App install page.
-  private readonly accessToken: string;
+  private accessToken: string | null;
+  private readonly clientId?: string;
+  private readonly clientSecret?: string;
   private readonly baseUrl: string;
   private readonly timeout: number;
   private readonly retries: number;
 
-  constructor(shopDomain?: string, accessToken?: string) {
+  constructor(shopDomain?: string, accessToken?: string, clientId?: string, clientSecret?: string) {
     this.shopDomain  = shopDomain  ?? config.shopify.shopDomain;
-    this.accessToken = accessToken ?? config.shopify.clientSecret; // SHOPIFY_SECRET = Admin API access token
+    this.clientId    = clientId ?? config.shopify.clientId;
+    this.clientSecret = clientSecret ?? config.shopify.clientSecret;
+    // For legacy custom apps, clientSecret was used as the static Admin API token.
+    // If no OAuth clientId is provided but a secret is, fallback to using it as the token.
+    this.accessToken = accessToken ?? (!this.clientId && this.clientSecret ? this.clientSecret : null);
     this.baseUrl     = `https://${this.shopDomain}/admin/api/2025-01`;
     this.timeout     = externalServicesConfig.shopify.timeout;
     this.retries     = externalServicesConfig.shopify.retries;
   }
 
+  async requestAccessToken(): Promise<string> {
+    if (!this.clientId || !this.clientSecret) {
+      throw new ShopifyServiceError('Client ID and Client Secret are required for OAuth token exchange');
+    }
+
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const res = await fetch(`https://${this.shopDomain}/admin/oauth/access_token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          grant_type: 'client_credentials',
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        throw new ShopifyServiceError(`OAuth failed: ${res.status} ${res.statusText}`, res.status);
+      }
+
+      const data = await res.json() as { access_token: string; expires_in: number };
+      this.accessToken = data.access_token;
+      return this.accessToken;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
+  }
+
+  async testConnection(): Promise<{ success: boolean; error?: string }> {
+    try {
+      await this.requestAccessToken();
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+    }
+  }
+
   private async fetchWithRetry<T>(path: string): Promise<T> {
+    if (!this.accessToken) {
+      await this.requestAccessToken();
+    }
+
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= this.retries; attempt++) {
@@ -107,7 +160,7 @@ export class ShopifyService {
       try {
         const res = await fetch(`${this.baseUrl}${path}`, {
           headers: {
-            'X-Shopify-Access-Token': this.accessToken,
+            'X-Shopify-Access-Token': this.accessToken!,
             'Content-Type': 'application/json',
           },
           signal: controller.signal,

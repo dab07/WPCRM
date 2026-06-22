@@ -809,6 +809,8 @@ Return only the enhanced message, no explanations.`;
     wa_button_url?: string;
     discount_code?: string;
     discount_percentage?: number;
+    channel?: 'whatsapp' | 'email' | 'both';
+    festival?: string;
   }) {
     try {
       let initialStatus = 'draft';
@@ -836,6 +838,8 @@ Return only the enhanced message, no explanations.`;
           wa_button_url: campaignData.wa_button_url || null,
           discount_code: campaignData.discount_code || null,
           discount_percentage: campaignData.discount_percentage || null,
+          channel: campaignData.channel || null,
+          festival: campaignData.festival || null,
           sent_count: 0,
           delivered_count: 0,
           read_count: 0

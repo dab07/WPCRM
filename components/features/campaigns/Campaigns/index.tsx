@@ -162,6 +162,24 @@ function CampaignRow({ campaign, onClick, generatingIds }: CampaignRowProps) {
             {campaign.festival && campaign.festival !== campaign.name && (
               <p className="font-mono text-[10px] text-brand-muted truncate">{campaign.name}</p>
             )}
+            {campaign.wa_campaign_type && campaign.wa_campaign_type !== 'standard' && (
+              <div className="mt-1 flex items-center gap-1.5">
+                <span className="px-1 py-0.5 border border-brand-yellow/30 bg-brand-yellow/10 text-brand-yellow rounded-[2px] text-[9px] uppercase tracking-wider font-mono leading-none">
+                  {campaign.wa_campaign_type === 'discount' ? 'Discount' : 'URL Button'}
+                </span>
+                {campaign.wa_campaign_type === 'discount' && (campaign.discount_code || campaign.discount_percentage) && (
+                  <span className="font-mono text-[9px] text-brand-muted truncate leading-none mt-0.5">
+                    {campaign.discount_percentage ? `${campaign.discount_percentage}% ` : ''}
+                    {campaign.discount_code ? `Code: ${campaign.discount_code}` : ''}
+                  </span>
+                )}
+                {campaign.wa_campaign_type === 'url_button' && campaign.wa_button_text && (
+                  <span className="font-mono text-[9px] text-brand-muted truncate leading-none mt-0.5">
+                    {campaign.wa_button_text}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           {isGenerating && (
             <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-yellow shrink-0" />
@@ -373,8 +391,41 @@ function CampaignDetailPanel({
                 </div>
                 {campaign.message_template && (
                   <div className="bg-brand-slate border border-[rgba(59,91,173,0.18)] rounded-[4px] p-4">
-                    <p className="label-eyebrow text-brand-muted mb-2">Caption</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="label-eyebrow text-brand-muted mb-0">Caption</p>
+                      {campaign.wa_campaign_type && campaign.wa_campaign_type !== 'standard' && (
+                        <span className="px-1.5 py-0.5 bg-brand-yellow/10 text-brand-yellow rounded text-[9px] uppercase tracking-wider border border-brand-yellow/20">
+                          {campaign.wa_campaign_type === 'discount' ? 'Discount' : 'URL Button'}
+                        </span>
+                      )}
+                    </div>
                     <p className="font-body text-[13px] text-brand-offwhite whitespace-pre-wrap leading-relaxed">{campaign.message_template}</p>
+                    
+                    {campaign.wa_campaign_type === 'discount' && (campaign.discount_code || campaign.discount_percentage) && (
+                      <div className="mt-3 pt-3 border-t border-[rgba(59,91,173,0.18)] grid grid-cols-2 gap-3">
+                        {campaign.discount_percentage && (
+                          <div>
+                            <p className="font-mono text-[9px] uppercase tracking-label text-brand-muted mb-1">Discount %</p>
+                            <p className="font-body text-[13px] text-brand-yellow font-medium">{campaign.discount_percentage}%</p>
+                          </div>
+                        )}
+                        {campaign.discount_code && (
+                          <div>
+                            <p className="font-mono text-[9px] uppercase tracking-label text-brand-muted mb-1">Code</p>
+                            <p className="font-mono text-[13px] text-brand-offwhite tracking-wider">{campaign.discount_code}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {campaign.wa_campaign_type === 'url_button' && (campaign.wa_button_text || campaign.wa_button_url) && (
+                      <div className="mt-3 pt-3 border-t border-[rgba(59,91,173,0.18)]">
+                        <p className="font-mono text-[9px] uppercase tracking-label text-brand-muted mb-1">Button</p>
+                        <a href={campaign.wa_button_url || '#'} target="_blank" rel="noopener noreferrer" className="inline-block px-3 py-1.5 bg-[rgba(59,91,173,0.15)] border border-[rgba(59,91,173,0.3)] rounded-[4px] font-body text-[12px] text-brand-offwhite hover:text-brand-yellow hover:border-brand-yellow/50 transition-colors">
+                          {campaign.wa_button_text || 'Open Link'}
+                        </a>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
