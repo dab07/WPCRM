@@ -87,11 +87,8 @@ export class GeminiServiceError extends Error {
 export class GeminiService {
   private client: GoogleGenAI | null = null;
   private readonly timeout: number;
-  private readonly retries: number;
-
   constructor() {
     this.timeout = externalServicesConfig.gemini.timeout;
-    this.retries = externalServicesConfig.gemini.retries;
   }
 
   private getClient(): GoogleGenAI {
@@ -113,7 +110,7 @@ export class GeminiService {
     return this.client;
   }
 
-  private async executeWithRetry<T>(
+  private async executeWithTimeout<T>(
     operation: () => Promise<T>,
     operationName: string
   ): Promise<T> {
@@ -145,7 +142,7 @@ export class GeminiService {
    */
   async extractBusinessCardFromText(text: string): Promise<GeminiResponse<BusinessCardData>> {
     try {
-      const result = await this.executeWithRetry(async () => {
+      const result = await this.executeWithTimeout(async () => {
         const client = this.getClient();
         const response = await client.models.generateContent({
           model: externalServicesConfig.gemini.model,
@@ -196,7 +193,7 @@ export class GeminiService {
    */
   async extractBusinessCardFromImage(imageBase64: string): Promise<GeminiResponse<BusinessCardData>> {
     try {
-      const result = await this.executeWithRetry(async () => {
+      const result = await this.executeWithTimeout(async () => {
         const client = this.getClient();
         const response = await client.models.generateContent({
           model: externalServicesConfig.gemini.model,
@@ -257,7 +254,7 @@ export class GeminiService {
     intent: string;
   }>> {
     try {
-      const result = await this.executeWithRetry(async () => {
+      const result = await this.executeWithTimeout(async () => {
         const context = conversationHistory.length > 0
           ? `Previous conversation:\n${conversationHistory.join('\n')}\n\n`
           : '';
@@ -321,7 +318,7 @@ Points to remeber befopre generating response
     customPrompt?: string
   ): Promise<GeminiResponse<string>> {
     try {
-      const result = await this.executeWithRetry(async () => {
+      const result = await this.executeWithTimeout(async () => {
         const defaultPrompt = 'Generate a brief, engaging 20-30 word message about this Instagram reel to share with customers via WhatsApp. Include the reel link and make it sound natural and exciting.';
 
         const prompt = customPrompt || defaultPrompt;
@@ -382,7 +379,7 @@ ${prompt}`;
     targetAudience: string[];
   }>> {
     try {
-      const result = await this.executeWithRetry(async () => {
+      const result = await this.executeWithTimeout(async () => {
         const prompt = `Analyze this Instagram content and return ONLY a JSON object with these fields:
 - categories: array of content categories (e.g., ["lifestyle", "business", "entertainment"])
 - sentiment: "positive", "neutral", or "negative"
@@ -561,7 +558,7 @@ Festival context: ${config.theme ?? config.campaignName}`;
    */
   async generateIntelligentCampaign(params: IntelligentCampaignParams): Promise<GeminiResponse<any>> {
     try {
-      const result = await this.executeWithRetry(async () => {
+      const result = await this.executeWithTimeout(async () => {
         const client = this.getClient();
 
         const systemPrompt = `You are ZavopsAI — an intelligent campaign strategist embedded inside a

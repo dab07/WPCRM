@@ -3,7 +3,6 @@
 import { AgenticDashboard } from '../../features/agentic/AgenticDashboard';
 import { ContactsPanel } from '../../features/contacts/ContactsPanel';
 import { CampaignsPanel } from '../../features/campaigns';
-import { ShopifyPanel } from '../../features/shopify';
 import { IntegrationsPanel } from '../../features/integrations/IntegrationsPanel';
 import { IntelligentPanel } from '../../features/intelligent/IntelligentPanel';
 import type { Tab } from './types';
@@ -19,7 +18,6 @@ export function MainContent({ activeTab }: MainContentProps) {
       {activeTab === 'intelligent' && <IntelligentPanel />}
       {activeTab === 'contacts' && <ContactsPanel />}
       {activeTab === 'campaigns' && <CampaignsPanel />}
-      {activeTab === 'shopify' && <ShopifyPanel />}
       {activeTab === 'integrations' && <IntegrationsPanel />}
     </main>
   );

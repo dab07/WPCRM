@@ -17,7 +17,7 @@ import {
 import { ApprovalModal } from './ApprovalModal';
 import { CreateCampaignModal } from './CreateCampaignModal';
 import { EditCampaignModal } from './EditCampaignModal';
-import { IntelligentCampaignTab } from './IntelligentCampaignTab';
+// import { IntelligentCampaignTab } from './IntelligentCampaignTab';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 interface Toast { id: string; message: string; type: 'success' | 'error' | 'info'; }
@@ -865,9 +865,11 @@ export function CampaignsPanel() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Generation failed');
       setCampaigns((prev) => prev.map((c) => c.id === campaignId ? (data.campaign as Campaign) : c));
+      setDetailCampaign((prev) => prev?.id === campaignId ? (data.campaign as Campaign) : prev);
       showToast(`Image generated for ${campaign.festival ?? campaign.name}`, 'success');
     } catch (err) {
       setCampaigns((prev) => prev.map((c) => c.id === campaignId ? { ...c, image_status: 'not_generated' } : c));
+      setDetailCampaign((prev) => prev?.id === campaignId ? { ...prev, image_status: 'not_generated' } : prev);
       showToast(err instanceof Error ? err.message : 'Image generation failed', 'error');
     } finally {
       setGeneratingIds((prev) => { const next = new Set(prev); next.delete(campaignId); return next; });
