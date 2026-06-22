@@ -1,19 +1,10 @@
 import { NextResponse } from 'next/server';
 import { generateCustomerJourneyStrategy, IntelligentCampaignParams } from '@/lib/services/external/GeminiService';
 import { ShopifyService } from '@/lib/services/external/ShopifyService';
-import { getOmnisendService } from '@/lib/services/external/OmnisendService';
-import { OpportunityEngine } from '@/lib/services/intelligence/OpportunityEngine';
 
 export async function POST() {
   try {
     const shopifyService = new ShopifyService();
-    let omnisendService;
-    try {
-      omnisendService = await getOmnisendService();
-    } catch (e) {
-      console.warn("Omnisend service not available, using mock data for Omnisend.");
-    }
-
     // Fetch Shopify data safely so missing scopes don't break the whole feature
     const [customers, orders] = await Promise.all([
       shopifyService.getCustomers().catch(e => { console.warn('Failed to fetch customers:', e.message); return []; }),

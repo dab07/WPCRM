@@ -151,7 +151,7 @@ export class WeatherScanner implements SignalScanner {
     }));
   }
 
-  private calculateImpact(clientId: string, type: string): number {
+  private calculateImpact(_clientId: string, _type: string): number {
     // Stub: in reality, this would query historical CRM data
     return Math.floor(Math.random() * 5000) + 1000;
   }

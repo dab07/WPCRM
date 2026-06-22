@@ -60,7 +60,7 @@ export class OpportunityEngine {
     try {
       // Create campaign assets using the Intelligence Orchestrator (which uses Gemini)
       // This is the equivalent of the PRD's Brief & Copy engines
-      const result = await this.orchestrator.createCampaignBrief(opportunity);
+      await this.orchestrator.createCampaignBrief(opportunity);
       
       console.log(`Successfully generated campaign brief and assets for opportunity ${opportunity.id}`);
       

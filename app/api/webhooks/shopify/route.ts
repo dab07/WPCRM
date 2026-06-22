@@ -8,7 +8,7 @@ export async function POST(request: Request) {
 
     const topic = request.headers.get('x-shopify-topic');
     const shop = request.headers.get('x-shopify-shop-domain');
-    const body = await request.json();
+    // const body = await request.json();
 
     console.log(`Received Shopify webhook: ${topic} for shop: ${shop}`);
 

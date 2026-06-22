@@ -66,13 +66,13 @@ export class LocalEventScanner implements SignalScanner {
     return opportunities;
   }
 
-  private getAffinityScore(clientId: string, eventType: string): number {
+  private getAffinityScore(_clientId: string, _eventType: string): number {
     // Stub: look up event_type x product_category affinity matrix
     // For now, return a random score between 0.4 and 0.9
     return 0.4 + (Math.random() * 0.5);
   }
 
-  private calculateImpact(clientId: string, eventType: string): number {
+  private calculateImpact(_clientId: string, _eventType: string): number {
     // Stub
     return Math.floor(Math.random() * 3000) + 500;
   }
