@@ -5,7 +5,7 @@ import { getOmnisendService } from '@/lib/services/external/OmnisendService';
 import { OpportunityEngine } from '@/lib/services/intelligence/OpportunityEngine';
 import { supabaseAdmin } from '../../../../supabase/supabase';
 
-export async function POST(request: Request) {
+export async function POST() {
   try {
     const shopifyService = new ShopifyService();
     let omnisendService;
@@ -66,8 +66,6 @@ export async function POST(request: Request) {
     // Fetch the brand guidelines for "Zavops" (or the active brand's guidelines)
     let brandGuidelinesText = "";
     try {
-      const { data: { session } } = await supabaseAdmin.auth.getSession();
-      const token = session?.access_token;
 
       const { data: guidelines } = await supabaseAdmin
         .from('brand_guidelines')

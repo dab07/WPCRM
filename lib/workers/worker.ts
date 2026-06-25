@@ -13,7 +13,7 @@ export const opportunityWorker = new Worker(
 
     if (job.name === 'lifecycle-scan') {
       // Run phase 1: sync and scan
-      const result = await runLifecycleScan(job.data);
+      const result = await runLifecycleScan();
       console.log(`Lifecycle scan completed. Found ${result.opportunities?.length || 0} opportunities.`);
       return result;
     }
@@ -29,7 +29,7 @@ export const opportunityWorker = new Worker(
     
     throw new Error(`Unknown job type: ${job.name}`);
   },
-  { connection }
+  { connection: connection as any }
 );
 
 opportunityWorker.on('completed', (job) => {

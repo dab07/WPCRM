@@ -9,7 +9,7 @@ export class OpenWeatherService {
     return apiKey;
   }
 
-  async getCurrentWeather(brandId: string, city: string) {
+  async getCurrentWeather(_brandId: string, city: string) {
     const apiKey = this.getApiKey();
     const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric`;
     const res = await fetch(url);
@@ -17,7 +17,7 @@ export class OpenWeatherService {
     return res.json();
   }
 
-  async getForecast(brandId: string, city: string) {
+  async getForecast(_brandId: string, city: string) {
     const apiKey = this.getApiKey();
     const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric`;
     const res = await fetch(url);

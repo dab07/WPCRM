@@ -166,17 +166,17 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
 
       let fileUrl = '';
       let logoUrl = '';
-      let currentBrandLabel = '';
+
 
       if (saveForFuture && newLabel.trim()) {
         fileUrl = uploadedFileUrl;
         logoUrl = uploadedLogoUrl;
-        currentBrandLabel = newLabel.trim();
+
       } else {
         const found = guidelines.find((g) => g.label === selectedLabel);
         fileUrl = found?.file_url ?? '';
         logoUrl = found?.logo_url ?? '';
-        currentBrandLabel = selectedLabel;
+
       }
 
       const res = await fetch('/api/campaigns/generate-caption', {

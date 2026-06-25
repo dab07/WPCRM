@@ -1,6 +1,6 @@
 import { ShopifyService } from '../services/external/ShopifyService';
 
-export async function runLifecycleScan(data: any) {
+export async function runLifecycleScan() {
   const shopifyService = new ShopifyService();
   
   // 1. Sync data (Phase 1 part 1)
