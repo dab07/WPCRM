@@ -21,7 +21,8 @@ export async function POST(request: NextRequest) {
       discount_code,
       discount_percentage,
       channel,
-      festival
+      festival,
+      brand_label
     } = body;
 
     // Validate required fields
@@ -73,7 +74,8 @@ export async function POST(request: NextRequest) {
       discount_code,
       discount_percentage,
       channel,
-      festival
+      festival,
+      brand_label
     });
 
     return NextResponse.json({

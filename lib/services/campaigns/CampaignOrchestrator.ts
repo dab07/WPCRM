@@ -811,6 +811,7 @@ Return only the enhanced message, no explanations.`;
     discount_percentage?: number;
     channel?: 'whatsapp' | 'email' | 'both';
     festival?: string;
+    brand_label?: string;
   }) {
     try {
       let initialStatus = 'draft';
@@ -840,6 +841,7 @@ Return only the enhanced message, no explanations.`;
           discount_percentage: campaignData.discount_percentage || null,
           channel: campaignData.channel || null,
           festival: campaignData.festival || null,
+          brand_label: campaignData.brand_label || null,
           sent_count: 0,
           delivered_count: 0,
           read_count: 0

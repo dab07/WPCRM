@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from('brand_guidelines')
-      .select('id, label, content, file_url')
+      .select('id, label, content, file_url, logo_url')
       .in('brand_id', brandIds)
       .order('created_at', { ascending: false });
 
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { label, content, file_url } = await request.json();
+    const { label, content, file_url, logo_url } = await request.json();
 
     if (!label) {
       return NextResponse.json({ error: 'Label is required' }, { status: 400 });
@@ -84,8 +84,9 @@ export async function POST(request: NextRequest) {
         label,
         content: content || null,
         file_url: file_url || null,
+        logo_url: logo_url || null,
       })
-      .select('id, label, content, file_url')
+      .select('id, label, content, file_url, logo_url')
       .single();
 
     if (error) throw error;

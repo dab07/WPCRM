@@ -42,7 +42,7 @@ const CHANNEL_OPTIONS: ChannelOption[] = [
 // Upcoming channels (disabled — shown greyed out)
 const UPCOMING_CHANNELS = [
   { id: 'meta', label: 'Meta Ads', icon: <BarChart2 className="w-4 h-4 stroke-[1.5]" /> },
-  { id: 'sms',  label: 'SMS',      icon: <Smartphone  className="w-4 h-4 stroke-[1.5]" /> },
+  { id: 'sms', label: 'SMS', icon: <Smartphone className="w-4 h-4 stroke-[1.5]" /> },
 ];
 
 // ── Preview state ─────────────────────────────────────────────────────────────
@@ -85,17 +85,18 @@ const SELECT_ARROW_STYLE = {
 const LABEL_CLS = 'block font-mono text-[10px] uppercase tracking-label text-brand-muted mb-1.5';
 
 export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalProps) {
-  const [prompt,         setPrompt]         = useState('');
-  const [step,           setStep]           = useState<'prompt' | 'generating' | 'preview'>('prompt');
-  const [preview,        setPreview]        = useState<PreviewState | null>(null);
-  const [saving,         setSaving]         = useState(false);
-  const [error,          setError]          = useState('');
-  const [guidelines,     setGuidelines]     = useState<Array<{ id: string; label: string; content: string }>>([]);
-  const [selectedLabel,  setSelectedLabel]  = useState('');
-  const [brandGuidelines,setBrandGuidelines]= useState('');
-  const [newLabel,       setNewLabel]       = useState('');
-  const [saveForFuture,  setSaveForFuture]  = useState(false);
-  const [guidelineFile,  setGuidelineFile]  = useState<File | null>(null);
+  const [prompt, setPrompt] = useState('');
+  const [step, setStep] = useState<'prompt' | 'generating' | 'preview'>('prompt');
+  const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [guidelines, setGuidelines] = useState<Array<{ id: string; label: string; content: string; file_url?: string; logo_url?: string }>>([]);
+  const [selectedLabel, setSelectedLabel] = useState('');
+  const [brandGuidelines, setBrandGuidelines] = useState('');
+  const [newLabel, setNewLabel] = useState('');
+  const [saveForFuture, setSaveForFuture] = useState(false);
+  const [guidelineFile, setGuidelineFile] = useState<File | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
   useEffect(() => {
     const loadGuidelines = async () => {
@@ -126,26 +127,56 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
       const token = session?.access_token ?? 'anon';
 
       let uploadedFileUrl = '';
+      let uploadedLogoUrl = '';
       if (saveForFuture && newLabel.trim()) {
         if (guidelineFile) {
           const ext = guidelineFile.name.split('.').pop();
           const filePath = `${Math.random().toString(36).slice(2)}_${Date.now()}.${ext}`;
           const { error: uploadError } = await sb.storage.from('brand-guidelines').upload(filePath, guidelineFile);
           if (uploadError) {
-             console.error('Failed to upload guidelines file:', uploadError);
-             setError(`Failed to upload guidelines: ${uploadError.message}`);
-             setStep('prompt');
-             return;
+            console.error('Failed to upload guidelines file:', uploadError);
+            setError(`Failed to upload guidelines: ${uploadError.message}`);
+            setStep('prompt');
+            return;
           }
           const { data: { publicUrl } } = sb.storage.from('brand-guidelines').getPublicUrl(filePath);
           uploadedFileUrl = publicUrl;
         }
-        
+
+        if (logoFile) {
+          const ext = logoFile.name.split('.').pop();
+          const filePath = `logos/${Math.random().toString(36).slice(2)}_${Date.now()}.${ext}`;
+          const { error: uploadError } = await sb.storage.from('brand-guidelines').upload(filePath, logoFile);
+          if (uploadError) {
+            console.error('Failed to upload logo file:', uploadError);
+            setError(`Failed to upload logo: ${uploadError.message}`);
+            setStep('prompt');
+            return;
+          }
+          const { data: { publicUrl } } = sb.storage.from('brand-guidelines').getPublicUrl(filePath);
+          uploadedLogoUrl = publicUrl;
+        }
+
         await fetch('/api/campaigns/guidelines', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ label: newLabel.trim(), content: brandGuidelines, file_url: uploadedFileUrl })
+          body: JSON.stringify({ label: newLabel.trim(), content: brandGuidelines, file_url: uploadedFileUrl, logo_url: uploadedLogoUrl })
         }).catch(e => console.error('Failed to save guideline:', e));
+      }
+
+      let fileUrl = '';
+      let logoUrl = '';
+      let currentBrandLabel = '';
+
+      if (saveForFuture && newLabel.trim()) {
+        fileUrl = uploadedFileUrl;
+        logoUrl = uploadedLogoUrl;
+        currentBrandLabel = newLabel.trim();
+      } else {
+        const found = guidelines.find((g) => g.label === selectedLabel);
+        fileUrl = found?.file_url ?? '';
+        logoUrl = found?.logo_url ?? '';
+        currentBrandLabel = selectedLabel;
       }
 
       const res = await fetch('/api/campaigns/generate-caption', {
@@ -166,6 +197,8 @@ ${brandGuidelines ? `\nBrand guidelines: ${brandGuidelines}` : ''}
 
 Return ONLY valid JSON, no markdown, no explanation.`,
           festival: 'campaign',
+          fileUrl,
+          logoUrl,
         }),
       });
 
@@ -178,21 +211,21 @@ Return ONLY valid JSON, no markdown, no explanation.`,
 
       const parsed = JSON.parse(jsonMatch[0]);
       setPreview({
-        name:             parsed.name ?? prompt,
-        festival:         parsed.festival ?? parsed.name ?? prompt,
+        name: parsed.name ?? prompt,
+        festival: parsed.festival ?? parsed.name ?? prompt,
         message_template: parsed.message_template ?? '',
-        scheduled_at:     parsed.scheduled_at ?? '',
-        target_tags:      Array.isArray(parsed.target_tags) ? parsed.target_tags : [],
-        channel:          'whatsapp',
+        scheduled_at: parsed.scheduled_at ?? '',
+        target_tags: Array.isArray(parsed.target_tags) ? parsed.target_tags : [],
+        channel: 'whatsapp',
         email: {
-          subject:     parsed.email_subject ?? '',
-          body:        parsed.email_body ?? '',
+          subject: parsed.email_subject ?? '',
+          body: parsed.email_body ?? '',
           attachments: [],
         },
         wa_campaign_type: 'standard',
-        wa_button_text:   '',
-        wa_button_url:    '',
-        discount_code:    '',
+        wa_button_text: '',
+        wa_button_url: '',
+        discount_code: '',
         discount_percentage: '',
       });
       setStep('preview');
@@ -234,22 +267,23 @@ Return ONLY valid JSON, no markdown, no explanation.`,
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          name:              preview.name,
-          festival:          preview.festival,
-          message_template:  preview.message_template,
-          scheduled_at:      preview.scheduled_at,
-          target_tags:       preview.target_tags,
-          status:            'draft',
-          channel:           preview.channel,
-          send_email:        sendEmail,
-          email_subject:     sendEmail ? preview.email.subject : null,
-          email_body:        sendEmail ? preview.email.body    : null,
-          email_attachments: sendEmail ? uploadedAttachments   : [],
-          wa_campaign_type:  preview.wa_campaign_type,
-          wa_button_text:    preview.wa_button_text || null,
-          wa_button_url:     preview.wa_button_url || null,
-          discount_code:     preview.discount_code || null,
+          name: preview.name,
+          festival: preview.festival,
+          message_template: preview.message_template,
+          scheduled_at: preview.scheduled_at,
+          target_tags: preview.target_tags,
+          status: 'draft',
+          channel: preview.channel,
+          send_email: sendEmail,
+          email_subject: sendEmail ? preview.email.subject : null,
+          email_body: sendEmail ? preview.email.body : null,
+          email_attachments: sendEmail ? uploadedAttachments : [],
+          wa_campaign_type: preview.wa_campaign_type,
+          wa_button_text: preview.wa_button_text || null,
+          wa_button_url: preview.wa_button_url || null,
+          discount_code: preview.discount_code || null,
           discount_percentage: preview.discount_percentage ? Number(preview.discount_percentage) : null,
+          brand_label: selectedLabel || newLabel.trim() || null,
         }),
       });
       const data = await res.json();
@@ -263,7 +297,7 @@ Return ONLY valid JSON, no markdown, no explanation.`,
   };
 
   const showWhatsApp = preview?.channel === 'whatsapp' || preview?.channel === 'both';
-  const showEmail    = preview?.channel === 'email'    || preview?.channel === 'both';
+  const showEmail = preview?.channel === 'email' || preview?.channel === 'both';
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -532,7 +566,7 @@ Return ONLY valid JSON, no markdown, no explanation.`,
 
               {/* Brand Guidelines */}
               <div className="space-y-2">
-                <label className={LABEL_CLS}>Brand Guidelines</label>
+                <label className={LABEL_CLS}>Brand / Guidelines</label>
                 <select
                   value={selectedLabel}
                   onChange={(e) => {
@@ -545,7 +579,7 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                   className={`${INPUT_CLS} cursor-pointer appearance-none`}
                   style={SELECT_ARROW_STYLE}
                 >
-                  <option value="" className="bg-[#1A2847]">Select a preset…</option>
+                  <option value="" className="bg-[#1A2847]">Select a Brand…</option>
                   {guidelines.map((g) => (
                     <option key={g.id} value={g.label} className="bg-[#1A2847]">{g.label}</option>
                   ))}
@@ -557,7 +591,7 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                   rows={3}
                   className={`${INPUT_CLS} resize-none`}
                 />
-                
+
                 <div className="flex flex-col gap-2 mt-2">
                   <label className={LABEL_CLS}>Upload Guidelines Document (Optional)</label>
                   <input
@@ -581,10 +615,33 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                   />
                 </div>
 
+                <div className="flex flex-col gap-2 mt-2">
+                  <label className={LABEL_CLS}>Upload Brand Logo (Optional)</label>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 2 * 1024 * 1024) {
+                          setError('Logo file size must be less than 2MB');
+                          e.target.value = '';
+                          return;
+                        }
+                        setError('');
+                        setLogoFile(file);
+                      } else {
+                        setLogoFile(null);
+                      }
+                    }}
+                    className="text-[12px] text-brand-muted file:mr-4 file:py-2 file:px-4 file:rounded-[4px] file:border-0 file:text-[12px] file:font-semibold file:bg-brand-blue/10 file:text-brand-blue hover:file:bg-brand-blue/20"
+                  />
+                </div>
+
                 <div className="flex items-center gap-3 mt-3">
                   <input
                     type="text"
-                    placeholder="New label (optional)"
+                    placeholder="New Brand Name (optional)"
                     value={newLabel}
                     onChange={(e) => setNewLabel(e.target.value)}
                     className={`${INPUT_CLS} flex-1`}

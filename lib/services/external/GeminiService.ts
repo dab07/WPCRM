@@ -27,6 +27,7 @@ export interface IntelligentCampaignParams {
     max_discount_pct: number;
     voice: string;
     suppression_days: number;
+    brand_guidelines?: string;
   };
   products: {
     top: Array<{ title: string; price: string }>;
@@ -451,11 +452,14 @@ Hashtags: ${hashtags.join(', ')}`;
     try {
       const client = this.getClient();
 
-      const prompt = `Create a professional festive WhatsApp campaign image for Zavops — ${config.campaignName}.
+      const prompt = `Create a beautiful and professional WhatsApp campaign image for ${config.campaignName}.
 
-${config.brandGuidelines ?? `WHite Background, Title of campaign in bold and centered with a subtitle \`[Add Brand Guideline or provide more information for inovative campaign  generation]\``}
+Please adhere to the following brand guidelines. It is very important that the brand colors and typography take precedence over any default festival colors. For example, if the brand uses golden yellow, use that instead of traditional festival colors.
 
-Festival context: ${config.theme ?? config.campaignName}`;
+BRAND GUIDELINES:
+${config.brandGuidelines ?? `White Background, Title of campaign in bold and centered with a subtitle`}
+
+Festival/Campaign context: ${config.theme ?? config.campaignName}`;
 
       const model = 'gemini-2.5-flash-image';
 
@@ -470,7 +474,7 @@ Festival context: ${config.theme ?? config.campaignName}`;
           },
         });
         userParts.push({
-          text: `Above is the official Zavops logo. Use it exactly as provided — place it at the top center of the image without modification.\n\n${prompt}`,
+          text: `Above is the official brand logo. You MUST use this logo exactly as provided. Incorporate it seamlessly into the design according to the brand guidelines.\n\n${prompt}`,
         });
       } else {
         userParts.push({ text: prompt });
@@ -597,6 +601,7 @@ Product category: ${params.brand.category}
 Average repurchase cycle: ${params.brand.avg_repurchase_days} days
 Max discount allowed: ${params.brand.max_discount_pct}%
 Brand voice: ${params.brand.voice}
+${params.brand.brand_guidelines ? `Brand Guidelines:\n${params.brand.brand_guidelines}\n` : ''}
 Top 3 products by order volume:
 ${params.products.top.map((p, i) => `  ${i + 1}. ${p.title} — ${p.price}`).join('\\n')}
 
@@ -662,7 +667,7 @@ Then return ONLY this JSON matching the structure:
   },
   "content": {
     "email": { "subject_line_options": ["", "", ""], "preview_text": "", "headline": "", "body_paragraph_1": "", "body_paragraph_2": "", "cta_text": "", "urgency_footer": "" },
-    "whatsapp": { "wa_campaign_type": "standard | discount | url_button", "message_body": "", "cta_button_text": "", "cta_button_url": "", "media_suggestion": "" },
+    "whatsapp": { "wa_campaign_type": "standard | discount | url_button", "message_body": "MUST BE EXACTLY 50-60 WORDS LONG", "cta_button_text": "", "cta_button_url": "", "media_suggestion": "" },
     "sms": { "message": "", "character_count": 0 },
     "meta_ad": { "headline": "", "primary_text": "", "description": "", "cta_button": "SHOP_NOW | LEARN_MORE | GET_OFFER" }
   },

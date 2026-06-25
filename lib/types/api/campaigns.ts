@@ -44,6 +44,7 @@ export interface Campaign {
   wa_button_url?: string | null;
   discount_code?: string | null;
   discount_percentage?: number | null;
+  brand_label?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -68,6 +69,7 @@ export interface CreateCampaignRequest {
   wa_button_url?: string;
   discount_code?: string;
   discount_percentage?: number;
+  brand_label?: string;
 }
 
 export interface UpdateCampaignRequest {
@@ -91,6 +93,7 @@ export interface UpdateCampaignRequest {
   wa_button_url?: string | null;
   discount_code?: string | null;
   discount_percentage?: number | null;
+  brand_label?: string | null;
 }
 
 // Helper: derive quarter from a date string

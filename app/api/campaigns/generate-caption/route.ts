@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GeminiService } from '../../../../lib/services/external/GeminiService';
+import { GeminiService } from '@/lib/services/external/GeminiService';
+import { supabaseAdmin } from '../../../../supabase/supabase';
 
 /**
  * POST /api/campaigns/generate-caption
@@ -7,13 +8,54 @@ import { GeminiService } from '../../../../lib/services/external/GeminiService';
  */
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, festival } = await request.json() as {
+    let { prompt, festival, fileUrl, logoUrl, campaignId } = await request.json() as {
       prompt: string;
       festival?: string;
+      fileUrl?: string;
+      logoUrl?: string;
+      campaignId?: string;
     };
 
     if (!prompt?.trim()) {
       return NextResponse.json({ error: 'prompt is required' }, { status: 400 });
+    }
+
+    // If a campaignId is provided but no fileUrl/logoUrl, fetch from DB
+    if (campaignId && (!fileUrl || !logoUrl)) {
+      const { data: campaign } = await supabaseAdmin
+        .from('campaigns')
+        .select('brand_label')
+        .eq('id', campaignId)
+        .single();
+        
+      if (campaign?.brand_label) {
+        const { data: guideline } = await supabaseAdmin
+          .from('brand_guidelines')
+          .select('file_url, logo_url')
+          .eq('label', campaign.brand_label)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        if (guideline) {
+          if (!fileUrl && guideline.file_url) fileUrl = guideline.file_url;
+          if (!logoUrl && guideline.logo_url) logoUrl = guideline.logo_url;
+        }
+      }
+    }
+
+    let fileContent = '';
+    if (fileUrl) {
+      try {
+        const fileRes = await fetch(fileUrl);
+        if (fileRes.ok) {
+          const text = await fileRes.text();
+          if (text) {
+            fileContent = text.slice(0, 10000); // Limit to 10k chars to avoid huge context blowup
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch fileUrl content:', err);
+      }
     }
 
     const gemini = new GeminiService();
@@ -22,6 +64,7 @@ export async function POST(request: NextRequest) {
 
 Festival / Campaign: ${festival ?? 'General'}
 User instructions: ${prompt}
+${logoUrl ? `Brand Logo URL: ${logoUrl}\n` : ''}${fileContent ? `\nReference Brand Guidelines Document:\n${fileContent}\n` : ''}
 
 Provide your response according to the exact JSON structure requested in the user instructions. Do NOT add any explanation, preamble, or markdown formatting. Output ONLY the JSON.`;
 

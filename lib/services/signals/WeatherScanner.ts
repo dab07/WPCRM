@@ -26,19 +26,10 @@ export class WeatherScanner implements SignalScanner {
   }
 
   async scan(clientId: string): Promise<Opportunity[]> {
-    // Dynamically fetch the API key from Supabase credentials table
-    const { getCredential } = await import('../../credentials/repo');
-    const { decryptCredential } = await import('../../credentials/crypto');
+    // Use environment configuration for API key matching other external services
+    const { config } = await import('../../config/environment');
+    this.apiKey = config.openweathermap.apiKey;
 
-    try {
-      const cred = await getCredential(clientId, 'openweathermap');
-      if (cred) {
-        const payload = await decryptCredential(cred);
-        this.apiKey = payload.apiKey || payload.api_key || '';
-      }
-    } catch (err) {
-      console.error(`Failed to load openweathermap credential for client ${clientId}`, err);
-    }
     const opportunities: Opportunity[] = [];
 
     // For each threshold, fetch forecast and evaluate

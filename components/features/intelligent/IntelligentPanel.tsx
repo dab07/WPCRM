@@ -10,6 +10,8 @@ export function IntelligentPanel() {
   const [result, setResult] = useState<any | null>(null);
   const [journeyResult, setJourneyResult] = useState<any | null>(null);
   const [error, setError] = useState('');
+  const [showPopup, setShowPopup] = useState(false);
+  const [popupClosable, setPopupClosable] = useState(false);
 
   const generateCampaign = async () => {
     setLoading(true);
@@ -70,24 +72,29 @@ export function IntelligentPanel() {
       const { data: { session } } = await sb.auth.getSession();
       const token = session?.access_token ?? 'anon';
 
+      const campaignName = (result.decision?.campaign_type && result.decision?.contextual_trigger) 
+        ? `${result.decision.campaign_type} - ${result.decision.contextual_trigger}`
+        : 'Suggested Intelligent Campaign';
+        
       const payload = {
-        name: `${result.decision?.campaign_type} - ${result.decision?.contextual_trigger}`,
-        festival: result.decision?.contextual_trigger || '',
-        message_template: result.content?.whatsapp?.message_body || '',
+        name: campaignName,
+        festival: result.decision?.contextual_trigger || 'General Event',
+        message_template: result.content?.whatsapp?.message_body || "Hello! We have an exclusive offer just for you. Don't miss out on our latest collection and special discounts. Grab your favorites now before they're gone! Click the link below to shop the sale.",
         target_tags: [],
-        scheduled_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        channel: result.strategy?.primary_channel?.includes('whatsapp') && result.strategy?.primary_channel?.includes('email') ? 'both' 
-               : result.strategy?.primary_channel?.includes('email') ? 'email' 
-               : 'whatsapp',
+        scheduled_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        channel: result.strategy?.primary_channel?.includes('whatsapp') && result.strategy?.primary_channel?.includes('email') ? 'both'
+          : result.strategy?.primary_channel?.includes('email') ? 'email'
+            : 'whatsapp',
         send_email: result.strategy?.primary_channel?.includes('email'),
         email_subject: result.content?.email?.subject_line_options?.[0] || '',
         email_body: result.content?.email?.body_paragraph_1 || '',
         email_attachments: [],
-        wa_campaign_type: result.content?.whatsapp?.wa_campaign_type || 'standard',
-        wa_button_text: result.content?.whatsapp?.cta_button_text || null,
-        wa_button_url: result.content?.whatsapp?.cta_button_url || null,
-        discount_code: result.strategy?.discount_code || null,
-        discount_percentage: result.strategy?.discount_percent || null,
+        wa_campaign_type: 'standard', // Force standard as requested
+        wa_button_text: null,
+        wa_button_url: null,
+        discount_code: null,
+        discount_percentage: null,
+        brand_label: 'Zavops',
       };
 
       const res = await fetch('/api/campaigns/create', {
@@ -98,8 +105,13 @@ export function IntelligentPanel() {
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to create campaign');
-      
-      alert("Campaign created successfully! You can find it in the Pending or Backlog tab.");
+
+      setShowPopup(true);
+      setPopupClosable(false);
+      setTimeout(() => {
+        setPopupClosable(true);
+      }, 3000);
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create campaign');
     } finally {
@@ -168,7 +180,7 @@ export function IntelligentPanel() {
                     <p className="font-body text-xs text-brand-muted mt-2">{result.decision?.why_now}</p>
                   </div>
                 </div>
-                
+
                 <div>
                   <p className="label-eyebrow text-brand-muted mb-1">Segment</p>
                   <div className="bg-brand-navy p-3 rounded-[4px] border border-[rgba(59,91,173,0.12)] font-body text-sm text-brand-offwhite">
@@ -203,14 +215,14 @@ export function IntelligentPanel() {
                     <p className="label-eyebrow text-brand-muted mb-1">WhatsApp Content</p>
                     <div className="bg-brand-navy p-3 rounded-[4px] border border-[rgba(59,91,173,0.12)]">
                       <p className="font-body text-xs text-brand-offwhite whitespace-pre-wrap">{result.content.whatsapp.message_body}</p>
-                      
+
                       {result.content.whatsapp.wa_campaign_type === 'discount' && result.strategy?.discount_code && (
                         <div className="mt-2 bg-brand-slate p-2 rounded text-center border border-dashed border-[rgba(59,91,173,0.3)]">
                           <p className="font-mono text-xs text-brand-yellow">Use Code: {result.strategy.discount_code}</p>
                           {result.strategy.discount_percent > 0 && <p className="font-body text-[10px] text-brand-muted">{result.strategy.discount_percent}% OFF</p>}
                         </div>
                       )}
-                      
+
                       {result.content.whatsapp.wa_campaign_type === 'url_button' && result.content.whatsapp.cta_button_url && (
                         <button className="px-3 py-1 border border-brand-yellow text-brand-yellow rounded-[4px] text-xs font-mono uppercase mt-3 w-full">
                           {result.content.whatsapp.cta_button_text} (Link)
@@ -273,7 +285,7 @@ export function IntelligentPanel() {
                       <p className="text-sm font-semibold text-brand-offwhite">{stage.segmentation}</p>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <p className="label-eyebrow text-brand-muted">Touchpoints ({stage.touchpoints_count})</p>
                     <div className="grid grid-cols-1 gap-2">
@@ -293,6 +305,27 @@ export function IntelligentPanel() {
           </div>
         )}
       </div>
+
+      {showPopup && (
+        <div className="fixed inset-0 bg-brand-navy/80 flex items-center justify-center z-[100] backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-brand-slate border border-[rgba(59,91,173,0.3)] p-8 rounded-[8px] max-w-md text-center shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-green-400" />
+            </div>
+            <h3 className="font-heading font-bold text-brand-offwhite text-xl mb-3">Campaign Created!</h3>
+            <p className="font-body text-brand-muted text-sm mb-8 leading-relaxed">
+              Please set the scheduled date as per your requirements and also set the WhatsApp message template from the campaign edit screen.
+            </p>
+            <button
+              onClick={() => popupClosable && setShowPopup(false)}
+              disabled={!popupClosable}
+              className="w-full py-3 bg-brand-yellow hover:brightness-110 text-brand-navy font-heading font-bold text-[13px] uppercase tracking-label rounded-[4px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {popupClosable ? 'Acknowledge & Close' : 'Please read (Wait 3s)...'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

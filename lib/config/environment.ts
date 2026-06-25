@@ -74,6 +74,10 @@ export const config = {
     isDevelopment: process.env.NODE_ENV === 'development',
     isProduction: process.env.NODE_ENV === 'production',
   },
+
+  openweathermap: {
+    apiKey: process.env.OPENWEATHER_API_KEY ?? '',
+  },
 } as const;
 
 const requiredEnvVars = [

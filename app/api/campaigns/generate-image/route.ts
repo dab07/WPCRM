@@ -1,22 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClient } from '../../../../supabase/supabase';
 import { GeminiService } from '../../../../lib/services/external/GeminiService';
-import fs from 'fs';
-import path from 'path';
 import sharp from 'sharp';
 
-// Read the Zavops logo once at module load (server-side only)
-function loadLogoBase64(): string | null {
-  try {
-    const logoPath = path.join(process.cwd(), 'logos', 'Zavops logo full (1).png');
-    return fs.readFileSync(logoPath).toString('base64');
-  } catch (err) {
-    console.warn('[generate-image] Could not load Zavops logo:', err);
-    return null;
-  }
-}
-
-const ZAVOPS_LOGO_BASE64 = loadLogoBase64();
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 
 /**
@@ -86,17 +72,58 @@ export async function POST(request: NextRequest) {
     // Fetch brand guidelines for this campaign (if any)
     const { data: campaignRow } = await supabase
       .from('campaigns')
-      .select('brand_guidelines')
+      .select('brand_label')
       .eq('id', campaignId)
       .single();
+
+    let logoBase64: string | null = null;
+    let brandGuidelinesText = undefined;
+
+    if (campaignRow?.brand_label) {
+      const { data: guideline } = await supabase
+        .from('brand_guidelines')
+        .select('content, file_url, logo_url')
+        .eq('label', campaignRow.brand_label)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+        
+      if (guideline) {
+        brandGuidelinesText = guideline.content || '';
+        
+        if (guideline.file_url) {
+          try {
+            const fileRes = await fetch(guideline.file_url);
+            if (fileRes.ok) {
+              const fileText = await fileRes.text();
+              brandGuidelinesText += fileText ? `\n--- Document Content ---\n${fileText.slice(0, 10000)}` : '';
+            }
+          } catch (e) {
+            console.warn('Failed to fetch file_url for image generation', e);
+          }
+        }
+
+        if (guideline.logo_url) {
+          try {
+            const logoRes = await fetch(guideline.logo_url);
+            if (logoRes.ok) {
+              const arrayBuffer = await logoRes.arrayBuffer();
+              logoBase64 = Buffer.from(arrayBuffer).toString('base64');
+            }
+          } catch (e) {
+            console.warn('Failed to fetch logo_url for image generation', e);
+          }
+        }
+      }
+    }
 
     // Generate image via Gemini, passing any stored guidelines
     const gemini = new GeminiService();
     const result = await gemini.generateCampaignImage({
       campaignName: festival,
       theme: theme || festival,
-      logoBase64: ZAVOPS_LOGO_BASE64,
-      brandGuidelines: campaignRow?.brand_guidelines,
+      logoBase64: logoBase64,
+      brandGuidelines: brandGuidelinesText,
     });
 
     if (!result.success || !result.data) {

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Search, RefreshCw, ImageIcon, CheckCircle, Loader2, AlertTriangle,
   ChevronDown, ChevronUp, Send, Calendar, Sparkles,
-  Plus, X, XCircle, Wand2, MessageSquare, Pencil, RotateCcw, Mail, Layers,
+  Plus, X, XCircle, Wand2, MessageSquare, Pencil, RotateCcw, Mail, Layers, Trash2,
 } from 'lucide-react';
 import { getSupabaseClient } from '../../../../supabase/supabase';
 import type { Campaign, Quarter, CampaignChannel } from '../../../../lib/types/api/campaigns';
@@ -162,6 +162,11 @@ function CampaignRow({ campaign, onClick, generatingIds }: CampaignRowProps) {
             {campaign.festival && campaign.festival !== campaign.name && (
               <p className="font-mono text-[10px] text-brand-muted truncate">{campaign.name}</p>
             )}
+            {campaign.brand_label && (
+              <p className="font-mono text-[9px] text-brand-yellow uppercase mt-0.5 truncate border border-brand-yellow/30 bg-brand-yellow/10 rounded px-1 w-fit">
+                {campaign.brand_label}
+              </p>
+            )}
             {campaign.wa_campaign_type && campaign.wa_campaign_type !== 'standard' && (
               <div className="mt-1 flex items-center gap-1.5">
                 <span className="px-1 py-0.5 border border-brand-yellow/30 bg-brand-yellow/10 text-brand-yellow rounded-[2px] text-[9px] uppercase tracking-wider font-mono leading-none">
@@ -306,6 +311,7 @@ interface CampaignDetailPanelProps {
   onReject: (c: Campaign) => void;
   onMoveToPending: (id: string) => void;
   onChannelChange: (id: string, ch: CampaignChannel) => void;
+  onDelete: (id: string) => void;
   generatingIds: Set<string>;
 }
 
@@ -317,7 +323,7 @@ const DETAIL_CHANNEL_OPTIONS: Array<{ id: CampaignChannel; label: string; icon: 
 ];
 
 function CampaignDetailPanel({
-  campaign, onClose, onEdit, onGenerate, onApprove, onReject, onMoveToPending, onChannelChange, generatingIds,
+  campaign, onClose, onEdit, onGenerate, onApprove, onReject, onMoveToPending, onChannelChange, onDelete, generatingIds,
 }: CampaignDetailPanelProps) {
   const isGenerating = generatingIds.has(campaign.id) || campaign.image_status === 'generating';
   const effectiveChannel: CampaignChannel = campaign.channel ?? (campaign.send_email ? 'both' : 'whatsapp');
@@ -564,6 +570,13 @@ function CampaignDetailPanel({
               </button>
             )}
 
+            <button
+              onClick={() => { if(window.confirm('Are you sure you want to delete this campaign?')) { onDelete(campaign.id); } }}
+              className="flex items-center gap-1.5 px-3 py-2 border border-red-500/40 text-red-400 hover:bg-red-500/10 rounded-[4px] font-mono text-[11px] uppercase tracking-label transition-all"
+            >
+              <Trash2 className="w-3.5 h-3.5 stroke-[1.5]" /> Delete
+            </button>
+
             {(campaign.status === 'pending' || campaign.status === 'to_be_approved') && !isGenerating && (
               <button
                 onClick={() => onGenerate(campaign.id)}
@@ -645,7 +658,11 @@ function RejectionModal({ campaign, onClose, onRegenerated }: RejectionModalProp
       const captionRes = await fetch('/api/campaigns/generate-caption', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ prompt: captionPrompt, festival: campaign.festival ?? campaign.name }),
+        body: JSON.stringify({ 
+          prompt: captionPrompt, 
+          festival: campaign.festival ?? campaign.name,
+          campaignId: campaign.id 
+        }),
       });
       const captionData = await captionRes.json();
       if (!captionRes.ok) throw new Error(captionData.error ?? 'Caption generation failed');
@@ -952,6 +969,24 @@ export function CampaignsPanel() {
     }
   }, [showToast]);
 
+  const handleDelete = useCallback(async (campaignId: string) => {
+    try {
+      const sb = getSupabaseClient();
+      const { data: { session } } = await sb.auth.getSession();
+      const token = session?.access_token ?? 'anon';
+      const res = await fetch(`/api/campaigns/delete?id=${campaignId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed to delete campaign');
+      setCampaigns((prev) => prev.filter((c) => c.id !== campaignId));
+      showToast('Campaign deleted successfully', 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete campaign', 'error');
+    }
+  }, [showToast]);
+
   const TABS: { id: StatusTab; label: string }[] = [
     { id: 'all', label: 'All' },
     { id: 'draft', label: 'Backlogs' },
@@ -1107,6 +1142,7 @@ export function CampaignsPanel() {
           onReject={(c) => { setRejectionCampaign(c); setDetailCampaign(null); }}
           onMoveToPending={(id) => { handleMoveToPending(id); setDetailCampaign(null); }}
           onChannelChange={(id, ch) => { handleChannelChange(id, ch); setDetailCampaign((prev) => prev ? { ...prev, channel: ch } : prev); }}
+          onDelete={(id) => { handleDelete(id); setDetailCampaign(null); }}
           generatingIds={generatingIds}
         />
       )}

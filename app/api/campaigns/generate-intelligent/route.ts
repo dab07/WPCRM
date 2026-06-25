@@ -3,8 +3,9 @@ import { generateIntelligentCampaign, IntelligentCampaignParams } from '@/lib/se
 import { ShopifyService } from '@/lib/services/external/ShopifyService';
 import { getOmnisendService } from '@/lib/services/external/OmnisendService';
 import { OpportunityEngine } from '@/lib/services/intelligence/OpportunityEngine';
+import { supabaseAdmin } from '../../../../supabase/supabase';
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const shopifyService = new ShopifyService();
     let omnisendService;
@@ -46,7 +47,7 @@ export async function POST() {
     // Customer lifecycle counts (Simplified logic for demonstration)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+
     const prePurchaseCount = 0;
     const firstPurchaseCount = orders.filter((o: any) => new Date(o.created_at) > thirtyDaysAgo).length;
     const repeatActiveCount = Math.floor(customers.length * 0.3); // Mocking based on customers
@@ -62,6 +63,34 @@ export async function POST() {
       ? opportunities.map(o => `- ${o.title}: ${o.description}`).join('\n')
       : "No specific weather or local events right now. Focus on lifecycle marketing (e.g., dormant recovery).";
 
+    // Fetch the brand guidelines for "Zavops" (or the active brand's guidelines)
+    let brandGuidelinesText = "";
+    try {
+      const { data: { session } } = await supabaseAdmin.auth.getSession();
+      const token = session?.access_token;
+
+      const { data: guidelines } = await supabaseAdmin
+        .from('brand_guidelines')
+        .select('content, file_url')
+        .eq('label', 'Zavops')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (guidelines) {
+        brandGuidelinesText += guidelines.content ? guidelines.content + "\n" : "";
+        if (guidelines.file_url) {
+          const fileRes = await fetch(guidelines.file_url);
+          if (fileRes.ok) {
+            const fileText = await fileRes.text();
+            brandGuidelinesText += fileText ? `\n--- Document Content ---\n${fileText.slice(0, 10000)}` : "";
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch Zavops brand guidelines", e);
+    }
+
     // Build the payload
     const params: IntelligentCampaignParams = {
       brand: {
@@ -70,7 +99,8 @@ export async function POST() {
         avg_repurchase_days: 45,
         max_discount_pct: 20,
         voice: "Friendly, premium, urgent",
-        suppression_days: 7
+        suppression_days: 7,
+        ...(brandGuidelinesText ? { brand_guidelines: brandGuidelinesText } : {})
       },
       products: {
         top: topProducts.length > 0 ? topProducts : [
@@ -134,7 +164,7 @@ export async function POST() {
   } catch (error) {
     console.error('[Generate Intelligent Campaign API] Error:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to generate intelligent campaign',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
