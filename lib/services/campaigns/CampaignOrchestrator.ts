@@ -278,11 +278,25 @@ export class CampaignOrchestrator {
     try {
       console.log(`Executing campaign: ${campaign.name}`);
 
-      // Get eligible contacts first
-      const contacts = await this.getEligibleContacts(campaign);
+      // ── Resolve effective channel ───────────────────────────────────────────
+      const effectiveChannel: 'whatsapp' | 'email' | 'both' =
+        campaign.channel === 'email' ? 'email'
+        : campaign.channel === 'both' ? 'both'
+        : campaign.channel === 'whatsapp' ? 'whatsapp'
+        : campaign.send_email ? 'both'
+        : 'whatsapp';
+
+      const sendWhatsApp = effectiveChannel === 'whatsapp' || effectiveChannel === 'both';
+      const sendEmail    = effectiveChannel === 'email'    || effectiveChannel === 'both';
+
+      // Get eligible contacts for WhatsApp from Gallabox
+      let contacts: Contact[] = [];
+      if (sendWhatsApp) {
+        contacts = await this.getEligibleContacts(campaign);
+      }
       
-      if (contacts.length === 0) {
-        console.log(`No eligible contacts for campaign: ${campaign.name}`);
+      if (sendWhatsApp && contacts.length === 0 && !sendEmail) {
+        console.log(`No eligible contacts for WhatsApp campaign: ${campaign.name}`);
         await this.updateCampaignStatus(campaign.id, 'executed');
         return { sent: 0, failed: 0, delivered: 0 };
       }
@@ -299,54 +313,22 @@ export class CampaignOrchestrator {
       let deliveredCount = 0;
       const messageRecords: any[] = [];
 
-      // ── Resolve effective channel ───────────────────────────────────────────
-      const effectiveChannel: 'whatsapp' | 'email' | 'both' =
-        campaign.channel === 'email' ? 'email'
-        : campaign.channel === 'both' ? 'both'
-        : campaign.channel === 'whatsapp' ? 'whatsapp'
-        : campaign.send_email ? 'both'
-        : 'whatsapp';
 
-      const sendWhatsApp = effectiveChannel === 'whatsapp' || effectiveChannel === 'both';
-      const sendEmail    = effectiveChannel === 'email'    || effectiveChannel === 'both';
 
-      // ── STEP 1: Omnisend email — sync contacts then broadcast ONCE ─────────
-      // Omnisend is a broadcast platform. We:
-      //   a) Upsert every eligible contact (that has an email) into Omnisend
-      //      as 'subscribed' so they appear in the audience.
-      //   b) Fire ONE campaign to all subscribed contacts.
-      // This must happen before the WhatsApp batch loop so the email is sent
-      // regardless of per-contact WhatsApp success/failure.
+      // ── STEP 1: Omnisend email — fire broadcast ONCE ─────────
+      // Omnisend is a broadcast platform. We fire ONE campaign to all subscribed contacts.
+      // We no longer sync contacts from Supabase; we rely on Omnisend's built-in audience.
       let emailCampaignFired = false;
       if (sendEmail && campaign.email_subject && campaign.email_body) {
-        const emailContacts = contacts.filter((c) => c.email);
-        console.log(`[Campaign ${campaign.name}] Syncing ${emailContacts.length} contacts into Omnisend…`);
-
         let omnisend: OmnisendService;
         try {
           omnisend = await this.getOmnisendService();
         } catch (err) {
           console.error(`[Campaign ${campaign.name}] ❌ Omnisend not configured:`, err);
-          // Skip email entirely if credentials aren't set up
           omnisend = null as unknown as OmnisendService;
         }
 
         if (omnisend) {
-          // Upsert each contact into Omnisend so they are in the audience
-          for (const contact of emailContacts) {
-            try {
-              const nameParts = (contact.name ?? '').split(' ');
-              await omnisend.upsertContact({
-                email: contact.email ?? undefined,
-                firstName: nameParts[0] ?? undefined,
-                lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined,
-                tags: contact.tags ?? [],
-                status: 'subscribed',
-              });
-            } catch (err) {
-              console.warn(`[Campaign] Omnisend upsert failed for ${contact.email}:`, err);
-            }
-          }
 
           // Build email HTML — attach campaign image if available
           const imageHtml = (campaign.image_url && !campaign.image_url.startsWith('data:'))
@@ -637,27 +619,36 @@ export class CampaignOrchestrator {
    */
   private async getEligibleContacts(campaign: Campaign): Promise<Contact[]> {
     try {
-      let query = this.supabase
-        .from('contacts')
-        .select('*');
+      const gallabox = await this.getGallaboxService();
+      
+      // Fetch contacts from Gallabox (using a high limit for broadcasts)
+      const result = await gallabox.getContacts(10000, 0);
+      
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to fetch contacts from Gallabox');
+      }
+
+      let contacts = result.contacts || [];
 
       // Apply tag filtering if specified
       if (campaign.target_tags && campaign.target_tags.length > 0) {
-        // PostgreSQL array overlap operator
-        query = query.overlaps('tags', campaign.target_tags);
-      }
-
-      const { data: contacts, error } = await query;
-
-      if (error) {
-        throw new CampaignOrchestratorError(
-          `Failed to fetch contacts: ${error.message}`,
-          campaign.id,
-          error
+        contacts = contacts.filter(c => 
+          c.tags && c.tags.some(tag => campaign.target_tags.includes(tag))
         );
       }
 
-      return contacts || [];
+      return contacts.map(c => {
+        const mapped: Contact = {
+          id: c.id,
+          name: c.name || '',
+          phone_number: c.phone,
+          tags: c.tags || [],
+          metadata: c.customFields || {}
+        };
+        if (c.email) mapped.email = c.email;
+        if (c.company) mapped.company = c.company;
+        return mapped;
+      });
     } catch (error) {
       if (error instanceof CampaignOrchestratorError) {
         throw error;

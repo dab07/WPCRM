@@ -57,6 +57,23 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Auto-generate Shopify Discount for Inventory Clearance
+    let finalDiscountCode = discount_code;
+    let finalDiscountPercentage = discount_percentage;
+
+    if (body.metadata?.is_clearance && !discount_code) {
+      try {
+        const { ShopifyService } = await import('@/lib/services/external/ShopifyService');
+        const shopify = new ShopifyService();
+        finalDiscountCode = `CLEARANCE-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        finalDiscountPercentage = 20; // 20% default clearance
+        await shopify.createDiscountCode(finalDiscountCode, finalDiscountPercentage);
+        console.log(`[Campaign API] Auto-generated Shopify discount ${finalDiscountCode} at ${finalDiscountPercentage}%`);
+      } catch (err) {
+        console.error('[Campaign API] Failed to auto-generate discount:', err);
+      }
+    }
+
     // Create campaign
     const orchestrator = new CampaignOrchestrator();
     const campaign = await orchestrator.createCampaign({
@@ -71,8 +88,8 @@ export async function POST(request: NextRequest) {
       wa_campaign_type,
       wa_button_text,
       wa_button_url,
-      discount_code,
-      discount_percentage,
+      discount_code: finalDiscountCode,
+      discount_percentage: finalDiscountPercentage,
       channel,
       festival,
       brand_label

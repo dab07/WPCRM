@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Search, RefreshCw, ImageIcon, CheckCircle, Loader2, AlertTriangle,
   ChevronDown, ChevronUp, Send, Calendar, Sparkles,
-  Plus, X, XCircle, Wand2, MessageSquare, Pencil, RotateCcw, Mail, Layers, Trash2,
+  Plus, X, XCircle, Wand2, MessageSquare, Pencil, RotateCcw, Mail, Layers, Trash2, Rocket,
 } from 'lucide-react';
 import { getSupabaseClient } from '../../../../supabase/supabase';
 import type { Campaign, Quarter, CampaignChannel } from '../../../../lib/types/api/campaigns';
@@ -15,8 +15,10 @@ import {
   type StatusTab, type QuarterGroup,
 } from './types';
 import { ApprovalModal } from './ApprovalModal';
+import { DeployModal } from './DeployModal';
 import { CreateCampaignModal } from './CreateCampaignModal';
 import { EditCampaignModal } from './EditCampaignModal';
+import { GenerateCampaignModal } from './GenerateCampaignModal';
 // import { IntelligentCampaignTab } from './IntelligentCampaignTab';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -312,6 +314,7 @@ interface CampaignDetailPanelProps {
   onMoveToPending: (id: string) => void;
   onChannelChange: (id: string, ch: CampaignChannel) => void;
   onDelete: (id: string) => void;
+  onDeploy: (c: Campaign) => void;
   generatingIds: Set<string>;
 }
 
@@ -323,7 +326,7 @@ const DETAIL_CHANNEL_OPTIONS: Array<{ id: CampaignChannel; label: string; icon: 
 ];
 
 function CampaignDetailPanel({
-  campaign, onClose, onEdit, onGenerate, onApprove, onReject, onMoveToPending, onChannelChange, onDelete, generatingIds,
+  campaign, onClose, onEdit, onGenerate, onApprove, onReject, onMoveToPending, onChannelChange, onDelete, onDeploy, generatingIds,
 }: CampaignDetailPanelProps) {
   const isGenerating = generatingIds.has(campaign.id) || campaign.image_status === 'generating';
   const effectiveChannel: CampaignChannel = campaign.channel ?? (campaign.send_email ? 'both' : 'whatsapp');
@@ -618,6 +621,15 @@ function CampaignDetailPanel({
               </button>
             )}
 
+            {campaign.status === 'approved' && (
+              <button
+                onClick={() => { onClose(); onDeploy(campaign); }}
+                className="flex items-center gap-1.5 px-4 py-2 bg-brand-yellow hover:brightness-110 text-brand-navy font-heading font-semibold text-[12px] uppercase tracking-label rounded-[4px] transition-all hover:-translate-y-0.5"
+              >
+                <Rocket className="w-3.5 h-3.5" /> Deploy Now
+              </button>
+            )}
+
             {campaign.status === 'executed' && campaign.executed_at && (
               <span className="flex items-center gap-1.5 px-3 py-2 font-mono text-[11px] text-brand-muted">
                 <Send className="w-3.5 h-3.5" />
@@ -826,6 +838,8 @@ export function CampaignsPanel() {
   const [detailCampaign, setDetailCampaign] = useState<Campaign | null>(null);
   const [editCampaign, setEditCampaign] = useState<Campaign | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showGenerate, setShowGenerate] = useState(false);
+  const [deployCampaign, setDeployCampaign] = useState<Campaign | null>(null);
 
   const { toasts, show: showToast } = useToast();
 
@@ -1040,6 +1054,12 @@ export function CampaignsPanel() {
             <RefreshCw className={`w-4 h-4 stroke-[1.5] ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
+            onClick={() => setShowGenerate(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-brand-yellow/50 text-brand-yellow hover:bg-brand-yellow/10 font-heading font-semibold text-[12px] uppercase tracking-label rounded-[4px] transition-all hover:-translate-y-0.5"
+          >
+            <Wand2 className="w-4 h-4 stroke-[1.5]" /> Generate Campaign
+          </button>
+          <button
             onClick={() => setShowCreate(true)}
             className="flex items-center gap-2 px-4 py-2 bg-brand-yellow hover:brightness-110 text-brand-navy font-heading font-semibold text-[12px] uppercase tracking-label rounded-[4px] transition-all hover:-translate-y-0.5"
           >
@@ -1110,6 +1130,12 @@ export function CampaignsPanel() {
       </div>
 
       {/* Modals */}
+      {showGenerate && (
+        <GenerateCampaignModal
+          onClose={() => setShowGenerate(false)}
+          onSuccess={() => { setShowGenerate(false); void loadCampaigns(); }}
+        />
+      )}
       {showCreate && (
         <CreateCampaignModal onClose={() => setShowCreate(false)} onSuccess={() => { setShowCreate(false); void loadCampaigns(); }} />
       )}
@@ -1143,7 +1169,19 @@ export function CampaignsPanel() {
           onMoveToPending={(id) => { handleMoveToPending(id); setDetailCampaign(null); }}
           onChannelChange={(id, ch) => { handleChannelChange(id, ch); setDetailCampaign((prev) => prev ? { ...prev, channel: ch } : prev); }}
           onDelete={(id) => { handleDelete(id); setDetailCampaign(null); }}
+          onDeploy={(c) => { setDeployCampaign(c); setDetailCampaign(null); }}
           generatingIds={generatingIds}
+        />
+      )}
+      {deployCampaign && (
+        <DeployModal
+          campaign={deployCampaign}
+          onClose={() => setDeployCampaign(null)}
+          onDeployed={(updated) => {
+            setCampaigns((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+            setDeployCampaign(null);
+            showToast(`Campaign "${updated.festival ?? updated.name}" deployed successfully`, 'success');
+          }}
         />
       )}
       {editCampaign && (

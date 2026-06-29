@@ -1,9 +1,5 @@
 import { supabaseAdmin } from '../../supabase/supabase';
 import { OpenWeatherService } from '../services/external/OpenWeatherService';
-import { enqueueScan } from '../workers/queue';
-import Redis from 'ioredis';
-
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
 export async function runWeatherScan(brandId?: string) {
   const openWeather = new OpenWeatherService();
@@ -29,7 +25,9 @@ export async function runWeatherScan(brandId?: string) {
     for (const city of cities) {
       try {
         // 2. Fetch current weather
-        const weatherData = await openWeather.getCurrentWeather(bId, city);
+        const coords = await openWeather.getCoordinates(city);
+        if (!coords) throw new Error('Could not get coordinates for city');
+        const weatherData = await openWeather.getCurrentWeather(bId, coords.lat, coords.lon);
         
         // Save to weather_readings
         const todayDate = new Date().toISOString().split('T')[0];
@@ -45,15 +43,22 @@ export async function runWeatherScan(brandId?: string) {
 
         // 3. Evaluate thresholds
         for (const threshold of thresholds) {
-          // Deduplication check (wrapped in try-catch to bypass if Redis is offline)
-          const dedupKey = `${bId}:${city}:${threshold.type}`;
-          let isTriggered = false;
-          try {
-            isTriggered = (await redis.get(dedupKey)) ? true : false;
-          } catch (redisErr) {
-            console.warn(`Redis deduplication bypassed for ${dedupKey} (Redis may be offline).`);
+          // Deduplication check: look for an existing opportunity created within the last 14 days
+          // for the same brand, city, and threshold type (replaces the former Redis lock).
+          const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+          const { data: existingOpps } = await supabaseAdmin
+            .from('opportunities')
+            .select('id')
+            .eq('brand_id', bId)
+            .eq('signal_source', 'weather_monitoring')
+            .ilike('title', `%${threshold.type}%${city}%`)
+            .gte('created_at', fourteenDaysAgo)
+            .limit(1);
+
+          if (existingOpps && existingOpps.length > 0) {
+            // Already triggered within the last 14 days — skip
+            continue;
           }
-          if (isTriggered) continue; // Skip if already triggered in the last 14 days
 
           // Check condition (e.g. max temp >= target for N consecutive days)
           // Fetch last N days readings
@@ -97,19 +102,6 @@ export async function runWeatherScan(brandId?: string) {
 
             if (!oppErr && opp) {
               opportunitiesCreated.push(opp);
-              // Set deduplication lock (14 days = 14 * 24 * 60 * 60 seconds)
-              try {
-                await redis.set(dedupKey, '1', 'EX', 14 * 24 * 60 * 60);
-              } catch (redisErr) {
-                console.warn(`Failed to set Redis lock for ${dedupKey}.`);
-              }
-
-              // 4. Enqueue Job for Generation Layer
-              try {
-                await enqueueScan('generate-brief', { opportunityId: opp.id });
-              } catch (qErr) {
-                console.warn('Failed to enqueue generation job. BullMQ may be offline.');
-              }
             }
           }
         }

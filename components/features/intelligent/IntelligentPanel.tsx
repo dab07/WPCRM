@@ -1,100 +1,123 @@
 'use client';
 
-import { useState } from 'react';
-import { Loader2, Sparkles, BrainCircuit, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Loader2, BrainCircuit, CheckCircle, AlertTriangle, CloudRain, CalendarDays, History, RotateCcw, PackageMinus, Plus, Info } from 'lucide-react';
 import { getSupabaseClient } from '../../../supabase/supabase';
+import type { CampaignSuggestion } from '../../../lib/types/campaign-suggestions';
+
+type SignalTab = 'weather' | 'local_event' | 'history' | 'repurchase' | 'inventory';
+
+const TABS: { id: SignalTab; label: string; icon: any }[] = [
+  { id: 'weather', label: 'Weather & Location', icon: CloudRain },
+  { id: 'local_event', label: 'Local Events', icon: CalendarDays },
+  { id: 'history', label: 'History Campaigns', icon: History },
+  { id: 'repurchase', label: 'Repurchase', icon: RotateCcw },
+  { id: 'inventory', label: 'Inventory Clearance', icon: PackageMinus },
+];
 
 export function IntelligentPanel() {
   const [loading, setLoading] = useState(false);
-  const [journeyLoading, setJourneyLoading] = useState(false);
-  const [result, setResult] = useState<any | null>(null);
-  const [journeyResult, setJourneyResult] = useState<any | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [pushingId, setPushingId] = useState<number | null>(null);
+  const [suggestions, setSuggestions] = useState<CampaignSuggestion[]>([]);
+  const [activeTab, setActiveTab] = useState<SignalTab>('weather');
   const [error, setError] = useState('');
   const [showPopup, setShowPopup] = useState(false);
   const [popupClosable, setPopupClosable] = useState(false);
 
-  const generateCampaign = async () => {
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem('intelligent_campaign_suggestions');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const twentyFourHours = 24 * 60 * 60 * 1000;
+        if (Date.now() - parsed.timestamp < twentyFourHours) {
+          setSuggestions(parsed.data);
+        } else {
+          localStorage.removeItem('intelligent_campaign_suggestions');
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to load cached suggestions", e);
+    }
+  }, []);
+
+  const generateSignals = async () => {
     setLoading(true);
     setError('');
-    setResult(null);
-
+    
     try {
       const sb = getSupabaseClient();
       const { data: { session } } = await sb.auth.getSession();
       const token = session?.access_token ?? 'anon';
 
-      const res = await fetch('/api/campaigns/generate-intelligent', {
+      const res = await fetch('/api/campaigns/generate-signals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Failed to generate intelligent campaign');
+      if (!res.ok) throw new Error(data.error ?? 'Failed to generate campaign signals');
 
-      setResult(data.data);
+      setSuggestions(data.suggestions);
+      try {
+        localStorage.setItem('intelligent_campaign_suggestions', JSON.stringify({
+          timestamp: Date.now(),
+          data: data.suggestions
+        }));
+      } catch (e) {
+        console.warn("Failed to save suggestions to cache", e);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
   };
-  const generateJourneyStrategy = async () => {
-    setJourneyLoading(true);
-    setError('');
-    setJourneyResult(null);
 
+  const syncData = async () => {
+    setSyncing(true);
+    setError('');
+    
     try {
       const sb = getSupabaseClient();
       const { data: { session } } = await sb.auth.getSession();
       const token = session?.access_token ?? 'anon';
 
-      const res = await fetch('/api/campaigns/generate-journey', {
+      const res = await fetch('/api/campaigns/sync', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       });
-
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Failed to generate journey strategy');
-
-      setJourneyResult(data.data);
+      if (!res.ok) throw new Error(data.error ?? 'Failed to sync data');
+      
+      // Could show a toast here, for now just relying on the button state to indicate success
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
+      setError(err instanceof Error ? err.message : 'Something went wrong during sync');
     } finally {
-      setJourneyLoading(false);
+      setSyncing(false);
     }
   };
 
-  const createCampaignFromStrategy = async () => {
-    if (!result) return;
-    setLoading(true);
+  const pushToCampaign = async (suggestion: CampaignSuggestion, index: number) => {
+    setPushingId(index);
     try {
       const sb = getSupabaseClient();
       const { data: { session } } = await sb.auth.getSession();
       const token = session?.access_token ?? 'anon';
-
-      const campaignName = (result.decision?.campaign_type && result.decision?.contextual_trigger) 
-        ? `${result.decision.campaign_type} - ${result.decision.contextual_trigger}`
-        : 'Suggested Intelligent Campaign';
         
       const payload = {
-        name: campaignName,
-        festival: result.decision?.contextual_trigger || 'General Event',
-        message_template: result.content?.whatsapp?.message_body || "Hello! We have an exclusive offer just for you. Don't miss out on our latest collection and special discounts. Grab your favorites now before they're gone! Click the link below to shop the sale.",
+        name: suggestion.suggested_name,
+        festival: suggestion.suggested_festival,
+        message_template: suggestion.suggested_message,
         target_tags: [],
-        scheduled_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-        channel: result.strategy?.primary_channel?.includes('whatsapp') && result.strategy?.primary_channel?.includes('email') ? 'both'
-          : result.strategy?.primary_channel?.includes('email') ? 'email'
-            : 'whatsapp',
-        send_email: result.strategy?.primary_channel?.includes('email'),
-        email_subject: result.content?.email?.subject_line_options?.[0] || '',
-        email_body: result.content?.email?.body_paragraph_1 || '',
-        email_attachments: [],
-        wa_campaign_type: 'standard', // Force standard as requested
-        wa_button_text: null,
-        wa_button_url: null,
-        discount_code: null,
-        discount_percentage: null,
+        scheduled_at: suggestion.suggested_scheduled_at,
+        channel: 'whatsapp',
+        send_email: false,
+        wa_campaign_type: 'standard',
         brand_label: 'Zavops',
+        signal_source: suggestion.signal_type,
+        metadata: suggestion.metadata
       };
 
       const res = await fetch('/api/campaigns/create', {
@@ -115,43 +138,49 @@ export function IntelligentPanel() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create campaign');
     } finally {
-      setLoading(false);
+      setPushingId(null);
     }
   };
+
+  const filteredSuggestions = suggestions.filter(s => s.signal_type === activeTab);
+
   return (
     <div className="h-full overflow-y-auto w-full px-4">
-      <div className="flex flex-col gap-6 w-full max-w-4xl mx-auto py-8 pb-24">
+      <div className="flex flex-col gap-6 w-full max-w-5xl mx-auto py-8 pb-24">
         <div className="flex flex-col items-center text-center gap-4">
           <div className="w-16 h-16 bg-brand-yellow/10 rounded-full flex items-center justify-center">
             <BrainCircuit className="w-8 h-8 text-brand-yellow" />
           </div>
           <div>
-            <h2 className="font-display font-bold text-brand-offwhite text-2xl tracking-tight">Intelligent Campaign</h2>
-            <p className="font-body text-brand-muted max-w-lg mt-2">
-              Let ZavopsAI analyze your Shopify and Omnisend data, weather patterns, and customer lifecycle to propose the best campaign right now.
+            <h2 className="font-display font-bold text-brand-offwhite text-2xl tracking-tight">Intelligent Campaigns</h2>
+            <p className="font-body text-brand-muted max-w-lg mt-2 mx-auto">
+              ZavopsAI scans your real-time customer locations, local events, order repurchase cycles, and inventory to suggest hyper-targeted campaigns.
+            </p>
+            <p className="text-[11px] text-brand-yellow/80 mt-1 uppercase tracking-label font-mono font-medium bg-brand-yellow/10 inline-block px-2 py-0.5 rounded">
+              Note: These suggested campaigns will disappear within the next 24 hours.
             </p>
           </div>
           <div className="flex gap-4 mt-2">
             <button
-              onClick={generateCampaign}
-              disabled={loading || journeyLoading}
-              className="flex items-center gap-2 px-6 py-3 bg-brand-yellow hover:brightness-110 text-brand-navy font-heading font-semibold text-[13px] uppercase tracking-label rounded-[4px] transition-all hover:-translate-y-0.5 disabled:opacity-50"
+              onClick={syncData}
+              disabled={syncing || loading}
+              className="flex items-center gap-2 px-6 py-3 border border-brand-yellow/50 hover:bg-brand-yellow/10 text-brand-yellow font-heading font-semibold text-[13px] uppercase tracking-label rounded-[4px] transition-all hover:-translate-y-0.5 disabled:opacity-50"
             >
-              {loading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing Signals…</>
+              {syncing ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Syncing...</>
               ) : (
-                <><Sparkles className="w-4 h-4" /> Generate Campaign</>
+                <><RotateCcw className="w-4 h-4" /> Sync Data</>
               )}
             </button>
             <button
-              onClick={generateJourneyStrategy}
-              disabled={loading || journeyLoading}
-              className="flex items-center gap-2 px-6 py-3 border border-brand-yellow text-brand-yellow hover:bg-brand-yellow/10 font-heading font-semibold text-[13px] uppercase tracking-label rounded-[4px] transition-all hover:-translate-y-0.5 disabled:opacity-50"
+              onClick={generateSignals}
+              disabled={loading || syncing}
+              className="flex items-center gap-2 px-8 py-3 bg-brand-yellow hover:brightness-110 text-brand-navy font-heading font-semibold text-[13px] uppercase tracking-label rounded-[4px] transition-all hover:-translate-y-0.5 disabled:opacity-50"
             >
-              {journeyLoading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Mapping Journey…</>
+              {loading ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Scanning Signals…</>
               ) : (
-                <><BrainCircuit className="w-4 h-4" /> Generate Lifecycle Strategy</>
+                <><BrainCircuit className="w-4 h-4" /> Generate</>
               )}
             </button>
           </div>
@@ -164,143 +193,84 @@ export function IntelligentPanel() {
           </div>
         )}
 
-        {result && (
-          <div className="bg-brand-slate border border-[rgba(59,91,173,0.18)] rounded-[4px] p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center gap-2 mb-6 pb-4 border-b border-[rgba(59,91,173,0.18)]">
-              <CheckCircle className="w-5 h-5 text-green-400" />
-              <h3 className="font-heading font-semibold text-brand-offwhite text-lg">Proposed Strategy</h3>
+        {suggestions.length > 0 && (
+          <div className="mt-6 flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Tabs Navigation */}
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+              {TABS.map((tab) => {
+                const count = suggestions.filter(s => s.signal_type === tab.id).length;
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-[4px] font-heading font-semibold text-[11px] tracking-label uppercase whitespace-nowrap transition-colors ${
+                      isActive 
+                        ? 'bg-brand-slate text-brand-yellow border-b-2 border-brand-yellow' 
+                        : 'bg-transparent text-brand-muted hover:text-brand-offwhite hover:bg-brand-slate/50 border-b-2 border-transparent'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {tab.label}
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] ${isActive ? 'bg-brand-yellow/20 text-brand-yellow' : 'bg-brand-navy border border-[rgba(59,91,173,0.3)] text-brand-muted'}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <p className="label-eyebrow text-brand-muted mb-1">Decision</p>
-                  <div className="bg-brand-navy p-3 rounded-[4px] border border-[rgba(59,91,173,0.12)]">
-                    <p className="font-body text-sm text-brand-offwhite"><span className="text-brand-yellow font-bold">{result.decision?.campaign_type}</span> — {result.decision?.contextual_trigger}</p>
-                    <p className="font-body text-xs text-brand-muted mt-2">{result.decision?.why_now}</p>
-                  </div>
+            {/* Tab Content */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredSuggestions.length === 0 ? (
+                <div className="col-span-full py-12 flex flex-col items-center justify-center border border-dashed border-[rgba(59,91,173,0.2)] rounded-[4px] bg-brand-slate/30 text-brand-muted">
+                  <Info className="w-8 h-8 mb-3 opacity-50" />
+                  <p className="font-body text-sm">No signals detected for this category right now.</p>
                 </div>
+              ) : (
+                filteredSuggestions.map((suggestion, index) => (
+                  <div key={index} className="bg-brand-slate border border-[rgba(59,91,173,0.18)] rounded-[4px] p-5 flex flex-col gap-4">
+                    <div className="flex justify-between items-start gap-4">
+                      <div>
+                        <h4 className="font-heading font-bold text-brand-offwhite text-md mb-1">{suggestion.title}</h4>
+                        <p className="font-body text-xs text-brand-muted">{suggestion.description}</p>
+                      </div>
+                      <span className={`px-2 py-1 rounded text-[10px] font-mono uppercase shrink-0 ${
+                        suggestion.urgency === 'high' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                        suggestion.urgency === 'medium' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
+                        'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                      }`}>
+                        {suggestion.urgency} Priority
+                      </span>
+                    </div>
 
-                <div>
-                  <p className="label-eyebrow text-brand-muted mb-1">Segment</p>
-                  <div className="bg-brand-navy p-3 rounded-[4px] border border-[rgba(59,91,173,0.12)] font-body text-sm text-brand-offwhite">
-                    {result.segment?.description}
-                  </div>
-                </div>
+                    <div className="bg-brand-navy border border-[rgba(59,91,173,0.12)] p-3 rounded-[4px]">
+                      <p className="label-eyebrow text-brand-muted mb-2">Suggested Message</p>
+                      <p className="font-body text-sm text-brand-offwhite whitespace-pre-wrap">{suggestion.suggested_message}</p>
+                    </div>
 
-                <div>
-                  <p className="label-eyebrow text-brand-muted mb-1">Strategy</p>
-                  <div className="bg-brand-navy p-3 rounded-[4px] border border-[rgba(59,91,173,0.12)]">
-                    <p className="font-mono text-xs text-brand-yellow mb-1 uppercase tracking-label">{result.strategy?.primary_channel}</p>
-                    <p className="font-body text-sm text-brand-offwhite">{result.strategy?.objective}</p>
-                    <p className="font-body text-xs text-brand-muted mt-1">{result.strategy?.offer_type}: {result.strategy?.offer_detail}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {result.content?.email && result.strategy?.primary_channel?.includes('email') && (
-                  <div>
-                    <p className="label-eyebrow text-brand-muted mb-1">Email Content</p>
-                    <div className="bg-brand-navy p-3 rounded-[4px] border border-[rgba(59,91,173,0.12)] space-y-2">
-                      <p className="font-heading text-sm font-semibold text-brand-offwhite">{result.content.email.headline}</p>
-                      <p className="font-body text-xs text-brand-muted">{result.content.email.body_paragraph_1}</p>
-                      <button className="px-3 py-1 bg-brand-blue text-brand-offwhite rounded-[4px] text-xs font-mono uppercase mt-2 w-full">{result.content.email.cta_text}</button>
+                    <div className="mt-auto pt-2 flex justify-between items-center">
+                      <div className="text-[10px] font-mono text-brand-muted uppercase">
+                        {suggestion.signal_type === 'inventory' && Boolean(suggestion.metadata?.is_clearance) && (
+                          <span className="text-brand-yellow flex items-center gap-1">
+                            <PackageMinus className="w-3 h-3" /> Creates Discount
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => pushToCampaign(suggestion, index)}
+                        disabled={pushingId !== null}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-brand-blue hover:brightness-110 text-brand-offwhite font-heading font-semibold text-[11px] uppercase tracking-label rounded-[4px] transition-all disabled:opacity-50"
+                      >
+                        {pushingId === index ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                        Push to Campaigns
+                      </button>
                     </div>
                   </div>
-                )}
-
-                {result.content?.whatsapp && result.strategy?.primary_channel?.includes('whatsapp') && (
-                  <div>
-                    <p className="label-eyebrow text-brand-muted mb-1">WhatsApp Content</p>
-                    <div className="bg-brand-navy p-3 rounded-[4px] border border-[rgba(59,91,173,0.12)]">
-                      <p className="font-body text-xs text-brand-offwhite whitespace-pre-wrap">{result.content.whatsapp.message_body}</p>
-
-                      {result.content.whatsapp.wa_campaign_type === 'discount' && result.strategy?.discount_code && (
-                        <div className="mt-2 bg-brand-slate p-2 rounded text-center border border-dashed border-[rgba(59,91,173,0.3)]">
-                          <p className="font-mono text-xs text-brand-yellow">Use Code: {result.strategy.discount_code}</p>
-                          {result.strategy.discount_percent > 0 && <p className="font-body text-[10px] text-brand-muted">{result.strategy.discount_percent}% OFF</p>}
-                        </div>
-                      )}
-
-                      {result.content.whatsapp.wa_campaign_type === 'url_button' && result.content.whatsapp.cta_button_url && (
-                        <button className="px-3 py-1 border border-brand-yellow text-brand-yellow rounded-[4px] text-xs font-mono uppercase mt-3 w-full">
-                          {result.content.whatsapp.cta_button_text} (Link)
-                        </button>
-                      )}
-
-                      {result.content.whatsapp.wa_campaign_type !== 'url_button' && result.content.whatsapp.cta_button_text && (
-                        <button className="px-3 py-1 border border-brand-yellow text-brand-yellow rounded-[4px] text-xs font-mono uppercase mt-3 w-full">
-                          {result.content.whatsapp.cta_button_text}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <p className="label-eyebrow text-brand-muted mb-1">Projected Results</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-brand-navy p-2 rounded-[4px] border border-[rgba(59,91,173,0.12)] text-center">
-                      <p className="font-display text-lg text-green-400">{result.projected_results?.estimated_open_rate_pct}%</p>
-                      <p className="font-mono text-[10px] text-brand-muted uppercase">Est. Open</p>
-                    </div>
-                    <div className="bg-brand-navy p-2 rounded-[4px] border border-[rgba(59,91,173,0.12)] text-center">
-                      <p className="font-display text-lg text-brand-yellow">{result.projected_results?.estimated_revenue}</p>
-                      <p className="font-mono text-[10px] text-brand-muted uppercase">Est. Revenue</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-8 flex justify-end">
-              <button
-                onClick={createCampaignFromStrategy}
-                disabled={loading}
-                className="px-6 py-2 bg-brand-yellow text-brand-navy font-heading font-semibold text-[13px] uppercase tracking-label rounded-[4px] transition-all hover:-translate-y-0.5 disabled:opacity-50"
-              >
-                {loading ? 'Creating...' : 'Create Campaign from Strategy'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {journeyResult && (
-          <div className="bg-brand-slate border border-[rgba(59,91,173,0.18)] rounded-[4px] p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center gap-2 mb-6 pb-4 border-b border-[rgba(59,91,173,0.18)]">
-              <CheckCircle className="w-5 h-5 text-green-400" />
-              <h3 className="font-heading font-semibold text-brand-offwhite text-lg">Full Customer Journey Strategy</h3>
-            </div>
-            <div className="space-y-8">
-              {journeyResult.journey_strategy?.map((stage: any, index: number) => (
-                <div key={index} className="border border-[rgba(59,91,173,0.18)] rounded-[4px] p-4 bg-brand-navy">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h4 className="font-heading font-bold text-brand-yellow text-md">{stage.stage}</h4>
-                      <p className="text-xs text-brand-muted mt-1 font-body">{stage.objective}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-brand-muted">Targeting:</p>
-                      <p className="text-sm font-semibold text-brand-offwhite">{stage.segmentation}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="label-eyebrow text-brand-muted">Touchpoints ({stage.touchpoints_count})</p>
-                    <div className="grid grid-cols-1 gap-2">
-                      {stage.touchpoints?.map((tp: any, tpIndex: number) => (
-                        <div key={tpIndex} className="flex items-center gap-3 bg-brand-slate/50 p-2 text-sm rounded border border-brand-border">
-                          <span className="flex items-center justify-center w-6 h-6 rounded bg-brand-blue/20 text-brand-blue text-xs font-bold">{tp.step}</span>
-                          <span className="font-mono text-brand-yellow text-xs px-2 py-1 bg-brand-yellow/10 rounded">{tp.channel}</span>
-                          <span className="text-brand-offwhite font-medium text-xs w-24 shrink-0">{tp.timing}</span>
-                          <span className="text-brand-muted text-xs truncate">{tp.purpose}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         )}
@@ -314,7 +284,7 @@ export function IntelligentPanel() {
             </div>
             <h3 className="font-heading font-bold text-brand-offwhite text-xl mb-3">Campaign Created!</h3>
             <p className="font-body text-brand-muted text-sm mb-8 leading-relaxed">
-              Please set the scheduled date as per your requirements and also set the WhatsApp message template from the campaign edit screen.
+              Your intelligent campaign has been pushed successfully. Please review the schedule and audience tags on the Campaigns page.
             </p>
             <button
               onClick={() => popupClosable && setShowPopup(false)}

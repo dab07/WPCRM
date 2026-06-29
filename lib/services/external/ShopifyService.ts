@@ -146,7 +146,7 @@ export class ShopifyService {
     }
   }
 
-  private async fetchWithRetry<T>(path: string): Promise<T> {
+  private async fetchWithRetry<T>(path: string, method: string = 'GET', body?: any): Promise<T> {
     if (!this.accessToken) {
       await this.requestAccessToken();
     }
@@ -159,10 +159,12 @@ export class ShopifyService {
 
       try {
         const res = await fetch(`${this.baseUrl}${path}`, {
+          method: method,
           headers: {
             'X-Shopify-Access-Token': this.accessToken!,
             'Content-Type': 'application/json',
           },
+          ...(body ? { body: JSON.stringify(body) } : {}),
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
@@ -230,5 +232,40 @@ export class ShopifyService {
       this.getAbandonedCarts(updatedSince),
     ]);
     return { customers, orders, abandonedCarts };
+  }
+
+  async createDiscountCode(code: string, percentage: number): Promise<{ id: number }> {
+    // 1. Create a Price Rule
+    const priceRulePayload = {
+      price_rule: {
+        title: code,
+        target_type: "line_item",
+        target_selection: "all",
+        allocation_method: "across",
+        value_type: "percentage",
+        value: `-${percentage}`,
+        customer_selection: "all",
+        starts_at: new Date().toISOString()
+      }
+    };
+
+    const priceRuleData = await this.fetchWithRetry<{ price_rule: { id: number } }>(
+      '/price_rules.json',
+      'POST',
+      priceRulePayload
+    );
+
+    // 2. Create the Discount Code attached to the Price Rule
+    const discountCodePayload = {
+      discount_code: { code }
+    };
+
+    await this.fetchWithRetry(
+      `/price_rules/${priceRuleData.price_rule.id}/discount_codes.json`,
+      'POST',
+      discountCodePayload
+    );
+
+    return { id: priceRuleData.price_rule.id };
   }
 }
