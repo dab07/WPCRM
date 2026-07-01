@@ -5,11 +5,18 @@ export async function POST(request: NextRequest) {
   try {
     const { targetTags } = await request.json();
 
-    const gallabox = await getGallaboxService();
+    let gallabox;
+    try {
+      gallabox = await getGallaboxService();
+    } catch (err) {
+      console.warn('[estimate-contacts] Gallabox not configured:', err);
+      return NextResponse.json({ count: 0, warning: 'Gallabox not configured' });
+    }
+
     const result = await gallabox.getContacts(10000, 0);
 
     if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 500 });
+      return NextResponse.json({ count: 0, error: result.error });
     }
 
     let contacts = result.contacts || [];
@@ -24,8 +31,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[estimate-contacts] error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { count: 0, error: error instanceof Error ? error.message : 'Unknown error' }
     );
   }
 }

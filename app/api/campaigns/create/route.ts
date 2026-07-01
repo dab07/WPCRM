@@ -206,17 +206,23 @@ async function runAsyncTargetingAndSync(
     if (omnisend) {
       console.log(`[Async Targeting] Omnisend: Syncing ${matchingCustomers.length} contacts with tag ${targetTag}...`);
       for (const contact of matchingCustomers) {
-        if (contact.email) {
+        const email = contact.email?.trim();
+        if (email) {
+          const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
+          if (!EMAIL_REGEX.test(email)) {
+            console.warn(`[Async Targeting] Skipping contact with invalid email format: ${email}`);
+            continue;
+          }
           try {
             await omnisend.upsertContact({
-              email: contact.email,
+              email: email,
               firstName: contact.name,
               phone: contact.phone,
               tags: [targetTag],
               status: 'subscribed'
             });
           } catch (err) {
-            console.error(`[Async Targeting] Failed to sync contact ${contact.email} to Omnisend:`, err);
+            console.error(`[Async Targeting] Failed to sync contact ${email} to Omnisend:`, err);
           }
         }
       }

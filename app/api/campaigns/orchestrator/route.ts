@@ -135,10 +135,10 @@ async function executeScheduledCampaigns(source: string): Promise<{
       campaignResults.push({ id: campaign.id, name: campaign.name, channel: effectiveChannel, sent: 0, status: 'failed' });
       console.error(`[Orchestrator] ❌ "${campaign.name}" failed:`, msg);
 
-      // Reset to pending so it can be re-approved and retried
+      // Keep campaign status as approved on error so it stays in Approved tab and can be retried
       await supabase
         .from('campaigns')
-        .update({ status: 'pending', updated_at: new Date().toISOString() })
+        .update({ status: 'approved', updated_at: new Date().toISOString() })
         .eq('id', campaign.id);
     }
   }

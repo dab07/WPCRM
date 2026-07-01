@@ -179,9 +179,16 @@ export function DeployModal({ campaign, onClose, onDeployed }: DeployModalProps)
   useEffect(() => {
     async function fetchCount() {
       try {
+        const sb = getSupabaseClient();
+        const { data: { session } } = await sb.auth.getSession();
+        const token = session?.access_token ?? 'anon';
+
         const res = await fetch(`/api/campaigns/estimate-contacts`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
           body: JSON.stringify({ targetTags: campaign.target_tags })
         });
         if (!res.ok) throw new Error();
@@ -239,8 +246,8 @@ export function DeployModal({ campaign, onClose, onDeployed }: DeployModalProps)
 
   const channelLabel =
     effectiveChannel === 'whatsapp' ? 'Gallabox (WhatsApp)' :
-    effectiveChannel === 'email' ? 'Omnisend (Email)' :
-    'Gallabox + Omnisend';
+      effectiveChannel === 'email' ? 'Omnisend (Email)' :
+        'Gallabox + Omnisend';
 
   const visibleAttributes = getVisibleAttributes(effectiveChannel);
 
@@ -436,10 +443,10 @@ export function DeployModal({ campaign, onClose, onDeployed }: DeployModalProps)
                     <p className="font-heading font-medium text-brand-offwhite text-[13px]">
                       {campaign.scheduled_at
                         ? new Date(campaign.scheduled_at).toLocaleDateString('en-IN', {
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric',
-                          })
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        })
                         : 'Not scheduled'}
                     </p>
                   </div>
@@ -496,9 +503,8 @@ export function DeployModal({ campaign, onClose, onDeployed }: DeployModalProps)
                     </span>
                   </div>
                   <ArrowRight
-                    className={`w-4 h-4 text-brand-muted stroke-[1.5] transition-transform duration-200 ${
-                      showMapping ? 'rotate-90' : ''
-                    }`}
+                    className={`w-4 h-4 text-brand-muted stroke-[1.5] transition-transform duration-200 ${showMapping ? 'rotate-90' : ''
+                      }`}
                   />
                 </button>
 
@@ -530,9 +536,8 @@ export function DeployModal({ campaign, onClose, onDeployed }: DeployModalProps)
                         {visibleAttributes.map((row, i) => (
                           <tr
                             key={row.attribute}
-                            className={`border-b border-[rgba(59,91,173,0.08)] ${
-                              i % 2 === 0 ? 'bg-brand-navy' : 'bg-brand-slate/30'
-                            }`}
+                            className={`border-b border-[rgba(59,91,173,0.08)] ${i % 2 === 0 ? 'bg-brand-navy' : 'bg-brand-slate/30'
+                              }`}
                           >
                             <td className="px-4 py-2">
                               <span className="flex items-center gap-1.5 font-body text-[12px] text-brand-offwhite">
@@ -589,8 +594,7 @@ export function DeployModal({ campaign, onClose, onDeployed }: DeployModalProps)
                 onClick={handleDeploy}
                 className="flex-[2] flex items-center justify-center gap-2 px-4 py-3 bg-brand-yellow hover:brightness-110 text-brand-navy font-heading font-semibold text-[12px] uppercase tracking-label rounded-[4px] transition-all hover:-translate-y-0.5"
               >
-                <Rocket className="w-4 h-4" />
-                Deploy to {channelLabel}
+                Deploy
               </button>
             </div>
           )}

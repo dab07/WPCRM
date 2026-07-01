@@ -64,6 +64,8 @@ export interface OmnisendEmailCampaignParams {
   replyTo?: string;
   /** Segment ID to target (if omitted, will target all subscribed contacts) */
   segmentID?: string | undefined;
+  /** Scheduled date/time in ISO format; omit to send immediately */
+  scheduledAt?: string | undefined;
 }
 
 export interface OmnisendSendCampaignResult {
@@ -241,15 +243,44 @@ export class OmnisendService {
     tags?: string[] | undefined;
     status?: 'subscribed' | 'unsubscribed' | 'nonSubscribed' | undefined;
   }): Promise<void> {
+    const identifiers: any[] = [];
+    const status = contact.status ?? 'nonSubscribed';
+
+    if (contact.email) {
+      identifiers.push({
+        type: 'email',
+        id: contact.email,
+        channels: {
+          email: { status }
+        }
+      });
+    }
+
+    if (contact.phone) {
+      let normalizedPhone = contact.phone;
+      if (normalizedPhone && !normalizedPhone.startsWith('+')) {
+        normalizedPhone = `+${normalizedPhone}`;
+      }
+      identifiers.push({
+        type: 'phone',
+        id: normalizedPhone,
+        channels: {
+          sms: { status }
+        }
+      });
+    }
+
+    if (identifiers.length === 0) {
+      throw new Error('At least one identifier (email or phone) is required to upsert a contact to Omnisend.');
+    }
+
     await this.fetchWithRetry('/api/contacts', {
       method: 'POST',
       body: JSON.stringify({
-        email: contact.email,
-        phone: contact.phone,
-        firstName: contact.firstName,
-        lastName: contact.lastName,
-        tags: contact.tags,
-        status: contact.status ?? 'nonSubscribed',
+        identifiers,
+        firstName: contact.firstName || undefined,
+        lastName: contact.lastName || undefined,
+        tags: contact.tags || undefined,
       }),
     });
   }
@@ -330,13 +361,13 @@ export class OmnisendService {
           name: params.name,
           type: 'regular',
           channel: 'email',
-          language: 'en',
+          language: 'en_US',
           options: params.segmentID ? { segmentIds: [params.segmentID] } : {},
           content: {
             email: {
               subject: params.subject,
               senderName: params.fromName ?? 'CRM',
-              replyToEmail: params.replyTo ?? '',
+              replyToEmail: params.replyTo || 'hello@purpleandpure.com',
               templateID: template.id
             }
           },
@@ -346,13 +377,17 @@ export class OmnisendService {
       const campaignId = campaign.campaignID;
       console.log(`[Omnisend] Created draft campaign: ${campaignId}`);
 
-      // 2. Send immediately
+      // 3. Send or Schedule
+      const sendPayload: Record<string, any> = params.scheduledAt
+        ? { strategy: 'scheduled', scheduledAt: params.scheduledAt }
+        : { strategy: 'immediate' };
+
       await this.fetchWithRetry(`/api/campaigns/${campaignId}/send`, {
         method: 'POST',
-        body: JSON.stringify({ strategy: 'immediate' }),
+        body: JSON.stringify(sendPayload),
       });
 
-      console.log(`[Omnisend] Campaign ${campaignId} sent immediately.`);
+      console.log(`[Omnisend] Campaign ${campaignId} dispatched:`, JSON.stringify(sendPayload));
       return { success: true, campaignId };
 
     } catch (error) {

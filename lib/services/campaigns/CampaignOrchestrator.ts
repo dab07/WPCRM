@@ -336,17 +336,23 @@ export class CampaignOrchestrator {
           if (contacts.length > 0 && campaign.target_tags && campaign.target_tags.length > 0) {
             console.log(`[Campaign ${campaign.name}] Syncing ${contacts.length} contacts to Omnisend with tags: ${campaign.target_tags.join(', ')}`);
             for (const contact of contacts) {
-              if (contact.email) {
+              const email = contact.email?.trim();
+              if (email) {
+                const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
+                if (!EMAIL_REGEX.test(email)) {
+                  console.warn(`[Campaign ${campaign.name}] Skipping contact with invalid email format: ${email}`);
+                  continue;
+                }
                 try {
                   await omnisend.upsertContact({
-                    email: contact.email,
+                    email: email,
                     firstName: contact.name,
                     phone: contact.phone_number,
                     tags: campaign.target_tags,
                     status: 'subscribed'
                   });
                 } catch (err) {
-                  console.error(`[Campaign ${campaign.name}] Failed to sync contact ${contact.email}:`, err);
+                  console.error(`[Campaign ${campaign.name}] Failed to sync contact ${email}:`, err);
                 }
               }
             }
@@ -378,6 +384,7 @@ export class CampaignOrchestrator {
             body: bodyHtml,
             fromName: 'Zavops CRM',
             segmentID: segmentID,
+            scheduledAt: campaign.scheduled_at || undefined,
           });
 
           if (omnisendResult.success) {
@@ -429,6 +436,29 @@ export class CampaignOrchestrator {
           campaignImageMimeType = onceImageResult.mimeType ?? 'image/png';
         }
       }
+      // ── Resolve Gallabox contacts to filter and skip unregistered phone numbers ──
+      const gallaboxPhoneSet = new Set<string>();
+      let hasGallabox = false;
+      if (sendWhatsApp) {
+        try {
+          const gallabox = await this.getGallaboxService();
+          if (gallabox) {
+            hasGallabox = true;
+            const contactsResult = await gallabox.getContacts(10000, 0);
+            if (contactsResult.success && contactsResult.contacts) {
+              for (const gc of contactsResult.contacts) {
+                if (gc.phone) {
+                  // Normalize phone: digits only
+                  gallaboxPhoneSet.add(gc.phone.replace(/\D/g, ''));
+                }
+              }
+              console.log(`[Campaign ${campaign.name}] Loaded ${gallaboxPhoneSet.size} registered contacts from Gallabox.`);
+            }
+          }
+        } catch (err) {
+          console.warn(`[Campaign ${campaign.name}] ❌ Gallabox is not configured or failed to fetch contacts. WhatsApp send will be skipped:`, err);
+        }
+      }
 
       // Process contacts in batches to reduce memory usage
       const BATCH_SIZE = 10;
@@ -453,76 +483,81 @@ export class CampaignOrchestrator {
             let whatsappSuccess = false;
 
             // ── WhatsApp send ──────────────────────────────────────────────
-            if (sendWhatsApp) {
-              // Build params without explicit `undefined` values (exactOptionalPropertyTypes)
-              const waParams: {
-                to: string;
-                message: string;
-                type?: 'text' | 'image' | 'interactive';
-                imageBase64?: string;
-                imageCaption?: string;
-                imageMimeType?: string;
-                imagePublicUrl?: string;
-                interactivePayload?: any;
-              } = {
-                to: contact.phone_number,
-                message: personalizedMessage,
-                type: campaignImageBase64 ? 'image' : 'text',
-              };
-
-              if (campaignImageBase64) waParams.imageBase64 = campaignImageBase64;
-              waParams.imageCaption = personalizedMessage;
-              waParams.imageMimeType = campaignImageMimeType;
-              if (campaign.image_url && !campaign.image_url.startsWith('data:')) {
-                waParams.imagePublicUrl = campaign.image_url;
-              }
-
-              // Handle interactive campaigns via Gallabox session messages
-              if (campaign.wa_campaign_type === 'discount' || campaign.wa_campaign_type === 'url_button') {
-                waParams.type = 'interactive';
-                
-                const buttons = [];
-                if (campaign.wa_button_url && campaign.wa_button_text) {
-                  buttons.push({
-                    type: 'url',
-                    url: { title: campaign.wa_button_text, url: campaign.wa_button_url }
-                  });
-                }
-                
-                if (campaign.wa_campaign_type === 'discount' && campaign.discount_code) {
-                  // Fallback to text copy-code simulation if needed, or quick reply
-                  buttons.push({
-                    type: 'reply',
-                    reply: { id: `copy_${campaign.discount_code}`, title: `Code: ${campaign.discount_code}` }
-                  });
-                }
-
-                if (buttons.length > 0) {
-                  waParams.interactivePayload = {
-                    type: 'button',
-                    body: { text: personalizedMessage },
-                    action: { buttons }
-                  };
-                }
-              }
-
-              const result = await this.sendWhatsAppMessage(waParams);
-              whatsappSuccess = result.success;
-
-              if (result.success) {
-                const conversationId = await this.getOrCreateConversationId(contact.id);
-                if (conversationId) {
-                  messageRecords.push({
-                    conversation_id: conversationId,
-                    whatsapp_message_id: result.messageId,
-                    sender_type: 'ai',
-                    content: personalizedMessage,
-                    message_type: campaignImageBase64 ? 'image' : 'text',
-                    delivery_status: 'sent',
-                  });
-                }
+            if (sendWhatsApp && hasGallabox) {
+              const normalizedPhone = contact.phone_number.replace(/\D/g, '');
+              if (!gallaboxPhoneSet.has(normalizedPhone)) {
+                console.log(`[Campaign ${campaign.name}] Contact ${contact.phone_number} is not registered in Gallabox. Skipping WhatsApp message.`);
               } else {
-                console.error(`[Campaign] WhatsApp failed for ${contact.phone_number}: ${result.error}`);
+                // Build params without explicit `undefined` values (exactOptionalPropertyTypes)
+                const waParams: {
+                  to: string;
+                  message: string;
+                  type?: 'text' | 'image' | 'interactive';
+                  imageBase64?: string;
+                  imageCaption?: string;
+                  imageMimeType?: string;
+                  imagePublicUrl?: string;
+                  interactivePayload?: any;
+                } = {
+                  to: contact.phone_number,
+                  message: personalizedMessage,
+                  type: campaignImageBase64 ? 'image' : 'text',
+                };
+
+                if (campaignImageBase64) waParams.imageBase64 = campaignImageBase64;
+                waParams.imageCaption = personalizedMessage;
+                waParams.imageMimeType = campaignImageMimeType;
+                if (campaign.image_url && !campaign.image_url.startsWith('data:')) {
+                  waParams.imagePublicUrl = campaign.image_url;
+                }
+
+                // Handle interactive campaigns via Gallabox session messages
+                if (campaign.wa_campaign_type === 'discount' || campaign.wa_campaign_type === 'url_button') {
+                  waParams.type = 'interactive';
+                  
+                  const buttons = [];
+                  if (campaign.wa_button_url && campaign.wa_button_text) {
+                    buttons.push({
+                      type: 'url',
+                      url: { title: campaign.wa_button_text, url: campaign.wa_button_url }
+                    });
+                  }
+                  
+                  if (campaign.wa_campaign_type === 'discount' && campaign.discount_code) {
+                    // Fallback to text copy-code simulation if needed, or quick reply
+                    buttons.push({
+                      type: 'reply',
+                      reply: { id: `copy_${campaign.discount_code}`, title: `Code: ${campaign.discount_code}` }
+                    });
+                  }
+
+                  if (buttons.length > 0) {
+                    waParams.interactivePayload = {
+                      type: 'button',
+                      body: { text: personalizedMessage },
+                      action: { buttons }
+                    };
+                  }
+                }
+
+                const result = await this.sendWhatsAppMessage(waParams);
+                whatsappSuccess = result.success;
+
+                if (result.success) {
+                  const conversationId = await this.getOrCreateConversationId(contact.id);
+                  if (conversationId) {
+                    messageRecords.push({
+                      conversation_id: conversationId,
+                      whatsapp_message_id: result.messageId,
+                      sender_type: 'ai',
+                      content: personalizedMessage,
+                      message_type: campaignImageBase64 ? 'image' : 'text',
+                      delivery_status: 'sent',
+                    });
+                  }
+                } else {
+                  console.error(`[Campaign] WhatsApp failed for ${contact.phone_number}: ${result.error}`);
+                }
               }
             }
 
@@ -535,7 +570,7 @@ export class CampaignOrchestrator {
 
             // Count as sent if at least one channel succeeded
             // For email-only, WhatsApp wasn't attempted — count as success if email broadcast fired
-            const overallSuccess = sendWhatsApp ? whatsappSuccess : emailCampaignFired;
+            const overallSuccess = (sendWhatsApp && hasGallabox) ? whatsappSuccess : emailCampaignFired;
             return { success: overallSuccess, contact: contact.id };
 
           } catch (error) {
@@ -626,11 +661,11 @@ export class CampaignOrchestrator {
     } catch (error) {
       console.error(`Error executing campaign ${campaign.name}:`, error);
       
-      // Update campaign status to pending on error so it can be retried
+      // Keep campaign status as approved on error so it stays in Approved tab and can be retried
       await this.supabase
         .from('campaigns')
         .update({ 
-          status: 'pending',
+          status: 'approved',
         })
         .eq('id', campaign.id);
         
@@ -655,7 +690,7 @@ export class CampaignOrchestrator {
       
       // Apply tag filtering if specified
       if (campaign.target_tags && campaign.target_tags.length > 0) {
-        query = query.contains('tags', campaign.target_tags);
+        query = query.contains('tags', JSON.stringify(campaign.target_tags));
       }
 
       const { data: dbContacts, error } = await query;
