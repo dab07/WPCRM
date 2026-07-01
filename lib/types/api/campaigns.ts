@@ -12,8 +12,42 @@ export type ImageStatus = 'not_generated' | 'generating' | 'generated';
 
 export type Quarter = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 
-/** Which delivery channels this campaign uses */
-export type CampaignChannel = 'whatsapp' | 'email' | 'both';
+/** Which delivery channels this campaign uses — stored as comma-separated list */
+export type CampaignChannel =
+  // New provider-based values
+  | 'gallabox'          // WhatsApp via Gallabox
+  | 'omnisend_email'    // Email via Omnisend
+  | 'omnisend_push'     // Push Notifications via Omnisend
+  | 'omnisend_sms'      // SMS via Omnisend
+  // Legacy values (kept for backward compat reading old data)
+  | 'whatsapp'
+  | 'email'
+  | 'both';
+
+/** Set of channels selected for a campaign */
+export type ChannelSet = Set<CampaignChannel>;
+
+/** Human-readable labels per channel */
+export const CHANNEL_LABELS: Record<string, string> = {
+  gallabox: 'Gallabox',
+  omnisend_email: 'Omnisend · Email',
+  omnisend_push: 'Omnisend · Push',
+  omnisend_sms: 'Omnisend · SMS',
+  // legacy
+  whatsapp: 'WhatsApp',
+  email: 'Email',
+  both: 'WhatsApp + Email',
+};
+
+/** Convert old single-channel value to new channel array */
+export function normalizeChannels(channel?: CampaignChannel | string | null): string[] {
+  if (!channel) return ['gallabox'];
+  if (channel === 'whatsapp') return ['gallabox'];
+  if (channel === 'email') return ['omnisend_email'];
+  if (channel === 'both') return ['gallabox', 'omnisend_email'];
+  // New multi-value stored as comma-separated e.g. "gallabox,omnisend_email"
+  return channel.split(',').map(c => c.trim()).filter(Boolean);
+}
 
 export interface Campaign {
   id: string;
@@ -32,7 +66,7 @@ export interface Campaign {
   executed_at?: string | null;
   target_count?: number;
   // Channel & email fields
-  channel?: CampaignChannel | null;
+  channel?: string | null;
   email_subject?: string | null;
   email_body?: string | null;
   email_attachments?: any | null;
@@ -59,7 +93,7 @@ export interface CreateCampaignRequest {
   image_url?: string;
   image_status?: ImageStatus;
   target_count?: number;
-  channel?: CampaignChannel;
+  channel?: string;
   email_subject?: string;
   email_body?: string;
   email_attachments?: any[];
@@ -84,7 +118,7 @@ export interface UpdateCampaignRequest {
   executed_at?: string | null;
   target_count?: number;
   sent_count?: number;
-  channel?: CampaignChannel;
+  channel?: string;
   email_subject?: string | null;
   email_body?: string | null;
   email_attachments?: any[] | null;

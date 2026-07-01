@@ -20,8 +20,9 @@ import {
   Link2,
   Percent,
 } from 'lucide-react';
-import type { Campaign, CampaignChannel } from '../../../../lib/types/api/campaigns';
+import type { Campaign } from '../../../../lib/types/api/campaigns';
 import { getSupabaseClient } from '../../../../supabase/supabase';
+import { parseChannels, CHANNEL_DEFS } from './ChannelPicker';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface DeployModalProps {
@@ -129,49 +130,34 @@ const ATTRIBUTE_MAP: AttributeRow[] = [
   },
 ];
 
-function getVisibleAttributes(channel: CampaignChannel): AttributeRow[] {
+function getVisibleAttributes(channel: string): AttributeRow[] {
+  const channels = parseChannels(channel);
   return ATTRIBUTE_MAP.filter((row) => {
     if (row.showWhen === 'always') return true;
-    if (row.showWhen === 'email') return channel === 'email' || channel === 'both';
-    if (row.showWhen === 'whatsapp') return channel === 'whatsapp' || channel === 'both';
+    if (row.showWhen === 'email') return channels.includes('omnisend_email');
+    if (row.showWhen === 'whatsapp') return channels.includes('gallabox');
     return true;
   });
 }
 
 // ─── Channel Badge (inline) ───────────────────────────────────────────────────
-function ChannelInfo({ channel }: { channel: CampaignChannel }) {
-  if (channel === 'email') {
-    return (
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 border border-brand-blue/40 bg-brand-blue/10 rounded-[4px]">
-          <Mail className="w-4 h-4 stroke-[1.5] text-brand-blue" />
-          <span className="font-mono text-[11px] uppercase tracking-label text-brand-blue">Omnisend</span>
-        </div>
-      </div>
-    );
-  }
-  if (channel === 'whatsapp') {
-    return (
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 border border-green-500/40 bg-green-500/10 rounded-[4px]">
-          <MessageSquare className="w-4 h-4 stroke-[1.5] text-green-400" />
-          <span className="font-mono text-[11px] uppercase tracking-label text-green-400">Gallabox</span>
-        </div>
-      </div>
-    );
-  }
-  // both
+function ChannelInfo({ channel }: { channel: string }) {
+  const selectedChannels = parseChannels(channel);
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center gap-1.5 px-2.5 py-1.5 border border-green-500/40 bg-green-500/10 rounded-[4px]">
-        <MessageSquare className="w-4 h-4 stroke-[1.5] text-green-400" />
-        <span className="font-mono text-[11px] uppercase tracking-label text-green-400">Gallabox</span>
-      </div>
-      <span className="font-mono text-[10px] text-brand-muted">+</span>
-      <div className="flex items-center gap-1.5 px-2.5 py-1.5 border border-brand-blue/40 bg-brand-blue/10 rounded-[4px]">
-        <Mail className="w-4 h-4 stroke-[1.5] text-brand-blue" />
-        <span className="font-mono text-[11px] uppercase tracking-label text-brand-blue">Omnisend</span>
-      </div>
+    <div className="flex items-center gap-2 flex-wrap">
+      {selectedChannels.map((chId, idx) => {
+        const def = CHANNEL_DEFS.find(d => d.id === chId);
+        if (!def) return null;
+        return (
+          <div key={chId} className="flex items-center gap-2">
+            {idx > 0 && <span className="font-mono text-[10px] text-brand-muted">+</span>}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1.5 border ${def.borderColor} ${def.bgColor} rounded-[4px]`}>
+              <span className={def.iconColor}>{def.icon}</span>
+              <span className={`font-mono text-[11px] uppercase tracking-label ${def.iconColor}`}>{def.label}</span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -184,10 +170,10 @@ export function DeployModal({ campaign, onClose, onDeployed }: DeployModalProps)
   const [contactCount, setContactCount] = useState<number | null>(null);
   const [showMapping, setShowMapping] = useState(false);
 
-  const effectiveChannel: CampaignChannel =
-    campaign.channel ?? (campaign.send_email ? 'both' : 'whatsapp');
-  const showWA = effectiveChannel === 'whatsapp' || effectiveChannel === 'both';
-  const showEmail = effectiveChannel === 'email' || effectiveChannel === 'both';
+  const effectiveChannel = campaign.channel ?? (campaign.send_email ? 'both' : 'whatsapp');
+  const channels = parseChannels(effectiveChannel);
+  const showWA = channels.includes('gallabox');
+  const showEmail = channels.includes('omnisend_email');
 
   // Estimate recipient count
   useEffect(() => {

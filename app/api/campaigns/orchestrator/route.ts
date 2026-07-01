@@ -120,9 +120,11 @@ async function executeScheduledCampaigns(source: string): Promise<{
       const result = await orchestrator.executeSingleCampaign(campaign.id);
       sent += result.sent;
 
-      if (effectiveChannel === 'whatsapp') whatsapp_sent += result.sent;
-      else if (effectiveChannel === 'email') email_sent += result.sent;
-      else { whatsapp_sent += result.sent; email_sent += result.sent; }
+      const hasWhatsApp = effectiveChannel.includes('gallabox') || effectiveChannel === 'whatsapp' || effectiveChannel === 'both';
+      const hasEmail = effectiveChannel.includes('omnisend_email') || effectiveChannel === 'email' || effectiveChannel === 'both';
+
+      if (hasWhatsApp) whatsapp_sent += result.sent;
+      if (hasEmail) email_sent += result.sent;
 
       campaignResults.push({ id: campaign.id, name: campaign.name, channel: effectiveChannel, sent: result.sent, status: 'executed' });
       console.log(`[Orchestrator] ✅ "${campaign.name}" — ${result.sent} sent`);

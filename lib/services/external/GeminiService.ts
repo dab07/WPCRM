@@ -579,7 +579,7 @@ You receive real brand and customer data collected automatically from
 Shopify and Omnisend, along with live contextual signals.
 
 Your job:
-1. Decide the single best campaign to run RIGHT NOW for this brand.
+1. Decide the best campaign to run RIGHT NOW for this brand.
 2. Define the target audience segment.
 3. Write all campaign content ready for execution.
 4. Return a structured JSON object that will be shown to the brand owner
@@ -593,6 +593,7 @@ Rules:
 - Prefer no-discount offers when historical data shows they perform equally well.
 - Always apply weather, location, birthday, season, and time signals when
   they are relevant to the product category.
+- Create a unique tag of exactly 2 characters for this campaign under "decision.suggested_tag" using the format "XY", where "X" is the initial letter of the campaign type ("W" for Weather, "L" for Local, "H" for History, "I" for Inventory, "B" for Birthday, etc.) and "Y" is a whole number (e.g. 1, 2, 3).
 - Output valid JSON only. No prose, no markdown, no explanation outside the JSON.`;
 
         const userPrompt = `=== BRAND PROFILE ===
@@ -657,7 +658,7 @@ data provided. If two signals are equally strong, combine them.
 Then return ONLY this JSON matching the structure:
 {
   "decision": {
-    "campaign_type": "", "contextual_trigger": "", "why_now": "", "customer_stage_targeted": "", "estimated_audience_size": 0, "confidence": "high | medium | low", "confidence_reason": ""
+    "campaign_type": "", "contextual_trigger": "", "suggested_tag": "", "why_now": "", "customer_stage_targeted": "", "estimated_audience_size": 0, "confidence": "high | medium | low", "confidence_reason": ""
   },
   "segment": {
     "description": "", "filters": [{ "field": "", "operator": "", "value": "" }], "exclusions": ""
@@ -819,7 +820,7 @@ Dormant: ${params.counts.dormant}
    */
   async rewriteSignalMessages(signals: any[]): Promise<any[]> {
     if (!signals.length) return signals;
-    
+
     try {
       const result = await this.executeWithTimeout(async () => {
         const client = this.getClient();
@@ -831,11 +832,11 @@ Keep any links as exactly "[Link]". The output array MUST have the exact same le
 
 Output ONLY a valid JSON array of strings containing the rewritten messages.`;
 
-        const userPrompt = `Signals:\n${JSON.stringify(signals.map(s => ({ 
-          title: s.title, 
-          description: s.description, 
-          urgency: s.urgency, 
-          original_message: s.suggested_message 
+        const userPrompt = `Signals:\n${JSON.stringify(signals.map(s => ({
+          title: s.title,
+          description: s.description,
+          urgency: s.urgency,
+          original_message: s.suggested_message
         })), null, 2)}`;
 
         const response = await client.models.generateContent({
@@ -866,7 +867,7 @@ Output ONLY a valid JSON array of strings containing the rewritten messages.`;
         } catch {
           // ignore parse errors
         }
-        
+
         return signals;
       }, 'rewriteSignalMessages');
 
@@ -874,6 +875,38 @@ Output ONLY a valid JSON array of strings containing the rewritten messages.`;
     } catch (error) {
       console.error('[Gemini Service] Error rewriting signal messages:', error);
       return signals; // fallback to original signals if gemini fails
+    }
+  }
+
+  async selectTargetCustomers(campaign: { name: string; message_template: string }, customers: any[]): Promise<string[]> {
+    const client = this.getClient();
+    const systemPrompt = `You are an AI targeting engine. Your job is to analyze a campaign's name and message template, and decide which of the given customers are target candidates.
+Rules:
+- Location matching: If the campaign mentions a location or festival tied to a location (e.g., "Singapore Food Festival" or "Summer Drop - Singapore"), target customers whose location matches (e.g. Singapore).
+- Winback/Inactive: If the campaign is a winback/reactivation campaign (e.g. "We miss you" or "Rerun: Flash Sale"), target customers with total_orders > 0 who haven't ordered in a long time (last_order_date is old or null).
+- Clearance/Sale: If the campaign is a clearance or general store-wide sale (e.g., "Clearance Sale"), target all customers.
+- Return ONLY a JSON array of email strings of target candidates. Do not include markdown or explanations.`;
+
+    const userPrompt = `Campaign Name: ${campaign.name}
+Message Template: ${campaign.message_template}
+
+Customers:
+${JSON.stringify(customers.map(c => ({ email: c.email, name: c.name, location: c.location, tags: c.tags, total_orders: c.total_orders, last_order_date: c.last_order_date })), null, 2)}`;
+
+    try {
+      const response = await client.models.generateContent({
+        model: externalServicesConfig.gemini.model,
+        config: {
+          systemInstruction: systemPrompt,
+          responseMimeType: "application/json",
+        },
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }]
+      });
+      const emails = JSON.parse(response.text || '[]');
+      return Array.isArray(emails) ? emails : [];
+    } catch (err) {
+      console.error('[Gemini Service] Error selecting target customers:', err);
+      return [];
     }
   }
 }
@@ -974,4 +1007,9 @@ export async function generateCustomerJourneyStrategy(params: IntelligentCampaig
 export async function rewriteSignalMessages(signals: any[]): Promise<any[]> {
   const service = await getGeminiService();
   return service.rewriteSignalMessages(signals);
+}
+
+export async function selectTargetCustomers(campaign: { name: string; message_template: string }, customers: any[]): Promise<string[]> {
+  const service = await getGeminiService();
+  return service.selectTargetCustomers(campaign, customers);
 }

@@ -3,47 +3,11 @@
 import { useState, useEffect } from 'react';
 import {
   X, Wand2, Loader2, AlertTriangle, Sparkles, CheckCircle,
-  MessageSquare, Mail, Layers, Smartphone, BarChart2,
+  MessageSquare, Mail,
 } from 'lucide-react';
 import { getSupabaseClient } from '../../../../supabase/supabase';
 import { EmailComposerSection, type EmailComposerValue } from './EmailComposerSection';
-
-// ── Channel type ──────────────────────────────────────────────────────────────
-type Channel = 'whatsapp' | 'email' | 'both';
-
-interface ChannelOption {
-  id: Channel;
-  label: string;
-  icon: React.ReactNode;
-  description: string;
-}
-
-const CHANNEL_OPTIONS: ChannelOption[] = [
-  {
-    id: 'whatsapp',
-    label: 'WhatsApp',
-    icon: <MessageSquare className="w-4 h-4 stroke-[1.5]" />,
-    description: 'WhatsApp Business via Gallabox',
-  },
-  {
-    id: 'email',
-    label: 'Email',
-    icon: <Mail className="w-4 h-4 stroke-[1.5]" />,
-    description: 'Broadcast via Omnisend',
-  },
-  {
-    id: 'both',
-    label: 'WhatsApp + Email',
-    icon: <Layers className="w-4 h-4 stroke-[1.5]" />,
-    description: 'Both channels simultaneously',
-  },
-];
-
-// Upcoming channels (disabled — shown greyed out)
-const UPCOMING_CHANNELS = [
-  { id: 'meta', label: 'Meta Ads', icon: <BarChart2 className="w-4 h-4 stroke-[1.5]" /> },
-  { id: 'sms', label: 'SMS', icon: <Smartphone className="w-4 h-4 stroke-[1.5]" /> },
-];
+import { ChannelPicker, type ChannelId, serializeChannels, parseChannels } from './ChannelPicker';
 
 // ── Preview state ─────────────────────────────────────────────────────────────
 interface PreviewState {
@@ -52,7 +16,7 @@ interface PreviewState {
   message_template: string;
   scheduled_at: string;
   target_tags: string[];
-  channel: Channel;
+  channels: ChannelId[];
   email: EmailComposerValue;
   wa_campaign_type: 'standard' | 'discount' | 'url_button';
   wa_button_text: string;
@@ -216,7 +180,7 @@ Return ONLY valid JSON, no markdown, no explanation.`,
         message_template: parsed.message_template ?? '',
         scheduled_at: parsed.scheduled_at ?? '',
         target_tags: Array.isArray(parsed.target_tags) ? parsed.target_tags : [],
-        channel: 'whatsapp',
+        channels: parseChannels('gallabox'),
         email: {
           subject: parsed.email_subject ?? '',
           body: parsed.email_body ?? '',
@@ -245,7 +209,8 @@ Return ONLY valid JSON, no markdown, no explanation.`,
       const { data: { session } } = await sb.auth.getSession();
       const token = session?.access_token ?? 'anon';
 
-      const sendEmail = preview.channel === 'email' || preview.channel === 'both';
+      const channelStr = serializeChannels(preview.channels);
+      const sendEmail = preview.channels.includes('omnisend_email');
       const uploadedAttachments: { url: string; name: string; path: string }[] = [];
 
       if (sendEmail && preview.email.attachments.length > 0) {
@@ -273,7 +238,7 @@ Return ONLY valid JSON, no markdown, no explanation.`,
           scheduled_at: preview.scheduled_at,
           target_tags: preview.target_tags,
           status: 'draft',
-          channel: preview.channel,
+          channel: channelStr,
           send_email: sendEmail,
           email_subject: sendEmail ? preview.email.subject : null,
           email_body: sendEmail ? preview.email.body : null,
@@ -296,8 +261,8 @@ Return ONLY valid JSON, no markdown, no explanation.`,
     }
   };
 
-  const showWhatsApp = preview?.channel === 'whatsapp' || preview?.channel === 'both';
-  const showEmail = preview?.channel === 'email' || preview?.channel === 'both';
+  const showWhatsApp = preview?.channels.includes('gallabox');
+  const showEmail = preview?.channels.includes('omnisend_email');
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -348,63 +313,13 @@ Return ONLY valid JSON, no markdown, no explanation.`,
                 Campaign generated — review and confirm below
               </div>
 
-              {/* ── Channel selector ── */}
+              {/* ── Channel picker (multi-select checkboxes) ── */}
               <div>
-                <p className={LABEL_CLS}>Select Channel</p>
-
-                {/* Active channels */}
-                <div className="grid grid-cols-3 gap-2 mb-2">
-                  {CHANNEL_OPTIONS.map((opt) => {
-                    const active = preview.channel === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setPreview(prev => prev ? { ...prev, channel: opt.id } : null)}
-                        className={`
-                          flex flex-col items-center gap-1.5 px-3 py-3 border rounded-[4px]
-                          font-mono text-[11px] uppercase tracking-label transition-all
-                          focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-yellow
-                          ${active
-                            ? 'border-brand-yellow bg-brand-yellow/10 text-brand-yellow'
-                            : 'border-[rgba(59,91,173,0.3)] text-brand-muted hover:border-brand-blue/60 hover:text-brand-offwhite'}
-                        `}
-                      >
-                        {/* Custom checkbox dot */}
-                        <span className={`w-3 h-3 rounded-[2px] border flex items-center justify-center shrink-0
-                          ${active ? 'border-brand-yellow bg-brand-yellow' : 'border-brand-muted/50'}`}
-                        >
-                          {active && (
-                            <svg viewBox="0 0 8 8" className="w-2 h-2 fill-brand-navy" aria-hidden="true">
-                              <path d="M1 4l2 2 4-4" stroke="#1A2847" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          )}
-                        </span>
-                        {opt.icon}
-                        <span>{opt.label}</span>
-                        <span className="font-body text-[10px] normal-case tracking-normal text-center leading-tight opacity-70">
-                          {opt.description}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Upcoming channels (disabled) */}
-                <div className="flex gap-2">
-                  {UPCOMING_CHANNELS.map((ch) => (
-                    <div
-                      key={ch.id}
-                      className="flex items-center gap-2 px-3 py-2 border border-[rgba(59,91,173,0.15)] rounded-[4px] opacity-40 cursor-not-allowed"
-                    >
-                      {ch.icon}
-                      <span className="font-mono text-[10px] uppercase tracking-label text-brand-muted">{ch.label}</span>
-                      <span className="font-mono text-[9px] uppercase tracking-label text-brand-yellow/60 border border-brand-yellow/30 px-1.5 py-0.5 rounded-[2px]">
-                        Soon
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <ChannelPicker
+                  selected={preview.channels}
+                  onChange={(channels) => setPreview(prev => prev ? { ...prev, channels } : null)}
+                  labelCls="block font-mono text-[10px] uppercase tracking-label text-brand-muted mb-2"
+                />
               </div>
 
               {/* ── Diagonal slash divider ── */}

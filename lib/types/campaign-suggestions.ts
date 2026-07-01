@@ -11,5 +11,7 @@ export interface CampaignSuggestion {
   suggested_festival: string;
   suggested_message: string;
   suggested_scheduled_at: string;
+  /** Pre-computed deterministic tag for this campaign, e.g. "weather_sg" or "repurchase_2026_6" */
+  suggested_tag: string;
   metadata: Record<string, unknown>;
 }

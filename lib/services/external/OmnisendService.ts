@@ -62,6 +62,8 @@ export interface OmnisendEmailCampaignParams {
   fromName?: string;
   /** Reply-to address (must be verified in Omnisend) */
   replyTo?: string;
+  /** Segment ID to target (if omitted, will target all subscribed contacts) */
+  segmentID?: string | undefined;
 }
 
 export interface OmnisendSendCampaignResult {
@@ -253,6 +255,41 @@ export class OmnisendService {
   }
 
   /**
+   * Creates a segment in Omnisend for the specified tags.
+   */
+  async createSegment(name: string, tags: string[]): Promise<string | undefined> {
+    if (!this.apiKey) return undefined;
+    
+    try {
+      const payload = {
+        name: name,
+        conditionGroups: [
+          {
+            conditions: [
+              {
+                entity: "contact",
+                junction: "and",
+                filters: [
+                  { operator: "anyOf", property: "tags", value: tags }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+
+      const data = await this.fetchWithRetry<{ segmentID: string }>('/api/segments', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      return data.segmentID;
+    } catch (err) {
+      console.error('[Omnisend] createSegment failed:', err);
+      return undefined;
+    }
+  }
+
+  /**
    * Create an Omnisend email campaign targeting all subscribed contacts,
    * then immediately fire it.
    *
@@ -273,19 +310,35 @@ export class OmnisendService {
         ? params.body
         : `<html><body style="font-family:sans-serif;font-size:15px;line-height:1.6;color:#333;max-width:600px;margin:auto;padding:24px">${params.body.replace(/\n/g, '<br>')}</body></html>`;
 
-      // 1. Create campaign as draft
+      // 1. Import email template from HTML
+      const template = await this.fetchWithRetry<{ id: string }>('/api/email-templates/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `${params.name} Template`,
+          html: htmlBody
+        }),
+      });
+
+      if (!template || !template.id) {
+        throw new Error('Failed to import HTML into an Omnisend email template');
+      }
+
+      // 2. Create campaign as draft
       const campaign = await this.fetchWithRetry<{ campaignID: string }>('/api/campaigns', {
         method: 'POST',
         body: JSON.stringify({
           name: params.name,
-          type: 'email',
-          status: 'draft',
-          options: {},
+          type: 'regular',
+          channel: 'email',
+          language: 'en',
+          options: params.segmentID ? { segmentIds: [params.segmentID] } : {},
           content: {
-            subject: params.subject,
-            fromName: params.fromName ?? 'CRM',
-            replyTo: params.replyTo ?? '',
-            html: htmlBody,
+            email: {
+              subject: params.subject,
+              senderName: params.fromName ?? 'CRM',
+              replyToEmail: params.replyTo ?? '',
+              templateID: template.id
+            }
           },
         }),
       });

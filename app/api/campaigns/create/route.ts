@@ -95,6 +95,16 @@ export async function POST(request: NextRequest) {
       brand_label
     });
 
+    // Trigger async targeting and segmentation sync in background
+    if (target_tags && target_tags.length > 0) {
+      runAsyncTargetingAndSync(
+        name,
+        message_template,
+        target_tags[0],
+        body.metadata?.target_emails
+      ).catch(err => console.error('[Campaign API] Background targeting error:', err));
+    }
+
     return NextResponse.json({
       success: true,
       campaign
@@ -132,5 +142,87 @@ export async function GET() {
       },
       { status: 500 }
     );
+  }
+}
+
+async function runAsyncTargetingAndSync(
+  name: string,
+  messageTemplate: string,
+  targetTag: string,
+  metadataTargetEmails?: string[]
+) {
+  try {
+    const { supabaseAdmin } = await import('../../../../supabase/supabase');
+    const { selectTargetCustomers } = await import('../../../../lib/services/external/GeminiService');
+    const { getOmnisendService } = await import('../../../../lib/services/external/OmnisendService');
+
+    // 1. Fetch all customers
+    const { data: allCustomers } = await supabaseAdmin
+      .from('customers')
+      .select('id, name, email, phone, location, tags, total_orders, last_order_date');
+
+    if (!allCustomers || allCustomers.length === 0) {
+      console.log(`[Async Targeting] No customers found in DB.`);
+      return;
+    }
+
+    // 2. Resolve matching customer emails (either from metadata or AI)
+    let targetEmails = metadataTargetEmails || [];
+    if (targetEmails.length === 0) {
+      console.log(`[Async Targeting] metadata.target_emails is empty. Running Gemini to select target customers...`);
+      targetEmails = await selectTargetCustomers({ name, message_template: messageTemplate }, allCustomers);
+      console.log(`[Async Targeting] Gemini selected ${targetEmails.length} target customers.`);
+    }
+
+    if (targetEmails.length === 0) {
+      console.log(`[Async Targeting] No target customers resolved.`);
+      return;
+    }
+
+    // 3. Update matching customers in the local database
+    const matchingCustomers = allCustomers.filter(c => c.email && targetEmails.includes(c.email));
+    if (matchingCustomers.length > 0) {
+      const chunkSize = 50;
+      for (let i = 0; i < matchingCustomers.length; i += chunkSize) {
+        const chunk = matchingCustomers.slice(i, i + chunkSize);
+        await Promise.all(chunk.map((c: any) => {
+          const currentTags = Array.isArray(c.tags) ? c.tags : [];
+          const newTags = Array.from(new Set([...currentTags, targetTag]));
+          return supabaseAdmin.from('customers').update({ tags: newTags }).eq('id', c.id);
+        }));
+      }
+      console.log(`[Async Targeting] Local database: Tagged ${matchingCustomers.length} customers with ${targetTag}`);
+    }
+
+    // 4. Sync matching customers to Omnisend to build the segment
+    let omnisend;
+    try {
+      omnisend = await getOmnisendService();
+    } catch (err) {
+      console.warn(`[Async Targeting] Omnisend not configured, skipping contacts sync.`);
+      return;
+    }
+
+    if (omnisend) {
+      console.log(`[Async Targeting] Omnisend: Syncing ${matchingCustomers.length} contacts with tag ${targetTag}...`);
+      for (const contact of matchingCustomers) {
+        if (contact.email) {
+          try {
+            await omnisend.upsertContact({
+              email: contact.email,
+              firstName: contact.name,
+              phone: contact.phone,
+              tags: [targetTag],
+              status: 'subscribed'
+            });
+          } catch (err) {
+            console.error(`[Async Targeting] Failed to sync contact ${contact.email} to Omnisend:`, err);
+          }
+        }
+      }
+      console.log(`[Async Targeting] Omnisend sync completed.`);
+    }
+  } catch (err) {
+    console.error('[Async Targeting] Error in targeting pipeline:', err);
   }
 }

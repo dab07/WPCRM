@@ -9,9 +9,61 @@ export async function POST() {
 
   try {
     const shopify = new ShopifyService();
-    const customers = await shopify.getCustomers();
+    const [customers, orders] = await Promise.all([
+      shopify.getCustomers(),
+      shopify.getOrders()
+    ]);
+    
+    // 1. Map Orders to Customers to calculate total_orders and last_order_date
+    const orderStats = new Map<string, { count: number; lastDate: Date }>();
+    for (const o of orders) {
+      if (!o.email) continue;
+      const current = orderStats.get(o.email) || { count: 0, lastDate: new Date(0) };
+      const orderDate = new Date(o.created_at);
+      orderStats.set(o.email, {
+        count: current.count + 1,
+        lastDate: orderDate > current.lastDate ? orderDate : current.lastDate
+      });
+    }
 
-    // 1. Count cities
+    // Fetch existing customer tags from database to merge and prevent overwriting campaign segment tags
+    const { data: existingCustomers } = await supabaseAdmin
+      .from('customers')
+      .select('email, tags');
+    const existingTagsMap = new Map<string, string[]>();
+    if (existingCustomers) {
+      for (const ec of existingCustomers) {
+        if (ec.email) existingTagsMap.set(ec.email, ec.tags || []);
+      }
+    }
+
+    // 2. Sync to Unified Customers Table
+    const customerRecords = customers.map(c => {
+      const stats = orderStats.get(c.email) || { count: 0, lastDate: null };
+      const shopifyTags = c.tags ? c.tags.split(',').map(t => t.trim()) : [];
+      const localTags = existingTagsMap.get(c.email) || [];
+      const mergedTags = Array.from(new Set([...localTags, ...shopifyTags]));
+
+      return {
+        brand_id: brandId,
+        name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Unknown',
+        email: c.email,
+        phone: c.phone || null,
+        location: c.default_address?.city || null,
+        country_code: c.default_address?.country || null,
+        tags: mergedTags,
+        total_orders: stats.count,
+        last_order_date: stats.lastDate ? stats.lastDate.toISOString() : null,
+      };
+    });
+
+    if (customerRecords.length > 0) {
+      // Upsert using email as unique key (assuming DB constraint exists)
+      // Note: we might have duplicate emails if not constrained, but for MVP it's ok.
+      await supabaseAdmin.from('customers').upsert(customerRecords, { onConflict: 'email' });
+    }
+
+    // 3. Count cities for legacy location table and weather configs
     const cityCounts = new Map<string, { city: string; countryCode: string; count: number }>();
     for (const c of customers) {
       const city = c.default_address?.city;
@@ -27,7 +79,7 @@ export async function POST() {
       }
     }
 
-    // 2. Get top 5 cities
+    // 4. Get top locations
     const topLocations = Array.from(cityCounts.values())
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
@@ -35,7 +87,6 @@ export async function POST() {
     const openWeather = new OpenWeatherService();
     const cityNames: string[] = [];
 
-    // 3. Sync to customer_data
     for (const loc of topLocations) {
       cityNames.push(loc.city);
       const { data: existing } = await supabaseAdmin
@@ -59,7 +110,7 @@ export async function POST() {
       }
     }
 
-    // 4. Sync to weather_configs (so daily scanner monitors them)
+    // 5. Sync to weather_configs (so daily scanner monitors them)
     if (cityNames.length > 0) {
       const { data: existingConfig } = await supabaseAdmin
         .from('weather_configs')
@@ -83,7 +134,7 @@ export async function POST() {
       }
     }
 
-    // 5. Force a weather scan to populate weather_readings immediately
+    // 6. Force a weather scan to populate weather_readings immediately
     await runWeatherScan(brandId);
 
     return NextResponse.json({

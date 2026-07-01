@@ -106,14 +106,18 @@ export function IntelligentPanel() {
       const { data: { session } } = await sb.auth.getSession();
       const token = session?.access_token ?? 'anon';
         
+      const uniqueTag = suggestion.suggested_tag ?? `${suggestion.signal_type}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
       const payload = {
         name: suggestion.suggested_name,
         festival: suggestion.suggested_festival,
         message_template: suggestion.suggested_message,
-        target_tags: [],
+        target_tags: [uniqueTag],
         scheduled_at: suggestion.suggested_scheduled_at,
-        channel: 'whatsapp',
-        send_email: false,
+        channel: suggestion.signal_type === 'weather' || suggestion.signal_type === 'local_event' ? 'gallabox,omnisend_email'
+                 : suggestion.signal_type === 'repurchase' ? 'omnisend_email'
+                 : suggestion.signal_type === 'inventory' ? 'omnisend_email,omnisend_sms'
+                 : 'gallabox',
+        send_email: suggestion.signal_type !== 'history',
         wa_campaign_type: 'standard',
         brand_label: 'Zavops',
         signal_source: suggestion.signal_type,

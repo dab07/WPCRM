@@ -16,7 +16,7 @@ export async function PATCH(request: NextRequest) {
       scheduled_at?: string | null;
       image_url?: string | null;
       image_status?: string;
-      channel?: 'whatsapp' | 'email' | 'both';
+      channel?: string;
       send_email?: boolean;
       email_subject?: string | null;
       email_body?: string | null;
@@ -58,10 +58,10 @@ export async function PATCH(request: NextRequest) {
     // channel is the source of truth; keep send_email in sync for backward compat
     if (channel !== undefined) {
       payload.channel = channel;
-      payload.send_email = channel === 'email' || channel === 'both';
+      payload.send_email = channel.includes('omnisend_email') || channel === 'email' || channel === 'both';
     } else if (send_email !== undefined) {
       payload.send_email = send_email;
-      payload.channel = send_email ? 'both' : 'whatsapp';
+      payload.channel = send_email ? 'omnisend_email' : 'gallabox';
     }
     if (email_subject !== undefined) payload.email_subject = email_subject;
     if (email_body !== undefined) payload.email_body = email_body;
@@ -71,6 +71,17 @@ export async function PATCH(request: NextRequest) {
     if (body.discount_code !== undefined) payload.discount_code = body.discount_code;
     if (body.wa_button_text !== undefined) payload.wa_button_text = body.wa_button_text;
     if (body.wa_button_url !== undefined) payload.wa_button_url = body.wa_button_url;
+
+    // Move from pending to to_be_approved so it can be deployed
+    const { data: current } = await supabase
+      .from('campaigns')
+      .select('status')
+      .eq('id', campaignId)
+      .single();
+
+    if (current && current.status === 'pending') {
+      payload.status = 'to_be_approved';
+    }
 
     const { data, error } = await supabase
       .from('campaigns')

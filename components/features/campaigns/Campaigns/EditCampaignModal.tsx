@@ -8,7 +8,6 @@ import {
   MessageSquare,
   Calendar,
   Mail,
-  Layers,
   Upload,
   CheckCircle,
   Loader2,
@@ -20,16 +19,7 @@ import {
   EmailComposerSection,
   type EmailComposerValue,
 } from './EmailComposerSection';
-
-type Channel = 'whatsapp' | 'email' | 'both';
-
-function deriveChannel(campaign: Campaign): Channel {
-  const hasEmail = !!campaign.send_email;
-  const hasWhatsApp = !!campaign.message_template;
-  if (hasEmail && hasWhatsApp) return 'both';
-  if (hasEmail) return 'email';
-  return 'whatsapp';
-}
+import { ChannelPicker, type ChannelId, parseChannels, serializeChannels } from './ChannelPicker';
 
 interface EditCampaignModalProps {
   campaign: Campaign;
@@ -44,7 +34,7 @@ export function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignMo
   );
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(campaign.image_url ?? null);
-  const [channel, setChannel] = useState<Channel>(deriveChannel(campaign));
+  const [channels, setChannels] = useState<ChannelId[]>(parseChannels(campaign.channel));
   const [email, setEmail] = useState<EmailComposerValue>({
     subject: campaign.email_subject ?? '',
     body: campaign.email_body ?? '',
@@ -64,8 +54,8 @@ export function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignMo
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const showWhatsApp = channel === 'whatsapp' || channel === 'both';
-  const showEmail = channel === 'email' || channel === 'both';
+  const showWhatsApp = channels.includes('gallabox');
+  const showEmail = channels.includes('omnisend_email');
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -108,7 +98,8 @@ export function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignMo
       }
 
       // Upload any new email attachments
-      const sendEmail = showEmail;
+      const channelStr = serializeChannels(channels);
+      const sendEmail = channels.includes('omnisend_email');
       const uploadedAttachments: { url: string; name: string; path: string }[] = [];
 
       if (sendEmail) {
@@ -139,6 +130,7 @@ export function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignMo
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           campaignId: campaign.id,
+          channel: channelStr,
           message_template: showWhatsApp ? caption : campaign.message_template,
           scheduled_at: scheduledAt || null,
           ...(imageFile ? { image_url: imageUrl, image_status: 'generated' } : {}),
@@ -191,51 +183,16 @@ export function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignMo
         </div>
 
         <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-[#1A2847]">
-          {/* ── Channel selector ── */}
+          {/* ── Channel picker (multi-select checkboxes) ── */}
           <div>
             <p className="text-[10px] font-bold text-[#F7C31A] uppercase tracking-[0.2em] mb-3 flex items-center gap-2" style={{ fontFamily: 'Space Mono, monospace' }}>
               <span className="w-8 h-[1px] bg-[#F7C31A]"></span>
               SEND VIA
             </p>
-            <div className="grid grid-cols-3 gap-0 border border-[#3B5BAD]/30 rounded-[4px] p-1 bg-[#0F1A30]">
-              {(
-                [
-                  {
-                    id: 'whatsapp' as Channel,
-                    label: 'WHATSAPP',
-                    icon: <MessageSquare className="w-3.5 h-3.5" />,
-                  },
-                  {
-                    id: 'email' as Channel,
-                    label: 'EMAIL',
-                    icon: <Mail className="w-3.5 h-3.5" />,
-                  },
-                  {
-                    id: 'both' as Channel,
-                    label: 'BOTH',
-                    icon: <Layers className="w-3.5 h-3.5" />,
-                  },
-                ] as const
-              ).map((opt) => {
-                const isActive = channel === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setChannel(opt.id)}
-                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-[2px] text-[11px] font-semibold transition-all uppercase tracking-[0.1em] ${
-                      isActive 
-                        ? 'bg-[#F7C31A] text-[#1A2847]' 
-                        : 'text-[#8A96B0] hover:text-white hover:bg-[#2C3A5C]'
-                    }`}
-                    style={{ fontFamily: 'Space Mono, monospace' }}
-                  >
-                    {opt.icon}
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
+            <ChannelPicker
+              selected={channels}
+              onChange={setChannels}
+            />
           </div>
 
           {/* ── Scheduled date ── */}
@@ -253,6 +210,28 @@ export function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignMo
             />
           </div>
 
+          {/* ── Channel-specific sections ── */}
+          
+          {/* Image upload (Available for both WhatsApp and Email) */}
+          <div className="pt-2 border-t border-[#3B5BAD]/30 mt-6 relative">
+            <label className="text-[10px] font-bold text-[#8A96B0] uppercase tracking-[0.12em] mb-3 flex items-center gap-1.5" style={{ fontFamily: 'Space Mono, monospace' }}>
+              <ImageIcon className="w-3.5 h-3.5" />
+              CAMPAIGN MEDIA
+            </label>
+            {imagePreview && (
+              <div className="w-full aspect-video rounded-[4px] overflow-hidden border border-[#3B5BAD]/30 bg-[#1A2847] mb-4 relative group-hover:border-[#F7C31A]/50 transition-colors">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imagePreview} alt="Preview" className="w-full h-full object-cover mix-blend-luminosity opacity-70 group-hover:mix-blend-normal group-hover:opacity-100 transition-all duration-500" />
+                <div className="absolute inset-0 bg-[#3B5BAD]/20 mix-blend-overlay pointer-events-none" />
+              </div>
+            )}
+            <label className="flex items-center justify-center gap-2 w-full px-4 py-4 border border-dashed border-[#3B5BAD]/50 hover:border-[#F7C31A] bg-[#1A2847]/50 rounded-[4px] cursor-pointer text-xs text-[#8A96B0] hover:text-[#F7C31A] transition-colors" style={{ fontFamily: 'Space Mono, monospace' }}>
+              <Upload className="w-4 h-4" />
+              {imageFile ? imageFile.name.toUpperCase() : 'UPLOAD MEDIA OVERRIDE'}
+              <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+            </label>
+          </div>
+
           {/* ── WhatsApp section ── */}
           {showWhatsApp && (
             <div className="rounded-[4px] border border-[#3B5BAD]/30 bg-[#2C3A5C]/40 p-6 space-y-6 relative group hover:border-[#F7C31A]/30 transition-colors">
@@ -263,26 +242,6 @@ export function EditCampaignModal({ campaign, onClose, onSaved }: EditCampaignMo
                 <MessageSquare className="w-3.5 h-3.5" />
                 WHATSAPP PAYLOAD
               </p>
-
-              {/* Image upload */}
-              <div>
-                <label className="text-[10px] font-bold text-[#8A96B0] uppercase tracking-[0.12em] mb-3 flex items-center gap-1.5" style={{ fontFamily: 'Space Mono, monospace' }}>
-                  <ImageIcon className="w-3.5 h-3.5" />
-                  CAMPAIGN MEDIA
-                </label>
-                {imagePreview && (
-                  <div className="w-full aspect-video rounded-[4px] overflow-hidden border border-[#3B5BAD]/30 bg-[#1A2847] mb-4 relative group-hover:border-[#F7C31A]/50 transition-colors">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover mix-blend-luminosity opacity-70 group-hover:mix-blend-normal group-hover:opacity-100 transition-all duration-500" />
-                    <div className="absolute inset-0 bg-[#3B5BAD]/20 mix-blend-overlay pointer-events-none" />
-                  </div>
-                )}
-                <label className="flex items-center justify-center gap-2 w-full px-4 py-4 border border-dashed border-[#3B5BAD]/50 hover:border-[#F7C31A] bg-[#1A2847]/50 rounded-[4px] cursor-pointer text-xs text-[#8A96B0] hover:text-[#F7C31A] transition-colors" style={{ fontFamily: 'Space Mono, monospace' }}>
-                  <Upload className="w-4 h-4" />
-                  {imageFile ? imageFile.name.toUpperCase() : 'UPLOAD MEDIA OVERRIDE'}
-                  <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-                </label>
-              </div>
 
               {/* Campaign Type */}
               <div>

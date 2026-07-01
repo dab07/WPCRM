@@ -3,8 +3,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   X, Wand2, Loader2, AlertTriangle, CheckCircle, RefreshCw,
-  ThermometerSun, ShoppingCart, Package, MapPin, Zap,
-  ChevronRight, CalendarDays, History,
+  ThermometerSun, ShoppingCart, Package, Zap,
+  ChevronRight, CalendarDays,
 } from 'lucide-react';
 import { getSupabaseClient } from '../../../../supabase/supabase';
 import type { CampaignSuggestion } from '../../../../lib/types/campaign-suggestions';
@@ -230,13 +230,28 @@ export function GenerateCampaignModal({ onClose, onSuccess }: GenerateCampaignMo
   const [pushProgress, setPushProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
   const [pushErrors, setPushErrors] = useState<string[]>([]);
 
+  const CACHE_KEY = 'wp_campaign_suggestions_v2';
+  const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+
   // ── Scan ──────────────────────────────────────────────────────────────────
-  const runScan = useCallback(async () => {
+  const runScan = useCallback(async (forceFresh: boolean = false) => {
     setStep('scanning');
     setScanError('');
     setSelected(new Set());
 
     try {
+      if (!forceFresh) {
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Date.now() - parsed.timestamp < CACHE_EXPIRY) {
+            setSuggestions(parsed.suggestions);
+            setStep('results');
+            return;
+          }
+        }
+      }
+
       const sb = getSupabaseClient();
       const { data: { session } } = await sb.auth.getSession();
       const token = session?.access_token ?? 'anon';
@@ -253,7 +268,9 @@ export function GenerateCampaignModal({ onClose, onSuccess }: GenerateCampaignMo
         throw new Error(data.error ?? 'Scan failed');
       }
 
-      setSuggestions(data.suggestions ?? []);
+      const newSuggestions = data.suggestions ?? [];
+      setSuggestions(newSuggestions);
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), suggestions: newSuggestions }));
       setStep('results');
     } catch (err) {
       setScanError(err instanceof Error ? err.message : 'Scan failed. Please try again.');
@@ -262,7 +279,7 @@ export function GenerateCampaignModal({ onClose, onSuccess }: GenerateCampaignMo
   }, []);
 
   // Run scan on first mount
-  useEffect(() => { runScan(); }, [runScan]);
+  useEffect(() => { runScan(false); }, [runScan]);
 
   // ── Toggle selection ──────────────────────────────────────────────────────
   const toggleSelection = (index: number) => {
@@ -288,11 +305,13 @@ export function GenerateCampaignModal({ onClose, onSuccess }: GenerateCampaignMo
     const token = session?.access_token ?? 'anon';
 
     const errors: string[] = [];
+    const successfulIndices = new Set<number>();
 
     for (let i = 0; i < toCreate.length; i++) {
       const s = toCreate[i];
       if (!s) continue;
       try {
+        const uniqueTag = s.suggested_tag ?? `${s.signal_type}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
         const res = await fetch('/api/campaigns/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -302,9 +321,13 @@ export function GenerateCampaignModal({ onClose, onSuccess }: GenerateCampaignMo
             message_template: s.suggested_message,
             scheduled_at: s.suggested_scheduled_at,
             status: 'pending',
-            channel: 'whatsapp',
-            send_email: false,
-            target_tags: [],
+            channel: s.signal_type === 'weather' || s.signal_type === 'local_event' ? 'gallabox,omnisend_email'
+                     : s.signal_type === 'repurchase' ? 'omnisend_email'
+                     : s.signal_type === 'inventory' ? 'omnisend_email,omnisend_sms'
+                     : 'gallabox',
+            send_email: s.signal_type !== 'history',
+            target_tags: [uniqueTag],
+            metadata: s.metadata,
             wa_campaign_type: 'standard',
             signal_source: s.signal_type,
           }),
@@ -312,11 +335,20 @@ export function GenerateCampaignModal({ onClose, onSuccess }: GenerateCampaignMo
         if (!res.ok) {
           const d = await res.json();
           errors.push(`"${s.suggested_name}": ${d.error ?? 'Failed'}`);
+        } else {
+          const idx = Array.from(selected)[i];
+          if (idx !== undefined) successfulIndices.add(idx);
         }
       } catch (err) {
         errors.push(`"${s.suggested_name}": ${err instanceof Error ? err.message : 'Network error'}`);
       }
       setPushProgress({ done: i + 1, total: toCreate.length });
+    }
+
+    if (successfulIndices.size > 0) {
+      const remaining = suggestions.filter((_, idx) => !successfulIndices.has(idx));
+      setSuggestions(remaining);
+      localStorage.setItem('wp_campaign_suggestions_v2', JSON.stringify({ timestamp: Date.now(), suggestions: remaining }));
     }
 
     setPushErrors(errors);
@@ -503,10 +535,10 @@ export function GenerateCampaignModal({ onClose, onSuccess }: GenerateCampaignMo
           {step === 'results' && (
             <>
               <button
-                onClick={runScan}
+                onClick={() => runScan(true)}
                 className="flex items-center gap-2 px-4 py-3 border border-[rgba(59,91,173,0.18)] text-brand-muted hover:border-brand-yellow hover:text-brand-yellow rounded-[4px] font-mono text-[11px] uppercase tracking-label transition-all"
               >
-                <RefreshCw className="w-3.5 h-3.5 stroke-[1.5]" /> Scan Again
+                <RefreshCw className="w-3.5 h-3.5 stroke-[1.5]" /> Sync Data
               </button>
               <button
                 onClick={onClose}
@@ -535,10 +567,10 @@ export function GenerateCampaignModal({ onClose, onSuccess }: GenerateCampaignMo
             <>
               {pushErrors.length > 0 && (
                 <button
-                  onClick={runScan}
+                  onClick={() => runScan(true)}
                   className="flex items-center gap-2 px-4 py-3 border border-[rgba(59,91,173,0.18)] text-brand-muted hover:border-brand-yellow hover:text-brand-yellow rounded-[4px] font-mono text-[11px] uppercase tracking-label transition-all"
                 >
-                  <RefreshCw className="w-3.5 h-3.5 stroke-[1.5]" /> Scan Again
+                  <RefreshCw className="w-3.5 h-3.5 stroke-[1.5]" /> Sync Data
                 </button>
               )}
               <button

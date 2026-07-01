@@ -279,24 +279,24 @@ export class CampaignOrchestrator {
       console.log(`Executing campaign: ${campaign.name}`);
 
       // ── Resolve effective channel ───────────────────────────────────────────
-      const effectiveChannel: 'whatsapp' | 'email' | 'both' =
-        campaign.channel === 'email' ? 'email'
-        : campaign.channel === 'both' ? 'both'
-        : campaign.channel === 'whatsapp' ? 'whatsapp'
-        : campaign.send_email ? 'both'
-        : 'whatsapp';
+      const channelStr = campaign.channel || '';
+      const sendWhatsApp = channelStr.includes('gallabox') || channelStr === 'whatsapp' || channelStr === 'both';
+      const sendEmail    = channelStr.includes('omnisend_email') || channelStr === 'email' || channelStr === 'both';
+      const sendPush     = channelStr.includes('omnisend_push');
+      const sendSMS      = channelStr.includes('omnisend_sms');
 
-      const sendWhatsApp = effectiveChannel === 'whatsapp' || effectiveChannel === 'both';
-      const sendEmail    = effectiveChannel === 'email'    || effectiveChannel === 'both';
-
-      // Get eligible contacts for WhatsApp from Gallabox
-      let contacts: Contact[] = [];
-      if (sendWhatsApp) {
-        contacts = await this.getEligibleContacts(campaign);
+      if (sendPush) {
+        console.log(`[Campaign ${campaign.name}] Push Notifications via Omnisend requested (mocking response)`);
       }
+      if (sendSMS) {
+        console.log(`[Campaign ${campaign.name}] SMS via Omnisend requested (mocking response)`);
+      }
+
+      // Get eligible contacts from the unified customers table
+      let contacts: Contact[] = await this.getEligibleContacts(campaign);
       
-      if (sendWhatsApp && contacts.length === 0 && !sendEmail) {
-        console.log(`No eligible contacts for WhatsApp campaign: ${campaign.name}`);
+      if (contacts.length === 0) {
+        console.log(`No eligible contacts found for campaign: ${campaign.name}`);
         await this.updateCampaignStatus(campaign.id, 'executed');
         return { sent: 0, failed: 0, delivered: 0 };
       }
@@ -330,6 +330,37 @@ export class CampaignOrchestrator {
 
         if (omnisend) {
 
+          let segmentID: string | undefined;
+
+          // 1. Sync contacts to Omnisend and attach target_tags
+          if (contacts.length > 0 && campaign.target_tags && campaign.target_tags.length > 0) {
+            console.log(`[Campaign ${campaign.name}] Syncing ${contacts.length} contacts to Omnisend with tags: ${campaign.target_tags.join(', ')}`);
+            for (const contact of contacts) {
+              if (contact.email) {
+                try {
+                  await omnisend.upsertContact({
+                    email: contact.email,
+                    firstName: contact.name,
+                    phone: contact.phone_number,
+                    tags: campaign.target_tags,
+                    status: 'subscribed'
+                  });
+                } catch (err) {
+                  console.error(`[Campaign ${campaign.name}] Failed to sync contact ${contact.email}:`, err);
+                }
+              }
+            }
+
+            // 2. Create Segment in Omnisend
+            const segmentName = `Target Segment: ${campaign.target_tags.join(' & ')}`;
+            segmentID = await omnisend.createSegment(segmentName, campaign.target_tags);
+            if (segmentID) {
+              console.log(`[Campaign ${campaign.name}] Created Omnisend Segment: ${segmentID}`);
+            } else {
+              console.warn(`[Campaign ${campaign.name}] Failed to create segment. Will send to all subscribers if omitted.`);
+            }
+          }
+
           // Build email HTML — attach campaign image if available
           const imageHtml = (campaign.image_url && !campaign.image_url.startsWith('data:'))
             ? `<div style="text-align:center;margin-bottom:24px"><img src="${campaign.image_url}" alt="${campaign.name}" style="max-width:600px;width:100%;border-radius:8px"/></div>`
@@ -340,12 +371,13 @@ export class CampaignOrchestrator {
             .replace(/\{\{company\}\}/g, '')
             .replace(/\n/g, '<br>');
 
-          // Fire one Omnisend campaign to all subscribed contacts
+          // Fire Omnisend campaign
           const omnisendResult = await omnisend.sendEmailCampaign({
             name: `${campaign.name} — ${new Date().toISOString().slice(0, 10)}`,
             subject: campaign.email_subject,
             body: bodyHtml,
             fromName: 'Zavops CRM',
+            segmentID: segmentID,
           });
 
           if (omnisendResult.success) {
@@ -619,34 +651,31 @@ export class CampaignOrchestrator {
    */
   private async getEligibleContacts(campaign: Campaign): Promise<Contact[]> {
     try {
-      const gallabox = await this.getGallaboxService();
+      let query = this.supabase.from('customers').select('*');
       
-      // Fetch contacts from Gallabox (using a high limit for broadcasts)
-      const result = await gallabox.getContacts(10000, 0);
-      
-      if (!result.success) {
-        throw new Error(result.error ?? 'Failed to fetch contacts from Gallabox');
-      }
-
-      let contacts = result.contacts || [];
-
       // Apply tag filtering if specified
       if (campaign.target_tags && campaign.target_tags.length > 0) {
-        contacts = contacts.filter(c => 
-          c.tags && c.tags.some(tag => campaign.target_tags.includes(tag))
-        );
+        query = query.contains('tags', campaign.target_tags);
       }
+
+      const { data: dbContacts, error } = await query;
+      
+      if (error) {
+        throw new Error(`Failed to fetch contacts from Supabase: ${error.message}`);
+      }
+
+      let contacts = dbContacts || [];
 
       return contacts.map(c => {
         const mapped: Contact = {
           id: c.id,
           name: c.name || '',
-          phone_number: c.phone,
+          phone_number: c.phone || '',
           tags: c.tags || [],
-          metadata: c.customFields || {}
+          metadata: {} // fallback metadata
         };
         if (c.email) mapped.email = c.email;
-        if (c.company) mapped.company = c.company;
+        if (c.location) mapped.company = c.location; // Map location to company field for personalization if needed
         return mapped;
       });
     } catch (error) {
@@ -800,7 +829,7 @@ Return only the enhanced message, no explanations.`;
     wa_button_url?: string;
     discount_code?: string;
     discount_percentage?: number;
-    channel?: 'whatsapp' | 'email' | 'both';
+    channel?: string;
     festival?: string;
     brand_label?: string;
   }) {
